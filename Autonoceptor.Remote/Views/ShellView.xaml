@@ -1,0 +1,108 @@
+﻿<Page
+    x:Class="Autonoceptor.Remote.Views.ShellView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:xaml="using:Microsoft.Graphics.Canvas.UI.Xaml"
+    MinWidth="1000"
+    MinHeight="700"
+    mc:Ignorable="d">
+
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" HorizontalAlignment="Stretch" Height="Auto" Name="ContentGrid">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="160" />
+            <ColumnDefinition Width="350" />
+            <ColumnDefinition Width="140" />
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        
+        <TextBlock Text="Broker IP" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+
+        <TextBox Name="BrokerIp" Grid.Row="0" Grid.Column="1" Height="28"></TextBox>
+        <Button Name="BrokerConnect" Grid.Column="2" Grid.Row="0" Content="Connect" HorizontalAlignment="Center" MinWidth="115"></Button>
+
+        <CheckBox Name="StreamChanges" Content="Remote?" Grid.Column="0" Grid.Row="1" HorizontalAlignment="Right" FontSize="12" MinWidth="85"></CheckBox>
+        <Slider Name="UpdateInterval" Grid.Row="1" Grid.Column="1" Minimum="20" Maximum="750" Value="100" ></Slider>
+        <Button Name="SetUpdateInterval" Grid.Column="2" Grid.Row="1" Content="Set Update Interval" HorizontalAlignment="Center"></Button>
+
+        <TextBlock Text="Publish: Topic" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <TextBox Name="PubTopic" Grid.Row="2" Grid.Column="1" Height="28"></TextBox>
+        
+        <TextBlock Text="Publish: Message" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <TextBox Name="PubMessage" Grid.Row="3" Grid.Column="1" Height="28"></TextBox>
+        <Button Name="PublishMessage" Grid.Column="2" Grid.Row="3" Content="Publish" HorizontalAlignment="Center"></Button>
+
+        <TextBlock Text="Subscribe: Topic" Grid.Row="4" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <TextBox Name="SubTopic" Grid.Row="4" Grid.Column="1" Height="28"></TextBox>
+        <Button Name="Subscribe" Grid.Column="2" Grid.Row="4" Content="Subscribe" HorizontalAlignment="Center"></Button>
+
+        <TextBlock Text="Hough DP" Grid.Row="5" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <Slider Name="HoughDp" Grid.Row="5" Grid.Column="1" Minimum="1" Maximum="400" Value="1"></Slider>
+        <CheckBox Name="CirclesEnabled" Content="Enable" Grid.Column="2" Grid.Row="5" HorizontalAlignment="Center" FontSize="12" MinWidth="85"></CheckBox>
+
+        <TextBlock Text="Hough MinDistance" Grid.Row="6" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <Slider Name="HoughMinDistance" Grid.Row="6" Grid.Column="1" Minimum="1" Maximum="400" Value="1"></Slider>
+
+        <TextBlock Text="Hough Canny threshold" Grid.Row="7" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <Slider Name="HoughCannyThreshold" Grid.Row="7" Grid.Column="1" Minimum="10" Maximum="250" Value="150"></Slider>
+
+        <TextBlock Text="Hough Votes threshold" Grid.Row="8" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <Slider Name="HoughVotesThreshold" Grid.Row="8" Grid.Column="1" Minimum="1" Maximum="200" Value="60"></Slider>
+
+        <TextBlock Text="Hough MinRadius" Grid.Row="9" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <Slider Name="HoughMinRadius" Grid.Row="9" Grid.Column="1" Minimum="1" Maximum="100" Value="2"></Slider>
+
+        <TextBlock Text="Hough MaxRadius" Grid.Row="10" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <Slider Name="HoughMaxRadius" Grid.Row="10" Grid.Column="1" Minimum="10" Maximum="400" Value="140"></Slider>
+
+        <TextBlock Text="Hough MaxCircles" Grid.Row="11" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <Slider Name="HoughMaxCircles" Grid.Row="11" Grid.Column="1" Minimum="1" Maximum="200" Value="5"></Slider>
+
+        <TextBlock Text="Canny High/Low" Grid.Row="12" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <Slider Name="CannyHigh" Grid.Row="12" Grid.Column="1" Minimum="1" Maximum="300" Value="5" Width="130" HorizontalAlignment="Left" Margin="15,0,0,0"></Slider>
+        <Slider Name="CannyLow" Grid.Row="12" Grid.Column="1" Minimum="1" Maximum="300" Value="50" Width="130" HorizontalAlignment="Right" Margin="0,0,15,0"></Slider>
+        <CheckBox Name="LinesEnabled" Content="Enable" Grid.Column="2" Grid.Row="12" HorizontalAlignment="Center" FontSize="12" MinWidth="85"></CheckBox>
+
+        <Button Name="StartCar" Grid.Column="1" Grid.Row="13" Content="Start Car" HorizontalAlignment="Left" VerticalAlignment="Center"></Button>
+        <Button Name="StartCamera" Grid.Column="1" Grid.Row="13" Content="Start Camera" HorizontalAlignment="Right" VerticalAlignment="Center"></Button>
+
+        <!--<TextBlock Text="Camera Resolutions" Grid.Row="14" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <ComboBox ItemsSource="{Binding Resolutions}" Grid.Row="14" Grid.Column="1" Height="28" Width="300" VerticalAlignment="Center" ></ComboBox>
+        <Button Name="SetResolution" Grid.Column="2" Grid.Row="14" Content="Set Resolution" HorizontalAlignment="Center"></Button>-->
+
+        <xaml:CanvasControl x:Name="CanvasControl" Grid.Column="3" Grid.Row="0" Grid.RowSpan="16" Draw="CanvasControl_OnDraw" CreateResources="CanvasControl_CreateResources" HorizontalAlignment="Stretch" />
+
+        <ListView Grid.Row="15" Grid.Column="0" Grid.ColumnSpan="3" Height="Auto" ItemsSource="{Binding Log}" Width="Auto" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="0" Padding="0">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                   <Setter Property="Foreground" Value="GreenYellow"></Setter>
+                   <Setter Property="FontSize" Value="12"></Setter>
+                   <Setter Property="Margin" Value="0"></Setter>
+                   <Setter Property="Height" Value="5"></Setter>
+                   <Setter Property="Padding" Value="0"></Setter>
+                </Style>
+            </ListView.ItemContainerStyle>
+        </ListView>
+        <MediaElement Grid.Column="0" Grid.Row="9" Name="MediaElement"></MediaElement>
+    </Grid>
+    
+</Page>
