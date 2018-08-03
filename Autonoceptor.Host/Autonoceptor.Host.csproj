@@ -170,7 +170,7 @@
       <Name>Autonoceptor.Service</Name>
     </ProjectReference>
     <ProjectReference Include="..\Hardware.Xbox\Hardware.Xbox.csproj">
-      <Project>{a906ed34-b406-45ff-94f4-edb568341513}</Project>
+      <Project>{81ded141-b2cd-4d21-aa5c-788c7534e2fa}</Project>
       <Name>Hardware.Xbox</Name>
     </ProjectReference>
   </ItemGroup>

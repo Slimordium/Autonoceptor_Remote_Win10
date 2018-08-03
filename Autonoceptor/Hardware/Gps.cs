@@ -23,9 +23,7 @@ namespace Autonoceptor.Service.Hardware
         private DataReader _inputStream;
         private DataWriter _outputStream;
 
-        public IObservable<GpsFixData> GpsFixObservable { get; private set; }
-
-        public async Task InitializeAsync(CancellationToken cancellationToken)
+        public async Task InitializeAsync()
         {
             _gpsSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("105B", 9600, TimeSpan.FromMilliseconds(1500), TimeSpan.FromMilliseconds(1500));
 
@@ -34,34 +32,36 @@ namespace Autonoceptor.Service.Hardware
 
             _inputStream = new DataReader(_gpsSerialDevice.InputStream) {InputStreamOptions = InputStreamOptions.Partial};
             _outputStream = new DataWriter(_gpsSerialDevice.OutputStream);
-
-            GpsFixObservable = GetObservable().ObserveOn(Scheduler.Default);
         }
 
-        private IObservable<GpsFixData> GetObservable()
+        public IObservable<GpsFixData> GetObservable(CancellationToken cancellationToken)
         {
             var dataObservable = new Subject<GpsFixData>();
 
             Task.Run(async () =>
             {
-                var byteCount = await _inputStream.LoadAsync(1024);
-                var bytes = new byte[byteCount];
-                _inputStream.ReadBytes(bytes);
-
-                var sentences = Encoding.ASCII.GetString(bytes).Split('\n');
-
-                if (sentences.Length == 0)
-                    return;
-
-                foreach (var sentence in sentences)
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    if (!sentence.StartsWith("$"))
-                        continue;
+                    var byteCount = await _inputStream.LoadAsync(1024);
+                    var bytes = new byte[byteCount];
+                    _inputStream.ReadBytes(bytes);
 
-                    var data = GpsExtensions.ParseNmea(sentence);
+                    var sentences = Encoding.ASCII.GetString(bytes).Split('\n');
 
-                    dataObservable.OnNext(data);
+                    if (sentences.Length == 0)
+                        return;
+
+                    foreach (var sentence in sentences)
+                    {
+                        if (!sentence.StartsWith("$"))
+                            continue;
+
+                        var data = GpsExtensions.ParseNmea(sentence);
+
+                        dataObservable.OnNext(data);
+                    }
                 }
+
             });
 
             return dataObservable.AsObservable();

@@ -16,8 +16,6 @@ namespace Autonoceptor.Service.Hardware
 
         private DataReader _inputStream;
 
-        public IObservable<int> SonarObservable { get; private set; }
-
         public async Task InitializeAsync()
         {
             _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("104O", 9600, TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(1000));
@@ -26,42 +24,42 @@ namespace Autonoceptor.Service.Hardware
                 return;
 
             _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
-
-            SonarObservable = GetObservable().ObserveOn(Scheduler.Default);
         }
 
-        private IObservable<int> GetObservable()
+        public IObservable<int> GetObservable(CancellationToken cancellationToken)
         {
             var subject = new Subject<int>();
 
             Task.Run(async () =>
             {
-                var byteCount = await _inputStream.LoadAsync(8);
-
-                var buffer = new byte[byteCount];
-
-                _inputStream.ReadBytes(buffer);
-
-                var readings = Encoding.ASCII.GetString(buffer);
-
-                var inches = readings.Split('|');
-
-                foreach (var inch in inches)
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    if (string.IsNullOrEmpty(inch) || !inch.StartsWith(">") || !inch.EndsWith("<"))
-                        continue;
+                    var byteCount = await _inputStream.LoadAsync(8);
 
-                    try
+                    var buffer = new byte[byteCount];
+
+                    _inputStream.ReadBytes(buffer);
+
+                    var readings = Encoding.ASCII.GetString(buffer);
+
+                    var inches = readings.Split('|');
+
+                    foreach (var inch in inches)
                     {
-                        subject.OnNext(Convert.ToInt32(inch.Replace(">", "").Replace("<", "")));
-                    }
-                    catch (Exception e)
-                    {
-                        //
+                        if (string.IsNullOrEmpty(inch) || !inch.StartsWith(">") || !inch.EndsWith("<"))
+                            continue;
+
+                        try
+                        {
+                            subject.OnNext(Convert.ToInt32(inch.Replace(">", "").Replace("<", "")));
+                        }
+                        catch (Exception e)
+                        {
+                            //
+                        }
                     }
                 }
             });
-
 
             return subject;
         }

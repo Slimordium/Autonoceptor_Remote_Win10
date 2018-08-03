@@ -23,15 +23,12 @@ namespace Autonoceptor.Service
         private bool _started = false;
         private CancellationToken _cancellationToken;
 
-        public async Task InitializeAsync()
+        public async Task InitializeAsync(CancellationToken cancellationToken)
         {
             _steeringSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("4236", 9600, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
             _motorSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("111a", 9600, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
-        }
 
-        public async Task StartAsync(CancellationToken cancellationToken)
-        {
             while (_steeringSerialDevice == null || _motorSerialDevice == null)
             {
                 await Task.Delay(500);
@@ -83,10 +80,9 @@ namespace Autonoceptor.Service
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.Start))
             {
-                _started = !_started;
+                //_started = !_started;
             }
-
-            if (_started)
+            else
             {
                 if (reverseMagnitude > forwardMagnitude)
                 {
@@ -97,6 +93,10 @@ namespace Autonoceptor.Service
                     moveString = $"F{forwardMagnitude}%\r";
                 }
             }
+            //if (_started)
+            //{
+                
+            //}
 
             if (_motorOutputStream != null)
             {

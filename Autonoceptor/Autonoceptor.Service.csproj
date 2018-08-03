@@ -122,7 +122,6 @@
     <Compile Include="Navigation\GpsNavigator.cs" />
     <Compile Include="Ntrip\NtripClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="AutonoceptorService.cs" />
     <Compile Include="Hardware\UsbCamera.cs" />
     <EmbeddedResource Include="Properties\Test2.rd.xml" />
   </ItemGroup>
