@@ -110,20 +110,14 @@
     <Compile Include="AutonoceptorController.cs" />
     <Compile Include="Hardware\Tf02Lidar.cs" />
     <Compile Include="Hardware\Gps.cs" />
-    <Compile Include="Hardware\AdafruitFona.cs" />
     <Compile Include="Hardware\I2CDevice.cs" />
-    <Compile Include="Hardware\Mpr121.cs" />
-    <Compile Include="Hardware\Mpu9150.cs" />
-    <Compile Include="Hardware\Pca9685.cs" />
     <Compile Include="Hardware\MaxbotixSonar.cs" />
     <Compile Include="Hardware\RazorImu.cs" />
-    <Compile Include="Hardware\Rfm69Hcw.cs" />
     <Compile Include="Hardware\SerialDeviceHelper.cs" />
     <Compile Include="Hardware\SparkFunSerial16X2Lcd.cs" />
     <Compile Include="Navigation\GpsNavigator.cs" />
     <Compile Include="Ntrip\NtripClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Hardware\UsbCamera.cs" />
     <EmbeddedResource Include="Properties\Test2.rd.xml" />
   </ItemGroup>
   <ItemGroup>

@@ -19,12 +19,9 @@ namespace Autonoceptor.Service.Hardware
 
         private SerialDevice _lcdSerialDevice;
 
-        public async Task InitializeAsync(string usbIdentifier)
+        public async Task InitializeAsync()
         {
-            if (string.IsNullOrEmpty(usbIdentifier))
-                return;
-
-            _lcdSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync(usbIdentifier, 9600, new TimeSpan(0, 0, 0, 1), new TimeSpan(0, 0, 0, 1));
+            _lcdSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("A504WXPT", 9600, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
          
             if (_lcdSerialDevice == null)
                 return;
@@ -116,6 +113,5 @@ namespace Autonoceptor.Service.Hardware
             if (line == 2)
                 await WriteToSecondLineAsync(text);
         }
-        
     }
 }

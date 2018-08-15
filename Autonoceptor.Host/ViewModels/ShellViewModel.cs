@@ -25,9 +25,9 @@ namespace Autonoceptor.Host.ViewModels
         private readonly AutonoceptorController _autonoceptorController = new AutonoceptorController();
 
         private readonly Gps _gps = new Gps();
-        private readonly MaxbotixSonar _maxbotixSonar = new MaxbotixSonar();
         private readonly Timer _timeoutTimer;
         private readonly Tf02Lidar _lidar = new Tf02Lidar();
+        private readonly SparkFunSerial16X2Lcd _lcd = new SparkFunSerial16X2Lcd();
 
         private CancellationTokenSource _carCancellationTokenSource = new CancellationTokenSource();
 
@@ -114,8 +114,8 @@ namespace Autonoceptor.Host.ViewModels
             _mqttClient = new MqttClient("autonoceptor-control", BrokerIp, 1883);
             var status = await _mqttClient.InitializeAsync();
 
+            await _lcd.InitializeAsync();
             await _gps.InitializeAsync();
-            await _maxbotixSonar.InitializeAsync();
             await _autonoceptorController.InitializeAsync(_carCancellationTokenSource.Token);
             await _lidar.InitializeAsync();
 
@@ -154,15 +154,6 @@ namespace Autonoceptor.Host.ViewModels
 
                         await _autonoceptorController.OnNextXboxData(d);
                     }));
-
-            _disposables.Add(_maxbotixSonar.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
-                .Subscribe(async inches =>
-                {
-                    if (_mqttClient == null)
-                        return;
-
-                    await _mqttClient.PublishAsync(inches.ToString(), "autono-sonar");
-                }));
 
             await Task.Delay(1000);
 
