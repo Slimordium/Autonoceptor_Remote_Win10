@@ -22,7 +22,17 @@ namespace Autonoceptor.Shared.Utilities
         private static double _hdop;
         private static GpsFixData _lastGpsFixSaved = new GpsFixData();
 
+        private static bool _odometerCalibrated;
 
+        private static bool _gyroAccelCalibrated;
+        private static bool _sensorInputAvailable;
+        private static double _odometerPulseCount;
+
+        private static bool _movingBackward;
+        private static double _gyroBias;
+        private static double _odometerScalingFactor;
+        private static double _rotationRate;
+        private static double _distance;
 
         public static async Task<List<GpsFixData>> LoadWaypoints()
         {
@@ -172,7 +182,7 @@ namespace Autonoceptor.Shared.Utilities
 
                 switch (type)
                 {
-                    case "GPGGA": //Global Positioning System Fix Data
+                    case "GNGGA": //Global Positioning System Fix Data
                         if (tokens.Length < 10)
                             return null;
 
@@ -195,7 +205,7 @@ namespace Autonoceptor.Shared.Utilities
                         double.TryParse(tokens[8], out _hdop);
 
                         break;
-                    case "GPRMC": //Recommended minimum specific GPS/Transit data
+                    case "GNRMC": //Recommended minimum specific GPS/Transit data
 
                         if (tokens.Length < 9)
                             return null;
@@ -212,17 +222,15 @@ namespace Autonoceptor.Shared.Utilities
                             _heading = dir; //angle from true north that you are traveling or "Course made good"
 
                         break;
-                    case "GPGSV": //Satellites in View
+                    case "GNGSV": //Satellites in View
 
                         if (tokens.Length < 8)
                             return null;
 
-                        int satellitesInView;
-                        if (int.TryParse(tokens[3], out satellitesInView))
+                        if (int.TryParse(tokens[3], out var satellitesInView))
                             _satellitesInView = satellitesInView;
 
-                        int signalToNoiseRatio;
-                        if (int.TryParse(tokens[7], out signalToNoiseRatio))
+                        if (int.TryParse(tokens[7], out var signalToNoiseRatio))
                             _signalToNoiseRatio = signalToNoiseRatio;
 
                         break;
@@ -230,16 +238,48 @@ namespace Autonoceptor.Shared.Utilities
                         if (tokens.Length <= 1)
                             break;
 
-                        if (!tokens[1].Equals("030") || tokens.Length < 16)
-                            break;
+                        if (tokens[1].Contains("30") && tokens.Length >= 16) //RTK
+                        {
+                            _lat = Latitude2Double(tokens[4], tokens[5]);
+                            _lon = Longitude2Double(tokens[6], tokens[7]);
 
-                        _lat = Latitude2Double(tokens[4], tokens[5]);
-                        _lon = Longitude2Double(tokens[6], tokens[7]);
+                            double.TryParse(tokens[14], out _rtkAge);
 
-                        double.TryParse(tokens[14], out _rtkAge);
+                            var t = tokens[15].Split('*')[0];
+                            double.TryParse(t, out _rtkRatio);
+                        }
 
-                        var t = tokens[15].Split('*')[0];
-                        double.TryParse(t, out _rtkRatio);
+                        if (tokens[1].Contains("20") && tokens.Length >= 12) //Dead reckoning
+                        {
+                            _odometerCalibrated = tokens[2].Equals("1");
+                            _gyroAccelCalibrated = tokens[3].Equals("1");
+                            _sensorInputAvailable = tokens[4].Equals("1");
+
+                            _odometerPulseCount = Convert.ToDouble(tokens[5]);
+
+                            switch (tokens[6])
+                            {
+                                case "A":
+                                    _quality = GpsFixQuality.StandardGps;
+                                    break;
+                                case "N":
+                                    _quality = GpsFixQuality.NoFix;
+                                    break;
+                                case "E":
+                                    _quality = GpsFixQuality.Estimated;
+                                    break;
+                            }
+
+                            _movingBackward = tokens[7].Equals("1");
+
+                            _gyroBias = Convert.ToDouble(tokens[9]);
+
+                            _odometerScalingFactor = Convert.ToDouble(tokens[10]);
+
+                            _rotationRate = Convert.ToDouble(tokens[11]);
+
+                            _distance = Convert.ToDouble(tokens[12].Split('*')[0]);
+                        }
 
                         break;
                     default:
@@ -268,7 +308,17 @@ namespace Autonoceptor.Shared.Utilities
                 DateTime = _dateTime,
                 RtkAge = _rtkAge,
                 RtkRatio = _rtkRatio,
-                Hdop = _hdop
+                Hdop = _hdop,
+
+                OdometerCalibrated = _odometerCalibrated,
+                GyroAccelCalibrated = _gyroAccelCalibrated,
+                SensorInputAvailable = _sensorInputAvailable,
+                OdometerPulseCount = _odometerPulseCount,
+                MovingBackward = _movingBackward,
+                GyroBias = _gyroBias,
+                OdometerScalingFactor = _odometerScalingFactor,
+                RotationRate = _rotationRate,
+                Distance = _distance
             };
 
             return latLon;

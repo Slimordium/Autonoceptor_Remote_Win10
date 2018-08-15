@@ -25,7 +25,7 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task InitializeAsync()
         {
-            _gpsSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("105B", 9600, TimeSpan.FromMilliseconds(1500), TimeSpan.FromMilliseconds(1500));
+            _gpsSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 9600, TimeSpan.FromMilliseconds(1500), TimeSpan.FromMilliseconds(1500));
 
             if (_gpsSerialDevice == null)
                 return;
@@ -61,11 +61,9 @@ namespace Autonoceptor.Service.Hardware
                         dataObservable.OnNext(data);
                     }
                 }
-
             });
 
             return dataObservable.AsObservable();
         }
-
     }
 }

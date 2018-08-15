@@ -27,19 +27,13 @@ namespace Autonoceptor.Host.ViewModels
         private readonly Gps _gps = new Gps();
         private readonly MaxbotixSonar _maxbotixSonar = new MaxbotixSonar();
         private readonly Timer _timeoutTimer;
+        private readonly Tf02Lidar _lidar = new Tf02Lidar();
 
         private CancellationTokenSource _carCancellationTokenSource = new CancellationTokenSource();
-        private IDisposable _controllerDisposable;
-
-        private IDisposable _gpsDisposable;
-
-        private IDisposable _heartBeatDisposable;
 
         private MqttClient _mqttClient;
-        private IDisposable _sonarDisposable;
 
-        private IDisposable _startDisposable;
-        private long _streamRunning;
+        private List<IDisposable> _disposables = new List<IDisposable>();
 
         public ShellViewModel()
         {
@@ -123,23 +117,31 @@ namespace Autonoceptor.Host.ViewModels
             await _gps.InitializeAsync();
             await _maxbotixSonar.InitializeAsync();
             await _autonoceptorController.InitializeAsync(_carCancellationTokenSource.Token);
+            await _lidar.InitializeAsync();
 
-            _gpsDisposable = _gps.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
+            _disposables.Add(_gps.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
                 .Where(fix => fix != null).Subscribe(async fix =>
                 {
                     if (_mqttClient == null)
                         return;
 
                     await _mqttClient.PublishAsync(JsonConvert.SerializeObject(fix), "autono-gps");
-                });
+                }));
 
             //_heartBeatDisposable = _mqttClient.GetPublishStringObservable("autono-heartbeat").ObserveOnDispatcher().Subscribe(_ =>
             //    {
             //        _timeoutTimer.Change(TimeSpan.FromSeconds(2), Timeout.InfiniteTimeSpan);
             //    });
 
+            _disposables.Add(_lidar.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
+                .Where(lidarData => lidarData != null).Subscribe(
+                async lidarData =>
+                {
+                    await _mqttClient.PublishAsync(JsonConvert.SerializeObject(lidarData), "autono-lidar");
+                }));
+
             if (_mqttClient != null)
-                _controllerDisposable = _mqttClient.GetPublishStringObservable("autono-xbox").ObserveOnDispatcher()
+                _disposables.Add(_mqttClient.GetPublishStringObservable("autono-xbox").ObserveOnDispatcher()
                     .Subscribe(async s =>
                     {
                         if (_autonoceptorController == null || string.IsNullOrEmpty(s))
@@ -151,16 +153,16 @@ namespace Autonoceptor.Host.ViewModels
                             return;
 
                         await _autonoceptorController.OnNextXboxData(d);
-                    });
+                    }));
 
-            _sonarDisposable = _maxbotixSonar.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
+            _disposables.Add(_maxbotixSonar.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
                 .Subscribe(async inches =>
                 {
                     if (_mqttClient == null)
                         return;
 
                     await _mqttClient.PublishAsync(inches.ToString(), "autono-sonar");
-                });
+                }));
 
             await Task.Delay(1000);
 

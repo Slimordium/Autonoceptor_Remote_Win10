@@ -108,6 +108,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AutonoceptorController.cs" />
+    <Compile Include="Hardware\Tf02Lidar.cs" />
     <Compile Include="Hardware\Gps.cs" />
     <Compile Include="Hardware\AdafruitFona.cs" />
     <Compile Include="Hardware\I2CDevice.cs" />

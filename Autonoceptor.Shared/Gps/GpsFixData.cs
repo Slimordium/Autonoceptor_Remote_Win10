@@ -41,6 +41,15 @@ namespace Autonoceptor.Shared.Gps
         public double EastProjectionOfBaseLine { get; set; } = 0;
         public double NorthProjectionOfBaseLine { get; set; } = 0;
         public double UpProjectionOfBaseLine { get; set; } = 0;
+        public bool OdometerCalibrated { get; set; }
+        public bool GyroAccelCalibrated { get; set; }
+        public bool SensorInputAvailable { get; set; }
+        public double OdometerPulseCount { get; set; }
+        public bool MovingBackward { get; set; }
+        public double GyroBias { get; set; }
+        public double OdometerScalingFactor { get; set; }
+        public double RotationRate { get; set; }
+        public double Distance { get; set; }
 
         public override string ToString()
         {
