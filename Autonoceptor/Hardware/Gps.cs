@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
@@ -20,7 +19,7 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task InitializeAsync()
         {
-            _gpsSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 9600, TimeSpan.FromMilliseconds(1500), TimeSpan.FromMilliseconds(1500));
+            _gpsSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 9600, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
 
             if (_gpsSerialDevice == null)
                 return;
@@ -38,23 +37,33 @@ namespace Autonoceptor.Service.Hardware
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     var byteCount = await _inputStream.LoadAsync(1024);
-                    var bytes = new byte[byteCount];
-                    _inputStream.ReadBytes(bytes);
-
-                    var sentences = Encoding.ASCII.GetString(bytes).Split('\n');
+                    var sentences = _inputStream.ReadString(byteCount).Split('\n');
 
                     if (sentences.Length == 0)
-                        return;
+                        continue;
+
+                    var gpsFixData = new GpsFixData();
 
                     foreach (var sentence in sentences)
                     {
                         if (!sentence.StartsWith("$"))
                             continue;
 
-                        var data = GpsExtensions.ParseNmea(sentence);
+                        try
+                        {
+                            var tempData = GpsExtensions.ParseNmea(sentence);
 
-                        dataObservable.OnNext(data);
+                            if (tempData != null)
+                                gpsFixData = tempData;
+                        }
+                        catch (Exception)
+                        {
+                            //Yum
+                        }
                     }
+
+                    //The data is accumulative, so only need to publish once
+                    dataObservable.OnNext(gpsFixData);
                 }
             });
 

@@ -18,12 +18,12 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task InitializeAsync()
         {
-            _tf02SerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("A105BLG5", 115200, TimeSpan.FromMilliseconds(1500), TimeSpan.FromMilliseconds(1500));
+            _tf02SerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("A105BLG5", 115200, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
 
             if (_tf02SerialDevice == null)
                 return;
 
-            _inputStream = new DataReader(_tf02SerialDevice.InputStream);// {InputStreamOptions = InputStreamOptions.Partial};
+            _inputStream = new DataReader(_tf02SerialDevice.InputStream) {InputStreamOptions = InputStreamOptions.Partial};
             _outputStream = new DataWriter(_tf02SerialDevice.OutputStream);
         }
 

@@ -5,7 +5,6 @@ using System.Threading;
 using System.Diagnostics;
 using System.Reactive.Subjects;
 using Autonoceptor.Shared.Gps;
-using Autonoceptor.Shared.Ik;
 using Autonoceptor.Shared.Utilities;
 
 namespace Autonoceptor.Service.Navigation
@@ -67,8 +66,6 @@ namespace Autonoceptor.Service.Navigation
 
         internal IObservable<GpsFixData> GpsFixObservable { get; set; }
 
-        internal ISubject<IkParams> IkParamSubject { get; set; } = new BehaviorSubject<IkParams>(new IkParams());
-
         internal async Task<bool> NavigateToWaypoint(GpsFixData currentWaypoint, CancellationToken cancelationToken)
         {
             var gpsFixData = new GpsFixData();
@@ -116,43 +113,43 @@ namespace Autonoceptor.Service.Navigation
 
         private void RequestMove(double currentHeading, double headingToWaypoint, double turnMagnitude, double travelLengthZ)
         {
-            var ikParams = new IkParams();
-            ikParams.LengthZ = travelLengthZ;
-            ikParams.GaitSpeedMs = 20;
+            //var ikParams = new IkParams();
+            //ikParams.LengthZ = travelLengthZ;
+            //ikParams.GaitSpeedMs = 20;
 
-            if (currentHeading < 180 && headingToWaypoint > 270)
-            {
-                //_ikFilter.RequestMovement(20, 0, travelLengthZ, -turnMagnitude);
+            //if (currentHeading < 180 && headingToWaypoint > 270)
+            //{
+            //    //_ikFilter.RequestMovement(20, 0, travelLengthZ, -turnMagnitude);
 
-                ikParams.RotationY = -turnMagnitude;
-                IkParamSubject.OnNext(ikParams);
-                return;
-            }
+            //    ikParams.RotationY = -turnMagnitude;
+            //    IkParamSubject.OnNext(ikParams);
+            //    return;
+            //}
 
-            if (currentHeading > 180 && headingToWaypoint < 90)
-            {
-                //_ikFilter.RequestMovement(20, 0, travelLengthZ, turnMagnitude);
+            //if (currentHeading > 180 && headingToWaypoint < 90)
+            //{
+            //    //_ikFilter.RequestMovement(20, 0, travelLengthZ, turnMagnitude);
 
-                ikParams.RotationY = turnMagnitude;
-                IkParamSubject.OnNext(ikParams);
-                return;
-            }
+            //    ikParams.RotationY = turnMagnitude;
+            //    IkParamSubject.OnNext(ikParams);
+            //    return;
+            //}
 
 
-            if (currentHeading > headingToWaypoint)
-            {
-                //_ikFilter.RequestMovement(20, 0, travelLengthZ, -turnMagnitude);
+            //if (currentHeading > headingToWaypoint)
+            //{
+            //    //_ikFilter.RequestMovement(20, 0, travelLengthZ, -turnMagnitude);
 
-                ikParams.RotationY = -turnMagnitude;
-            }
-            else
-            {
-                //_ikFilter.RequestMovement(20, 0, travelLengthZ, turnMagnitude);
+            //    ikParams.RotationY = -turnMagnitude;
+            //}
+            //else
+            //{
+            //    //_ikFilter.RequestMovement(20, 0, travelLengthZ, turnMagnitude);
 
-                ikParams.RotationY = turnMagnitude;
-            }
+            //    ikParams.RotationY = turnMagnitude;
+            //}
 
-            IkParamSubject.OnNext(ikParams);
+            //IkParamSubject.OnNext(ikParams);
         }
     }
 }

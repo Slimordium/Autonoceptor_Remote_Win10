@@ -137,6 +137,9 @@ namespace Autonoceptor.Host.ViewModels
                 .Where(lidarData => lidarData != null).Subscribe(
                 async lidarData =>
                 {
+                    if (_mqttClient == null)
+                        return;
+
                     await _mqttClient.PublishAsync(JsonConvert.SerializeObject(lidarData), "autono-lidar");
                 }));
 

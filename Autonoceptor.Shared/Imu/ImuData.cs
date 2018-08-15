@@ -11,10 +11,8 @@ namespace Autonoceptor.Shared.Imu
 
         public ImuData(string values)
         {
-            if (values == null || values.Length < 6) return;
-
-
-
+            if (values == null || values.Length < 6)
+                return;
 
             Yaw = Convert.ToDouble(values[3]);
             Pitch = Convert.ToDouble(values[4]);
