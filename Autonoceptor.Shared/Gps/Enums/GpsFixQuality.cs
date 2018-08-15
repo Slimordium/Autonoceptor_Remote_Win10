@@ -12,7 +12,7 @@ namespace Autonoceptor.Shared.Gps.Enums
         PPS,
         RTK,
         FloatRTK,
-        Estimated,
+        DeadReckoning,
         Manual,
         Simulation
     }

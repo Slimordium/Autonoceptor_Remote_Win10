@@ -195,9 +195,10 @@ namespace Autonoceptor.Shared.Utilities
                         _lat = Latitude2Double(tokens[2], tokens[3]);
                         _lon = Longitude2Double(tokens[4], tokens[5]);
 
-                        int quality;
-                        if (int.TryParse(tokens[6], out quality))
+                        if (int.TryParse(tokens[6], out var quality))
                             _quality = (GpsFixQuality)quality;
+
+                        int.TryParse(tokens[7], out _satellitesInView);
 
                         if (float.TryParse(tokens[9], out _altitude))
                             _altitude = _altitude * 3.28084f;
@@ -254,7 +255,6 @@ namespace Autonoceptor.Shared.Utilities
                             _odometerCalibrated = tokens[2].Equals("1");
                             _gyroAccelCalibrated = tokens[3].Equals("1");
                             _sensorInputAvailable = tokens[4].Equals("1");
-
                             _odometerPulseCount = Convert.ToDouble(tokens[5]);
 
                             switch (tokens[6])
@@ -265,19 +265,15 @@ namespace Autonoceptor.Shared.Utilities
                                 case "N":
                                     _quality = GpsFixQuality.NoFix;
                                     break;
-                                case "E":
-                                    _quality = GpsFixQuality.Estimated;
+                                case "E": //Estimated, or Dead Reckoning
+                                    _quality = GpsFixQuality.DeadReckoning;
                                     break;
                             }
 
                             _movingBackward = tokens[7].Equals("1");
-
                             _gyroBias = Convert.ToDouble(tokens[9]);
-
                             _odometerScalingFactor = Convert.ToDouble(tokens[10]);
-
                             _rotationRate = Convert.ToDouble(tokens[11]);
-
                             _distance = Convert.ToDouble(tokens[12].Split('*')[0]);
                         }
 

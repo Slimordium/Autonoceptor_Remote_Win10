@@ -12,19 +12,19 @@ namespace Autonoceptor.Service.Hardware
 {
     public class Tf02Lidar
     {
-        private SerialDevice _tf02SerialDevice;
+        private SerialDevice _serialDevice;
         private DataReader _inputStream;
         private DataWriter _outputStream;
 
         public async Task InitializeAsync()
         {
-            _tf02SerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("A105BLG5", 115200, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
+            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("A105BLG5", 115200, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
 
-            if (_tf02SerialDevice == null)
+            if (_serialDevice == null)
                 return;
 
-            _inputStream = new DataReader(_tf02SerialDevice.InputStream) {InputStreamOptions = InputStreamOptions.Partial};
-            _outputStream = new DataWriter(_tf02SerialDevice.OutputStream);
+            _inputStream = new DataReader(_serialDevice.InputStream) {InputStreamOptions = InputStreamOptions.Partial};
+            _outputStream = new DataWriter(_serialDevice.OutputStream);
         }
 
         public IObservable<LidarData> GetObservable(CancellationToken cancellationToken)
@@ -48,11 +48,11 @@ namespace Autonoceptor.Service.Hardware
 
                     var lidarData = new LidarData();
 
-                    var packet = byteList.GetRange(loc, 8);
+                    var packet = byteList.GetRange(loc, 8).ToArray();
 
-                    lidarData.Distance = (ushort)BitConverter.ToInt16(packet.ToArray(), 2);
-                    lidarData.Strength = (ushort)BitConverter.ToInt16(packet.ToArray(), 4);
-                    lidarData.Reliability = packet.ToArray()[6];
+                    lidarData.Distance = (ushort)BitConverter.ToInt16(packet, 2);
+                    lidarData.Strength = (ushort)BitConverter.ToInt16(packet, 4);
+                    lidarData.Reliability = packet[6];
 
                     if (lidarData.Reliability < 7) //If the value is a 7 or 8, it is reliable. Ignore the rest
                         continue;

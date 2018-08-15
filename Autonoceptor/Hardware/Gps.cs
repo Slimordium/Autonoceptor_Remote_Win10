@@ -12,20 +12,20 @@ namespace Autonoceptor.Service.Hardware
 {
     public class Gps
     {
-        private SerialDevice _gpsSerialDevice;
+        private SerialDevice _serialDevice;
 
         private DataReader _inputStream;
         private DataWriter _outputStream;
 
         public async Task InitializeAsync()
         {
-            _gpsSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 9600, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
+            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 9600, TimeSpan.FromMilliseconds(25), TimeSpan.FromMilliseconds(25));
 
-            if (_gpsSerialDevice == null)
+            if (_serialDevice == null)
                 return;
 
-            _inputStream = new DataReader(_gpsSerialDevice.InputStream) {InputStreamOptions = InputStreamOptions.Partial};
-            _outputStream = new DataWriter(_gpsSerialDevice.OutputStream);
+            _inputStream = new DataReader(_serialDevice.InputStream) {InputStreamOptions = InputStreamOptions.Partial};
+            _outputStream = new DataWriter(_serialDevice.OutputStream);
         }
 
         public IObservable<GpsFixData> GetObservable(CancellationToken cancellationToken)
