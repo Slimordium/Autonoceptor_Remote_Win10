@@ -226,7 +226,7 @@ namespace Autonoceptor.Host.ViewModels
 
                             try
                             {
-                                await _mqttClient.PublishAsync(bytes, "autono-eye", TimeSpan.FromSeconds(3));
+                                await _mqttClient.PublishAsync(bytes, "autono-eye", TimeSpan.FromSeconds(1));
                             }
                             catch (TimeoutException)
                             {

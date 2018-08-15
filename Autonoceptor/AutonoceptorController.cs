@@ -14,95 +14,80 @@ namespace Autonoceptor.Service
 {
     public class AutonoceptorController
     {
-        private SerialDevice _steeringSerialDevice;
-        private SerialDevice _motorSerialDevice;
+        private SerialDevice _maestroPwmDevice;
 
-        private DataWriter _steeringOutputStream;
-        private DataWriter _motorOutputStream;
+        private DataWriter _maestroOutputStream;
 
-        private bool _started = false;
         private CancellationToken _cancellationToken;
 
         public async Task InitializeAsync(CancellationToken cancellationToken)
         {
-            _steeringSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("4236", 9600, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+            _cancellationToken = cancellationToken;
 
-            _motorSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("111a", 9600, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+            _maestroPwmDevice = await SerialDeviceHelper.GetSerialDeviceAsync("142361d3&0&0000", 9600, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
-            while (_steeringSerialDevice == null || _motorSerialDevice == null)
-            {
-                await Task.Delay(500);
-            }
+            if (cancellationToken.IsCancellationRequested)
+                return;
 
-            _steeringOutputStream = new DataWriter(_steeringSerialDevice.OutputStream);
+            _maestroPwmDevice.DataBits = 7;
 
-            _motorOutputStream = new DataWriter(_motorSerialDevice.OutputStream);
+            _maestroOutputStream = new DataWriter(_maestroPwmDevice.OutputStream);
 
             _cancellationToken = cancellationToken;
             _cancellationToken.Register(async () =>
             {
-                _motorOutputStream.WriteBytes(Encoding.ASCII.GetBytes("X\r"));
-                await _motorOutputStream.StoreAsync();
+                var outputVal = 1500;
+
+                var lsb = Convert.ToByte(outputVal & 0x7f);
+                var msb = Convert.ToByte((outputVal >> 7) & 0x7f);
+
+                _maestroOutputStream.WriteBytes(new[] { (byte)0x84, (byte)0x00, lsb, msb });//Stop
+                await _maestroOutputStream.StoreAsync();
             });
         }
 
         public async Task OnNextXboxData(XboxData xboxData)
         {
-            if (_cancellationToken.IsCancellationRequested)
+            if (_cancellationToken.IsCancellationRequested || _maestroOutputStream == null)
                 return;
 
-            decimal direction = 127;
+            var direction = 5932;
 
             switch (xboxData.RightStick.Direction)
             {
                 case Direction.UpLeft:
                 case Direction.DownLeft:
                 case Direction.Left:
-                    direction = Math.Round((decimal) Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, 127, 0)));
+                    direction = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, 1483, 1060)) * 4;
                     break;
                 case Direction.UpRight:
                 case Direction.DownRight:
                 case Direction.Right:
-                    direction = Math.Round((decimal) Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, 128, 254)));
+                    direction = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, 1483, 1900)) * 4;
                     break;
             }
 
-            if (_steeringOutputStream != null)
+            var lsb = Convert.ToByte((direction & 0x7f));
+            var msb = Convert.ToByte((direction >> 7) & 0x7f);
+          
+            _maestroOutputStream.WriteBytes(new[] { (byte)0x84, (byte)0x01, lsb, msb });//Steering 
+            await _maestroOutputStream.StoreAsync();
+
+            var forwardMagnitude = Convert.ToUInt16(xboxData.LeftTrigger.Map(0, 33000, 1500, 1090)) * 4;
+            var reverseMagnitude = Convert.ToUInt16(xboxData.RightTrigger.Map(0, 33000, 1500, 1800)) * 4;
+
+            var outputVal = forwardMagnitude;
+
+            if (reverseMagnitude > 6000)
             {
-                _steeringOutputStream.WriteBytes(new[] { (byte)0xFF, (byte)0x00, (byte)direction });
-                await _steeringOutputStream.StoreAsync();
+                outputVal = reverseMagnitude;
             }
 
-            var reverseMagnitude = Math.Round(xboxData.LeftTrigger.Map(0, 33000, 0, 40));
-            var forwardMagnitude = Math.Round(xboxData.RightTrigger.Map(0, 33000, 0, 60));
+            lsb = Convert.ToByte(outputVal & 0x7f);
+            msb = Convert.ToByte((outputVal >> 7) & 0x7f);
 
-            var moveString = "X\r"; //Stop if not going forward or backwards
-
-            if (xboxData.FunctionButtons.Contains(FunctionButton.Start))
-            {
-                //_started = !_started;
-            }
-            else
-            {
-                if (reverseMagnitude > forwardMagnitude)
-                {
-                    moveString = $"R{reverseMagnitude}%\r";
-                }
-                else
-                {
-                    moveString = $"F{forwardMagnitude}%\r";
-                }
-            }
-            //if (_started)
-            //{
-                
-            //}
-
-            if (_motorOutputStream != null)
-            {
-                _motorOutputStream.WriteBytes(Encoding.ASCII.GetBytes(moveString));
-                await _motorOutputStream.StoreAsync();
-            }
+            _maestroOutputStream.WriteBytes(new[] { (byte)0x84, (byte)0x00, lsb, msb });//Forward / reverse
+            await _maestroOutputStream.StoreAsync();
         }
     }
 }
