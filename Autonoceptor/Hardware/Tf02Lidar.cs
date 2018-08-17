@@ -54,7 +54,7 @@ namespace Autonoceptor.Service.Hardware
                     lidarData.Strength = (ushort)BitConverter.ToInt16(packet, 4);
                     lidarData.Reliability = packet[6];
 
-                    if (lidarData.Reliability < 7) //If the value is a 7 or 8, it is reliable. Ignore the rest
+                    if (lidarData.Reliability <= 5 || lidarData.Reliability > 8) //If the value is a 7 or 8, it is reliable. Ignore the rest
                         continue;
 
                     dataObservable.OnNext(lidarData);

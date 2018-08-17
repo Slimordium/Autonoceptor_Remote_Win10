@@ -14,13 +14,13 @@ namespace Autonoceptor.Host
         private CancellationToken _cancellationToken;
         private bool _emergencyStopped;
 
-        private int _rightMax = 1900;
-        private int _center = 1500;
-        private int _leftMax = 1060;
+        private int _rightMax = 1800;
+        private int _center = 1166;
+        private int _leftMax = 816;
 
-        private int _forwardMax = 1090;
+        private int _forwardMax = 1800;
         private int _stopped = 1500;
-        private int _reverseMax = 1800;
+        private int _reverseMax = 1090;
 
         private ushort _movementChannel = 0;
         private ushort _steeringChannel = 1;

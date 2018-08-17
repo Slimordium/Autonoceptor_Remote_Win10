@@ -39,18 +39,22 @@ namespace Autonoceptor.Host.ViewModels
 
         private List<IDisposable> _disposables = new List<IDisposable>();
 
+        private IDisposable _remoteDisposable;
+
+        private List<IDisposable> _sensorDisposables = new List<IDisposable>();
+
         private ExtendedExecutionSession _session;
+
+        private bool _hwInitialized;
 
         public ShellViewModel()
         {
             _timeoutTimer = new Timer(_ => TimeoutCallBack());
 
-            //_startDisposable = Observable.Timer(TimeSpan.FromSeconds(2))
-            //    .ObserveOnDispatcher()
-            //    .Subscribe(async _ => { await InitializeAutonoceptor(); });
-
             Application.Current.Suspending += CurrentOnSuspending;
             Application.Current.Resuming += CurrentOnResuming;
+
+            _disposables.Add(Observable.Interval(TimeSpan.FromMinutes(4)).Subscribe(async _ => { await RequestExtendedSession(); }));
         }
 
         public string BrokerIp { get; set; } = "172.16.0.246";
@@ -65,8 +69,10 @@ namespace Autonoceptor.Host.ViewModels
             _carCancellationTokenSource?.Cancel();
         }
 
-        private async void CurrentOnResuming(object sender, object o)
+        private void CurrentOnResuming(object sender, object o)
         {
+            _disposables.Add(Observable.Interval(TimeSpan.FromMinutes(4)).Subscribe(async _ => { await RequestExtendedSession(); }));
+
             //await InitializeAutonoceptor();
         }
 
@@ -104,7 +110,7 @@ namespace Autonoceptor.Host.ViewModels
                 {
                     disposable.Dispose();
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     //
                 }
@@ -133,20 +139,35 @@ namespace Autonoceptor.Host.ViewModels
             deferral.Complete();
         }
 
-        public async Task ConnectToRemote()
+        public async Task PublishSensorData()
         {
-            _carCancellationTokenSource = new CancellationTokenSource();
+            if (!_hwInitialized)
+            {
+                await InitializeHardware();
+            }
 
-            _mqttClient?.Dispose();
-            _mqttClient = null;
+            if (_mqttClient == null)
+            {
+                _mqttClient?.Dispose();
+                _mqttClient = null;
 
-            _mqttClient = new MqttClient("autonoceptor-control", BrokerIp, 1883);
-            var status = await _mqttClient.InitializeAsync();
+                _mqttClient = new MqttClient("autonoceptor-control", BrokerIp, 1883);
+                var status = await _mqttClient.InitializeAsync();
 
-            if (status != Status.Initialized)
-                return;
+                if (status != Status.Initialized)
+                    return;
+            }
 
-            _disposables.Add(_gps.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
+            await ConnectToRemote();
+          
+            foreach (var sensorDisposable in _sensorDisposables)
+            {
+                sensorDisposable.Dispose();
+            }
+
+            _sensorDisposables = new List<IDisposable>();
+
+            _sensorDisposables.Add(_gps.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
                 .Where(fix => fix != null).Subscribe(async fix =>
                 {
                     if (_mqttClient == null)
@@ -155,49 +176,62 @@ namespace Autonoceptor.Host.ViewModels
                     await _mqttClient.PublishAsync(JsonConvert.SerializeObject(fix), "autono-gps");
                 }));
 
-            //_heartBeatDisposable = _mqttClient.GetPublishStringObservable("autono-heartbeat").ObserveOnDispatcher().Subscribe(_ =>
-            //    {
-            //        _timeoutTimer.Change(TimeSpan.FromSeconds(2), Timeout.InfiniteTimeSpan);
-            //    });
-
-            _disposables.Add(_lidar.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
-                .Where(lidarData => lidarData != null).Sample(TimeSpan.FromMilliseconds(50)).Subscribe(
-                async lidarData =>
-                {
-                    if (_mqttClient == null)
-                        return;
-
-                    await _mqttClient.PublishAsync(JsonConvert.SerializeObject(lidarData), "autono-lidar");
-                }));
-
-            if (_mqttClient != null)
-            {
-                _disposables.Add(_mqttClient.GetPublishStringObservable("autono-xbox").ObserveOnDispatcher()
-                    .Subscribe(async serializedData =>
+            _sensorDisposables.Add(_lidar.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
+                .Where(lidarData => lidarData != null).Sample(TimeSpan.FromMilliseconds(150)).Subscribe(
+                    async lidarData =>
                     {
-                        if (string.IsNullOrEmpty(serializedData))
+                        if (_mqttClient == null)
                             return;
 
+                        await _mqttClient.PublishAsync(JsonConvert.SerializeObject(lidarData), "autono-lidar");
+                    }));
+        }
+
+        public async Task ConnectToRemote()
+        {
+            if (_mqttClient == null)
+            {
+                _mqttClient?.Dispose();
+                _mqttClient = null;
+
+                _mqttClient = new MqttClient("autonoceptor-control", BrokerIp, 1883);
+                var status = await _mqttClient.InitializeAsync();
+
+                if (status != Status.Initialized)
+                    return;
+            }
+
+            _remoteDisposable?.Dispose();
+
+            _remoteDisposable = _mqttClient.GetPublishStringObservable("autono-xbox").ObserveOnDispatcher()
+                .Subscribe(async serializedData =>
+                {
+                    if (string.IsNullOrEmpty(serializedData))
+                        return;
+
+                    try
+                    {
                         var xboxData = JsonConvert.DeserializeObject<XboxData>(serializedData);
 
                         if (xboxData == null)
                             return;
 
                         await _conductor.OnNextXboxData(xboxData);
-                    }));
-            }
-
-            await Task.Delay(1000);
-
-            //_timeoutTimer.Change(TimeSpan.FromSeconds(2), Timeout.InfiniteTimeSpan);
-
-            _disposables.Add(Observable.Interval(TimeSpan.FromMinutes(4)).Subscribe(async _ => { await RequestExtendedSession(); }));
-
-            //await StartStreamAsync();
+                    }
+                    catch (Exception)
+                    {
+                        //
+                    }
+                        
+                });
         }
+
+        
 
         private async Task InitializeHardware()
         {
+            _hwInitialized = true;
+
             await _lcd.InitializeAsync();
             await _gps.InitializeAsync();
             await _lidar.InitializeAsync();
