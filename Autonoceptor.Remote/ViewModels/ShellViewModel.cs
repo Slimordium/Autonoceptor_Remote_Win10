@@ -14,6 +14,7 @@ using Windows.UI.Xaml.Media.Imaging;
 using Caliburn.Micro;
 using Hardware.Xbox;
 using Autonoceptor.Remote.Views;
+using Autonoceptor.Shared;
 using Autonoceptor.Shared.OpenCv;
 using Newtonsoft.Json;
 using NLog;
@@ -261,10 +262,23 @@ namespace Autonoceptor.Remote.ViewModels
                     }));
             }
 
-            _disposables.Add(_mqttClient.GetPublishStringObservable("autono-sonar").ObserveOnDispatcher().Subscribe(r =>
+            _disposables.Add(_mqttClient.GetPublishStringObservable("autono-lidar").ObserveOnDispatcher().Subscribe(r =>
+            {
+                if (r == null)
+                    return;
+
+                try
                 {
-                    ShellView.Range = Convert.ToInt32(r);
-                }));
+                    var o = JsonConvert.DeserializeObject<LidarData>(r);
+
+                    ShellView.Range = Math.Round(o.Distance * 0.3937007874, 2); //Convert cm to in
+                }
+                catch (Exception e)
+                {
+                    //
+                }
+
+            }));
 
             if (CirclesEnabled)
             {

@@ -91,7 +91,13 @@
 
         <xaml:CanvasControl x:Name="CanvasControl" Grid.Column="3" Grid.Row="0" Grid.RowSpan="16" Draw="CanvasControl_OnDraw" CreateResources="CanvasControl_CreateResources" HorizontalAlignment="Stretch" />
 
-        <ListView Grid.Row="15" Grid.Column="0" Grid.ColumnSpan="3" Height="Auto" ItemsSource="{Binding Log}" Width="Auto" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="0" Padding="0">
+        <ScrollViewer  Grid.Row="15" Grid.Column="0" Grid.ColumnSpan="3" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="{Binding Path=Width, ElementName=LogColumn}" Margin="3.4,0,0,-0.4" Background="White">
+            <ListBox x:Name="LogBox" FontSize="13" FontFamily="Arial Narrow" Background="White" ItemsSource="{Binding Log}" BorderThickness="0" SelectionMode="Multiple" Margin="5,0,0,0" >
+
+            </ListBox>
+        </ScrollViewer>
+
+        <!--<ListView Grid.Row="15" Grid.Column="0" Grid.ColumnSpan="3" Height="Auto" ItemsSource="{Binding Log}" Width="Auto" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="0" Padding="0">
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
                    <Setter Property="Foreground" Value="GreenYellow"></Setter>
@@ -101,7 +107,7 @@
                    <Setter Property="Padding" Value="0"></Setter>
                 </Style>
             </ListView.ItemContainerStyle>
-        </ListView>
+        </ListView>-->
         <MediaElement Grid.Column="0" Grid.Row="9" Name="MediaElement"></MediaElement>
     </Grid>
     

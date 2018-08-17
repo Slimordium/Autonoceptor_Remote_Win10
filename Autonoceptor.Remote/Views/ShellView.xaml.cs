@@ -36,7 +36,7 @@ namespace Autonoceptor.Remote.Views{
 
         private bool _complete = true;
 
-        internal static int Range { private get; set; }
+        internal static double Range { private get; set; }
 
         private double _canvasCenterWidth;
 
@@ -67,19 +67,19 @@ namespace Autonoceptor.Remote.Views{
                         {
                             using (var canvasBitmap = await CanvasBitmap.LoadAsync(drawingSession, imageBuffer))
                             {
-                                var rect = new Rect(0, 0, canvasBitmap.SizeInPixels.Width * 1.5, canvasBitmap.SizeInPixels.Height * 1.5);
+                                var rect = new Rect(0, 0, canvasBitmap.SizeInPixels.Width * 2.5, canvasBitmap.SizeInPixels.Height * 2.5);
 
-                                CanvasControl.Width = canvasBitmap.SizeInPixels.Width * 2;
-                                CanvasControl.Height = canvasBitmap.SizeInPixels.Height * 2;
+                                CanvasControl.Width = canvasBitmap.SizeInPixels.Width * 3;
+                                CanvasControl.Height = canvasBitmap.SizeInPixels.Height * 3;
 
-                                ICanvasImage image = new Transform2DEffect
-                                {
-                                    Source = canvasBitmap,
-                                    TransformMatrix = Matrix3x2.CreateRotation((float)(180 * Math.PI / 180)),
-                                };
+                                //ICanvasImage image = new Transform2DEffect
+                                //{
+                                //    Source = canvasBitmap,
+                                //    TransformMatrix = Matrix3x2.CreateRotation((float)(180 * Math.PI / 180)),
+                                //};
 
-                                var sourceRect = image.GetBounds(drawingSession);
-                                drawingSession.DrawImage(image, rect, sourceRect, 1);
+                                var sourceRect = canvasBitmap.GetBounds(drawingSession);
+                                drawingSession.DrawImage(canvasBitmap, rect, sourceRect, 1);
                             }
 
                             if (_circleF != null)

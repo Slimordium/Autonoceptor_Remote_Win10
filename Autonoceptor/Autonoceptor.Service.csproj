@@ -107,7 +107,7 @@
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="AutonoceptorController.cs" />
+    <Compile Include="Hardware\MaestroPwmController.cs" />
     <Compile Include="Hardware\Tf02Lidar.cs" />
     <Compile Include="Hardware\Gps.cs" />
     <Compile Include="Hardware\I2CDevice.cs" />
@@ -115,8 +115,6 @@
     <Compile Include="Hardware\RazorImu.cs" />
     <Compile Include="Hardware\SerialDeviceHelper.cs" />
     <Compile Include="Hardware\SparkFunSerial16X2Lcd.cs" />
-    <Compile Include="Navigation\GpsNavigator.cs" />
-    <Compile Include="Ntrip\NtripClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="Properties\Test2.rd.xml" />
   </ItemGroup>

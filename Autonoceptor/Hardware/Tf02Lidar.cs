@@ -58,6 +58,8 @@ namespace Autonoceptor.Service.Hardware
                         continue;
 
                     dataObservable.OnNext(lidarData);
+
+                    new ManualResetEventSlim(false).Wait(15);
                 }
             });
 

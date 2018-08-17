@@ -13,27 +13,33 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Autonoceptor.Service;
 using Autonoceptor.Service.Hardware;
+using Autonoceptor.Shared.Utilities;
 using Caliburn.Micro;
 using Hardware.Xbox;
+using Hardware.Xbox.Enums;
 using Newtonsoft.Json;
 using RxMqtt.Client;
+using RxMqtt.Shared;
 
 namespace Autonoceptor.Host.ViewModels
 {
     public class ShellViewModel : Conductor<object>
     {
-        private readonly AutonoceptorController _autonoceptorController = new AutonoceptorController();
-
+        private readonly Conductor _conductor = new Conductor();
         private readonly Gps _gps = new Gps();
-        private readonly Timer _timeoutTimer;
         private readonly Tf02Lidar _lidar = new Tf02Lidar();
         private readonly SparkFunSerial16X2Lcd _lcd = new SparkFunSerial16X2Lcd();
 
+        private readonly Timer _timeoutTimer;
+
         private CancellationTokenSource _carCancellationTokenSource = new CancellationTokenSource();
+        private CancellationTokenSource _videoStreamCancellationTokenSource = new CancellationTokenSource();
 
         private MqttClient _mqttClient;
 
         private List<IDisposable> _disposables = new List<IDisposable>();
+
+        private ExtendedExecutionSession _session;
 
         public ShellViewModel()
         {
@@ -50,7 +56,7 @@ namespace Autonoceptor.Host.ViewModels
         public string BrokerIp { get; set; } = "172.16.0.246";
 
         public MediaElement MediaElement { get; } = new MediaElement();
-        public int VideoProfile { get; set; } = 6; //6, 8
+        public int VideoProfile { get; set; } = 13; //60 = 320x240,30fps MJPG, 84 = 160x120, 30 fps, MJPG, "96, 800x600, 30 fps, MJPG" "108, 1280x720, 30 fps, MJPG"
 
         public CaptureElement CaptureElement { get; set; } = new CaptureElement();
 
@@ -61,10 +67,8 @@ namespace Autonoceptor.Host.ViewModels
 
         private async void CurrentOnResuming(object sender, object o)
         {
-            await InitializeAutonoceptor();
+            //await InitializeAutonoceptor();
         }
-
-        private ExtendedExecutionSession _session;
 
         private void NewSessionOnRevoked(object sender, ExtendedExecutionRevokedEventArgs args)
         {
@@ -94,17 +98,42 @@ namespace Autonoceptor.Host.ViewModels
         {
             var deferral = suspendingEventArgs.SuspendingOperation.GetDeferral();
 
-            _carCancellationTokenSource?.Cancel();
-            _carCancellationTokenSource = null;
-            _mqttClient?.Dispose();
-            _mqttClient = null;
+            foreach (var disposable in _disposables)
+            {
+                try
+                {
+                    disposable.Dispose();
+                }
+                catch (Exception e)
+                {
+                    //
+                }
+            }
+
+            _disposables = new List<IDisposable>();
+
+            try
+            {
+                _videoStreamCancellationTokenSource?.Cancel();
+                _videoStreamCancellationTokenSource = null;
+
+                _carCancellationTokenSource?.Cancel();
+                _carCancellationTokenSource = null;
+
+                _mqttClient?.Dispose();
+                _mqttClient = null;
+            }
+            catch (Exception e)
+            {
+                //
+            }
 
             await Task.Delay(1000);
 
             deferral.Complete();
         }
 
-        private async Task InitializeAutonoceptor()
+        public async Task ConnectToRemote()
         {
             _carCancellationTokenSource = new CancellationTokenSource();
 
@@ -114,10 +143,8 @@ namespace Autonoceptor.Host.ViewModels
             _mqttClient = new MqttClient("autonoceptor-control", BrokerIp, 1883);
             var status = await _mqttClient.InitializeAsync();
 
-            await _lcd.InitializeAsync();
-            await _gps.InitializeAsync();
-            await _autonoceptorController.InitializeAsync(_carCancellationTokenSource.Token);
-            await _lidar.InitializeAsync();
+            if (status != Status.Initialized)
+                return;
 
             _disposables.Add(_gps.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
                 .Where(fix => fix != null).Subscribe(async fix =>
@@ -134,7 +161,7 @@ namespace Autonoceptor.Host.ViewModels
             //    });
 
             _disposables.Add(_lidar.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
-                .Where(lidarData => lidarData != null).Subscribe(
+                .Where(lidarData => lidarData != null).Sample(TimeSpan.FromMilliseconds(50)).Subscribe(
                 async lidarData =>
                 {
                     if (_mqttClient == null)
@@ -144,30 +171,40 @@ namespace Autonoceptor.Host.ViewModels
                 }));
 
             if (_mqttClient != null)
+            {
                 _disposables.Add(_mqttClient.GetPublishStringObservable("autono-xbox").ObserveOnDispatcher()
-                    .Subscribe(async s =>
+                    .Subscribe(async serializedData =>
                     {
-                        if (_autonoceptorController == null || string.IsNullOrEmpty(s))
+                        if (string.IsNullOrEmpty(serializedData))
                             return;
 
-                        var d = JsonConvert.DeserializeObject<XboxData>(s);
+                        var xboxData = JsonConvert.DeserializeObject<XboxData>(serializedData);
 
-                        if (d == null)
+                        if (xboxData == null)
                             return;
 
-                        await _autonoceptorController.OnNextXboxData(d);
+                        await _conductor.OnNextXboxData(xboxData);
                     }));
+            }
 
             await Task.Delay(1000);
 
             //_timeoutTimer.Change(TimeSpan.FromSeconds(2), Timeout.InfiniteTimeSpan);
 
-            Observable.Interval(TimeSpan.FromMinutes(5)).Subscribe(async _ => { await RequestExtendedSession(); });
+            _disposables.Add(Observable.Interval(TimeSpan.FromMinutes(4)).Subscribe(async _ => { await RequestExtendedSession(); }));
 
-            await StartStreamAsync();
+            //await StartStreamAsync();
         }
 
-        private async Task<bool> StartStreamAsync()
+        private async Task InitializeHardware()
+        {
+            await _lcd.InitializeAsync();
+            await _gps.InitializeAsync();
+            await _lidar.InitializeAsync();
+            await _conductor.InitializeAsync(_carCancellationTokenSource);
+        }
+
+        private async Task<bool> StartVideoStreamAsync()
         {
             var mediaCapture = new MediaCapture();
 
@@ -195,7 +232,7 @@ namespace Autonoceptor.Host.ViewModels
 
             await mediaCapture.SetEncodingPropertiesAsync(MediaStreamType.VideoPreview, props, null);
 
-            while (!_carCancellationTokenSource.IsCancellationRequested)
+            while (!_videoStreamCancellationTokenSource.IsCancellationRequested)
             {
                 using (var stream = new InMemoryRandomAccessStream())
                 {
