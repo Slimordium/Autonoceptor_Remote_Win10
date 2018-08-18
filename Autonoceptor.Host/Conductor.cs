@@ -12,6 +12,7 @@ using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
 using Windows.UI.Xaml.Controls;
 using Autonoceptor.Service.Hardware;
+using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Utilities;
 using Hardware.Xbox;
 using Hardware.Xbox.Enums;
@@ -41,9 +42,13 @@ namespace Autonoceptor.Host
         private ushort _movementChannel = 0;
         private ushort _steeringChannel = 1;
 
-        private ushort _navEnableChannel = 8;
-        private ushort _recordWaypointsChannel = 10;
-        private ushort _enableRemoteChannel = 9;
+        private ushort _navEnableChannel = 12;
+        private ushort _recordWaypointsChannel = 13;
+        private ushort _enableRemoteChannel = 14;
+
+        private readonly string _brokerIp;
+
+        private IDisposable _remoteDisposable;
 
         private int _lidarRange;
         private bool _warn;
@@ -55,24 +60,65 @@ namespace Autonoceptor.Host
 
         private bool _recordWaypoints;
 
-        private StorageFolder _waypointFolder = ApplicationData.Current.LocalFolder;
+        private StorageFolder _waypointFolder = ApplicationData.Current.LocalCacheFolder;
 
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
 
         private readonly Tf02Lidar _lidar = new Tf02Lidar();
         private readonly SparkFunSerial16X2Lcd _lcd = new SparkFunSerial16X2Lcd();
 
-        private StorageFile _waypointFile;// = await storageFolder.CreateFileAsync($"waypoints-{DateTime.Now:MMM-dd-HH:mm:ss.ff}.txt", CreationCollisionOption.OpenIfExists);
+        private string _waypointFile;// = await storageFolder.CreateFileAsync($"waypoints-{DateTime.Now:MMM-dd-HH:mm:ss.ff}.txt", CreationCollisionOption.OpenIfExists);
+
+        private GpsFixData _gpsFixData = new GpsFixData();
 
         public async Task InitializeAsync(CancellationTokenSource cancellationTokenSource)
         {
-            await Gps.InitializeAsync();
-
             _cancellationToken = cancellationTokenSource.Token;
 
-            await _maestroPwmController.InitializeAsync(_cancellationToken);
+            await Task.WhenAll(
+                Gps.InitializeAsync(),
+                _lidar.InitializeAsync(),
+                _lcd.InitializeAsync(),
+                _maestroPwmController.InitializeAsync(_cancellationToken)
+            );
 
             cancellationTokenSource.Token.Register(async () => { await Stop(); });
+
+            if (Gps != null)
+            {
+                //Write GPS fix data to file, if switch is closed. Gps publishes fix data once a second
+                _disposables.Add(Gps.GetObservable(_cancellationToken)
+                    .ObserveOnDispatcher()
+                    .Subscribe(async gpsFixData =>
+                    {
+                        if (_waypointFile == null || !_recordWaypoints || (gpsFixData.Lat == _gpsFixData.Lat && gpsFixData.Lon == _gpsFixData.Lon))
+                            return;
+
+                        _gpsFixData = gpsFixData;
+
+                        try
+                        {
+                            await FileExtensions.SaveStringToFile(_waypointFile, gpsFixData.ToString());
+                        }
+                        catch (Exception)
+                        {
+                            //
+                        }
+                    }));
+            }
+
+            if (_lidar != null)
+            {
+                _disposables.Add(_lidar.GetObservable(_cancellationToken)
+                    .ObserveOnDispatcher()
+                    .Subscribe(async rangeData =>
+                    {
+                        await UpdateLidarRange(rangeData.Distance); 
+                    }));
+            }
+
+            if (_maestroPwmController == null)
+                return;
 
             _disposables.Add(_maestroPwmController.GetDigitalChannelObservable(_navEnableChannel, TimeSpan.FromMilliseconds(200))
                 .ObserveOnDispatcher()
@@ -117,48 +163,31 @@ namespace Autonoceptor.Host
             _disposables.Add(_maestroPwmController.GetDigitalChannelObservable(_recordWaypointsChannel, TimeSpan.FromMilliseconds(500))
                 .ObserveOnDispatcher()
                 .Subscribe(
-                async isSet =>
+                isSet =>
                 {
                     if (isSet)
                     {
                         _recordWaypoints = true;
 
-                        if (_waypointFile == null)
+                        if (string.IsNullOrEmpty(_waypointFile))
                         {
-                            _waypointFile = await _waypointFolder.CreateFileAsync($"waypoints-{DateTime.Now:MMM-dd-HH:mm:ss.ff}.txt", CreationCollisionOption.OpenIfExists);
+                            try
+                            {
+                                _waypointFile = $"waypoints-{DateTime.Now:MMM-dd-HH-mm-ss-ff}.txt";
+                            }
+                            catch (Exception)
+                            {
+                                //
+                            }
                         }
-                    }
 
-                    if (isSet)
                         return;
+                    }
 
                     _recordWaypoints = false;
                     _waypointFile = null;
                 }));
-
-            //Write GPS fix data to file, if switch is closed
-            _disposables.Add(Gps.GetObservable(_cancellationToken)
-                .ObserveOnDispatcher()
-                .Subscribe(async gpsFixData =>
-                {
-                    if (_waypointFile == null || !_recordWaypoints)
-                        return;
-
-                    try
-                    {
-                        await FileIO.WriteTextAsync(_waypointFile, gpsFixData.ToString());
-                    }
-                    catch (Exception)
-                    {
-                        //
-                    }
-                }));
-
         }
-
-        private string _brokerIp;
-
-        private IDisposable _remoteDisposable;
 
         public Conductor(string brokerIp)
         {
@@ -233,7 +262,15 @@ namespace Autonoceptor.Host
                     if (_mqttClient == null)
                         return;
 
-                    await _mqttClient.PublishAsync(JsonConvert.SerializeObject(fix), "autono-gps");
+                    try
+                    {
+                        await _mqttClient.PublishAsync(JsonConvert.SerializeObject(fix), "autono-gps");
+                    }
+                    catch (Exception)
+                    {
+                        //
+                    }
+
                 }));
 
             _sensorDisposables.Add(_lidar.GetObservable(_cancellationToken).ObserveOnDispatcher()
@@ -243,7 +280,16 @@ namespace Autonoceptor.Host
                         if (_mqttClient == null)
                             return;
 
-                        await _mqttClient.PublishAsync(JsonConvert.SerializeObject(lidarData), "autono-lidar");
+                        try
+                        {
+                            await _mqttClient.PublishAsync(JsonConvert.SerializeObject(lidarData), "autono-lidar");
+                        }
+                        catch (Exception)
+                        {
+                            //
+                        }
+
+                        
                     }));
         }
 
@@ -251,19 +297,19 @@ namespace Autonoceptor.Host
         {
             _lidarRange = range;
 
-            if (range <= 30)
+            if (range <= 90)
             {
                 await EmergencyStop();
             }
 
-            if (range > 30 && range <= 60)
+            if (range > 90 && range <= 130)
             {
                 await EmergencyStop(true);
 
                 _warn = true;
             }
 
-            if (range > 60)
+            if (range > 130)
             {
                 await EmergencyStop(true);
 
@@ -370,7 +416,7 @@ namespace Autonoceptor.Host
             if (_maestroPwmController == null || _cancellationToken.IsCancellationRequested || _emergencyStopped)
                 return;
 
-            var direction = 5932;
+            var direction = _center;
 
             switch (xboxData.RightStick.Direction)
             {

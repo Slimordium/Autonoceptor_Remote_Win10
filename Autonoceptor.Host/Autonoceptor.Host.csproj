@@ -104,6 +104,7 @@
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
     <Compile Include="Conductor.cs" />
+    <Compile Include="FileExtensions.cs" />
     <Compile Include="GpsNavUtility.cs" />
     <Compile Include="MoveRequest.cs" />
     <Compile Include="Priority.cs" />

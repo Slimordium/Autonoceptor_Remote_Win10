@@ -57,7 +57,7 @@ namespace Autonoceptor.Service.Hardware
 
             await _readWriteSemaphore.WaitAsync(_cancellationToken);
 
-            _outputStream.WriteBytes(new[] { (byte)0xAA, (byte)0x00, (byte)0x10, (byte)channel });//Forward / reverse
+            _outputStream.WriteBytes(new[] { (byte)0xAA, (byte)0x0C, (byte)0x10, (byte)channel });//Forward / reverse
             await _outputStream.StoreAsync();
 
             await _inputStream.LoadAsync(2);
@@ -98,8 +98,8 @@ namespace Autonoceptor.Service.Hardware
         /// <returns></returns>
         public IObservable<bool> GetDigitalChannelObservable(ushort channelNumber, TimeSpan updateInterval)
         {
-            if (channelNumber < 12 || channelNumber > 23)
-                throw new InvalidOperationException("Valid Channels are 12 - 23");
+            //if (channelNumber < 12 || channelNumber > 23)
+            //    throw new InvalidOperationException("Valid Channels are 12 - 23");
 
             var dataObservable = new Subject<bool>();
 
@@ -111,12 +111,12 @@ namespace Autonoceptor.Service.Hardware
                 {
                     var channelValue = await GetChannelValue(channelNumber);
 
-                    if (channelValue == 0 && channelValue != lastChannelValue)
+                    if (channelValue <= 1023 && channelValue != lastChannelValue)
                     {
                         dataObservable.OnNext(false);
                     }
 
-                    if (channelValue == 1023 && channelValue != lastChannelValue)
+                    if (channelValue > 1023 && channelValue != lastChannelValue)
                     {
                         dataObservable.OnNext(true);
                     }

@@ -42,7 +42,7 @@
 //        internal static async Task SaveStringToFile(string filename, string content)
 //        {
 //            var bytesToAppend = Encoding.UTF8.GetBytes(content.ToCharArray());
-         
+
 //            try
 //            {
 //                var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(filename, CreationCollisionOption.OpenIfExists).AsTask();

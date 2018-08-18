@@ -19,7 +19,7 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task InitializeAsync()
         {
-            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 9600, TimeSpan.FromMilliseconds(25), TimeSpan.FromMilliseconds(25));
+            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 115200, TimeSpan.FromMilliseconds(25), TimeSpan.FromMilliseconds(25));
 
             if (_serialDevice == null)
                 return;

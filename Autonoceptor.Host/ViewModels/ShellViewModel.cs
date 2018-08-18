@@ -25,7 +25,7 @@ namespace Autonoceptor.Host.ViewModels
 {
     public class ShellViewModel : Conductor<object>
     {
-        private readonly Conductor _conductor = new Conductor();
+        private readonly Conductor _conductor;
         
 
 
@@ -50,6 +50,8 @@ namespace Autonoceptor.Host.ViewModels
         {
             _timeoutTimer = new Timer(_ => TimeoutCallBack());
 
+            _conductor = new Conductor(BrokerIp);
+
             Application.Current.Suspending += CurrentOnSuspending;
             Application.Current.Resuming += CurrentOnResuming;
 
@@ -66,6 +68,11 @@ namespace Autonoceptor.Host.ViewModels
         private void TimeoutCallBack()
         {
             _carCancellationTokenSource?.Cancel();
+        }
+
+        public async Task StartConductor()
+        {
+            await _conductor.InitializeAsync(_carCancellationTokenSource);
         }
 
         private void CurrentOnResuming(object sender, object o)
@@ -138,174 +145,6 @@ namespace Autonoceptor.Host.ViewModels
             deferral.Complete();
         }
 
-        public async Task PublishSensorData()
-        {
-            if (!_hwInitialized)
-            {
-                await InitializeHardware();
-            }
-
-            if (_mqttClient == null)
-            {
-                _mqttClient?.Dispose();
-                _mqttClient = null;
-
-                _mqttClient = new MqttClient("autonoceptor-control", BrokerIp, 1883);
-                var status = await _mqttClient.InitializeAsync();
-
-                if (status != Status.Initialized)
-                    return;
-            }
-
-            await ConnectToRemote();
-          
-            foreach (var sensorDisposable in _sensorDisposables)
-            {
-                sensorDisposable.Dispose();
-            }
-
-            _sensorDisposables = new List<IDisposable>();
-
-            _sensorDisposables.Add(_gps.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
-                .Where(fix => fix != null).Subscribe(async fix =>
-                {
-                    if (_mqttClient == null)
-                        return;
-
-                    await _mqttClient.PublishAsync(JsonConvert.SerializeObject(fix), "autono-gps");
-                }));
-
-            _sensorDisposables.Add(_lidar.GetObservable(_carCancellationTokenSource.Token).ObserveOnDispatcher()
-                .Where(lidarData => lidarData != null).Sample(TimeSpan.FromMilliseconds(150)).Subscribe(
-                    async lidarData =>
-                    {
-                        if (_mqttClient == null)
-                            return;
-
-                        await _mqttClient.PublishAsync(JsonConvert.SerializeObject(lidarData), "autono-lidar");
-                    }));
-        }
-
-        public async Task ConnectToRemote()
-        {
-            if (_mqttClient == null)
-            {
-                _mqttClient?.Dispose();
-                _mqttClient = null;
-
-                _mqttClient = new MqttClient("autonoceptor-control", BrokerIp, 1883);
-                var status = await _mqttClient.InitializeAsync();
-
-                if (status != Status.Initialized)
-                    return;
-            }
-
-            _remoteDisposable?.Dispose();
-
-            _remoteDisposable = _mqttClient.GetPublishStringObservable("autono-xbox").ObserveOnDispatcher()
-                .Subscribe(async serializedData =>
-                {
-                    if (string.IsNullOrEmpty(serializedData))
-                        return;
-
-                    try
-                    {
-                        var xboxData = JsonConvert.DeserializeObject<XboxData>(serializedData);
-
-                        if (xboxData == null)
-                            return;
-
-                        await _conductor.OnNextXboxData(xboxData);
-                    }
-                    catch (Exception)
-                    {
-                        //
-                    }
-                        
-                });
-        }
-
-        private async Task InitializeHardware()
-        {
-            _hwInitialized = true;
-
-            await _lcd.InitializeAsync();
-            await _gps.InitializeAsync();
-            await _lidar.InitializeAsync();
-            await _conductor.InitializeAsync(_carCancellationTokenSource);
-        }
-
-        private async Task<bool> StartVideoStreamAsync()
-        {
-            var mediaCapture = new MediaCapture();
-
-            await mediaCapture.InitializeAsync();
-
-            var encodingProperties = mediaCapture.VideoDeviceController
-                .GetAvailableMediaStreamProperties(MediaStreamType.VideoPreview).ToList();
-
-            var res = new List<string>();
-
-            for (var i = 0; i < encodingProperties.Count; i++)
-            {
-                var p = (VideoEncodingProperties) encodingProperties[i];
-                res.Add($"{i}, {p.Width}x{p.Height}, {p.FrameRate.Numerator / p.FrameRate.Denominator} fps, {p.Subtype}");
-            }
-
-            // set resolution
-            await mediaCapture.VideoDeviceController.SetMediaStreamPropertiesAsync(MediaStreamType.VideoPreview, encodingProperties[Convert.ToInt32(VideoProfile)]); //2, 8, 9 - 60fps = better
-
-            CaptureElement = new CaptureElement {Source = mediaCapture};
-
-            await mediaCapture.StartPreviewAsync();
-
-            var props = mediaCapture.VideoDeviceController.GetMediaStreamProperties(MediaStreamType.VideoPreview);
-
-            await mediaCapture.SetEncodingPropertiesAsync(MediaStreamType.VideoPreview, props, null);
-
-            while (!_videoStreamCancellationTokenSource.IsCancellationRequested)
-            {
-                using (var stream = new InMemoryRandomAccessStream())
-                {
-                    try
-                    {
-                        await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), stream);
-                    }
-                    catch (Exception)
-                    {
-                        await Task.Delay(1000);
-                        continue;
-                    }
-
-                    try
-                    {
-                        using (var reader = new DataReader(stream.GetInputStreamAt(0)))
-                        {
-                            var bytes = new byte[stream.Size];
-                            await reader.LoadAsync((uint)stream.Size);
-                            reader.ReadBytes(bytes);
-
-                            if (_mqttClient == null)
-                                continue;
-
-                            try
-                            {
-                                await _mqttClient.PublishAsync(bytes, "autono-eye", TimeSpan.FromSeconds(1));
-                            }
-                            catch (TimeoutException)
-                            {
-                                //
-                            }
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        //
-                    }
-                }
-            }
-
-            return false;
-        }
+        
     }
 }
