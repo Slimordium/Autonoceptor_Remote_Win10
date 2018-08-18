@@ -26,9 +26,8 @@ namespace Autonoceptor.Host.ViewModels
     public class ShellViewModel : Conductor<object>
     {
         private readonly Conductor _conductor = new Conductor();
-        private readonly Gps _gps = new Gps();
-        private readonly Tf02Lidar _lidar = new Tf02Lidar();
-        private readonly SparkFunSerial16X2Lcd _lcd = new SparkFunSerial16X2Lcd();
+        
+
 
         private readonly Timer _timeoutTimer;
 
@@ -225,8 +224,6 @@ namespace Autonoceptor.Host.ViewModels
                         
                 });
         }
-
-        
 
         private async Task InitializeHardware()
         {
