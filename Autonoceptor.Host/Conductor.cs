@@ -63,7 +63,10 @@ namespace Autonoceptor.Host
 
         private readonly List<IDisposable> _disposables = new List<IDisposable>();
         private IDisposable _remoteDisposable;
+        private IDisposable _waypointNavigationDisposable;
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
+
+        private WaypointList _waypointList = new WaypointList();
 
         private string _waypointFileName;
 
@@ -134,19 +137,10 @@ namespace Autonoceptor.Host
                 .ObserveOnDispatcher()
                 .Subscribe(async gpsFixData =>
                 {
-                    if (string.IsNullOrEmpty(_waypointFileName) || !_recordWaypoints || (gpsFixData.Lat == _gpsFixData.Lat && gpsFixData.Lon == _gpsFixData.Lon))
+                    if ( !_recordWaypoints || (gpsFixData.Lat == _gpsFixData.Lat && gpsFixData.Lon == _gpsFixData.Lon))
                         return;
 
-                    Volatile.Write(ref _gpsFixData, gpsFixData);
-
-                    try
-                    {
-                        await FileExtensions.SaveStringToFile(_waypointFileName, gpsFixData.ToString());
-                    }
-                    catch (Exception)
-                    {
-                        //
-                    }
+                    _waypointList.Add(gpsFixData);
                 }));
 
             _disposables.Add(_lidar.GetObservable(_cancellationToken)
@@ -172,8 +166,31 @@ namespace Autonoceptor.Host
             _disposables.Add(_maestroPwm.GetDigitalChannelObservable(_navEnableChannel, TimeSpan.FromMilliseconds(500))
                 .ObserveOnDispatcher()
                 .Subscribe(
-                isSet =>
+                async isSet =>
                 {
+
+                    if (isSet)
+                    {
+                        await _lcd.WriteAsync("Beggining Waypoint follow", 1);
+
+                        _waypointList = await _waypointList.Load();
+
+                        _waypointNavigationDisposable = _gps.GetObservable(_cancellationToken).ObserveOnDispatcher().Subscribe(async gpsFixData =>
+                        {
+                            // See what I got
+                            await _lcd.WriteAsync("Starting Trail", 1);
+                            // call navigation method
+                        });
+                    }
+                    else
+                    {
+                        await _lcd.WriteAsync("Ending Waypoint follow", 1);
+                        _waypointNavigationDisposable?.Dispose();
+                    }
+
+                    
+
+
                     //TODO: This should follow stored waypoints
                 }));
 
@@ -208,7 +225,7 @@ namespace Autonoceptor.Host
 
                         _sensorDisposables = new List<IDisposable>();
 
-                        _mqttClient.Dispose();
+                        _mqttClient?.Dispose();
                         _mqttClient = null;
                     }
                     
@@ -222,27 +239,26 @@ namespace Autonoceptor.Host
                 {
                     if (isSet)
                     {
-                        await _lcd.WriteAsync("Saving WPs", 2);
+                        await _lcd.WriteAsync("Start Waypoint Tracking", 2);
 
                         _recordWaypoints = true;
 
-                        if (!string.IsNullOrEmpty(_waypointFileName))
-                            return;
-
-                        try
-                        {
-                            _waypointFileName = $"waypoints-{DateTime.Now:MMM-dd-HH-mm-ss-ff}.txt";
-                        }
-                        catch (Exception)
-                        {
-                            //
-                        }
-
+                        _waypointList = new WaypointList();
+                        
                         return;
                     }
+                    else
+                    {
 
-                    _recordWaypoints = false;
-                    _waypointFileName = null;
+                        await _waypointList.Save();
+
+                        _recordWaypoints = false;
+
+                        return;
+
+                    }
+
+                    
                 }));
         }
 
