@@ -63,7 +63,10 @@ namespace Autonoceptor.Host
 
         private readonly List<IDisposable> _disposables = new List<IDisposable>();
         private IDisposable _remoteDisposable;
+        private IDisposable _waypointNavigationDisposable;
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
+
+        private WaypointList _waypointList = new WaypointList();
 
         private string _waypointFileName;
 
@@ -144,16 +147,7 @@ namespace Autonoceptor.Host
                     if (string.IsNullOrEmpty(_waypointFileName) || !_recordWaypoints)
                         return;
 
-                    Volatile.Write(ref _gpsFixData, gpsFixData);
-
-                    try
-                    {
-                        await FileExtensions.SaveStringToFile(_waypointFileName, gpsFixData.ToString());
-                    }
-                    catch (Exception)
-                    {
-                        //
-                    }
+                    _waypointList.Add(gpsFixData);
                 }));
 
             _disposables.Add(_lidar.GetObservable(_cancellationToken)
@@ -184,8 +178,31 @@ namespace Autonoceptor.Host
                 .Distinct()
                 .ObserveOnDispatcher()
                 .Subscribe(
-                isSet =>
+                async isSet =>
                 {
+
+                    if (isSet)
+                    {
+                        await _lcd.WriteAsync("Beggining Waypoint follow", 1);
+
+                        _waypointList = await _waypointList.Load();
+
+                        _waypointNavigationDisposable = _gps.GetObservable(_cancellationToken).ObserveOnDispatcher().Subscribe(async gpsFixData =>
+                        {
+                            // See what I got
+                            await _lcd.WriteAsync("Starting Trail", 1);
+                            // call navigation method
+                        });
+                    }
+                    else
+                    {
+                        await _lcd.WriteAsync("Ending Waypoint follow", 1);
+                        _waypointNavigationDisposable?.Dispose();
+                    }
+
+                    
+
+
                     //TODO: This should follow stored waypoints
                 }));
 
@@ -239,27 +256,26 @@ namespace Autonoceptor.Host
                 {
                     if (channel.DigitalValue)
                     {
-                        await _lcd.WriteAsync("Saving WPs", 2);
+                        await _lcd.WriteAsync("Start Waypoint Tracking", 2);
 
                         _recordWaypoints = true;
 
-                        if (!string.IsNullOrEmpty(_waypointFileName))
-                            return;
-
-                        try
-                        {
-                            _waypointFileName = $"waypoints-{DateTime.Now:MMM-dd-HH-mm-ss-ff}.txt";
-                        }
-                        catch (Exception)
-                        {
-                            //
-                        }
-
+                        _waypointList = new WaypointList();
+                        
                         return;
                     }
+                    else
+                    {
 
-                    _recordWaypoints = false;
-                    _waypointFileName = null;
+                        await _waypointList.Save();
+
+                        _recordWaypoints = false;
+
+                        return;
+
+                    }
+
+                    
                 }));
         }
 
