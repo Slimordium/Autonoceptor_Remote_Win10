@@ -139,19 +139,17 @@ namespace Autonoceptor.Host
 
             //Write GPS fix data to file, if switch is closed. _gps publishes fix data once a second
             _disposables.Add(_gps.GetObservable(_cancellationToken)
-                .Distinct(gps => gps.Lat)
-                .Distinct(gps => gps.Lon)
+                .Where(wp => wp.Lat != 0 && wp.Lon != 0)
                 .ObserveOnDispatcher()
-                .Subscribe(async gpsFixData =>
+                .Subscribe(gpsFixData =>
                 {
-                    if (string.IsNullOrEmpty(_waypointFileName) || !_recordWaypoints)
+                    if (!_recordWaypoints)
                         return;
 
                     _waypointList.Add(gpsFixData);
                 }));
 
             _disposables.Add(_lidar.GetObservable(_cancellationToken)
-                .Distinct(lidarData => lidarData.Distance)
                 .ObserveOnDispatcher()
                 .Subscribe(async rangeData =>
                 {
@@ -160,7 +158,6 @@ namespace Autonoceptor.Host
 
             _disposables.Add(_lidar.GetObservable(_cancellationToken)
                 .Sample(TimeSpan.FromMilliseconds(100))
-                .Distinct(lidarData => lidarData.Distance)
                 .ObserveOnDispatcher()
                 .Subscribe(async rangeData =>
                 {
@@ -175,15 +172,14 @@ namespace Autonoceptor.Host
             //_navEnableChannel
             _disposables.Add(_maestroPwm.GetObservable()
                 .Where(channel => channel.ChannelId == _navEnableChannel)
-                .Distinct()
                 .ObserveOnDispatcher()
                 .Subscribe(
-                async isSet =>
+                async channel =>
                 {
 
-                    if (isSet)
+                    if (channel.DigitalValue)
                     {
-                        await _lcd.WriteAsync("Beggining Waypoint follow", 1);
+                        await _lcd.WriteAsync("Begining Waypoint follow", 1);
 
                         _waypointList = await _waypointList.Load();
 
@@ -210,7 +206,6 @@ namespace Autonoceptor.Host
             //If the enable remote switch is closed, start streaming video/sensor data
             _disposables.Add(_maestroPwm.GetObservable()
                 .Where(channel => channel.ChannelId == _enableRemoteChannel)
-                .Distinct()
                 .ObserveOnDispatcher()
                 .Subscribe(
                 async channel =>
@@ -249,7 +244,6 @@ namespace Autonoceptor.Host
             //Set _recordWaypoints to "true" if the channel is pulled high
             _disposables.Add(_maestroPwm.GetObservable()
                 .Where(channel => channel.ChannelId == _recordWaypointsChannel)
-                .Distinct()
                 .ObserveOnDispatcher()
                 .Subscribe(
                 async channel =>

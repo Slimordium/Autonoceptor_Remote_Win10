@@ -91,7 +91,7 @@
 
         <xaml:CanvasControl x:Name="CanvasControl" Grid.Column="3" Grid.Row="0" Grid.RowSpan="16" Draw="CanvasControl_OnDraw" CreateResources="CanvasControl_CreateResources" HorizontalAlignment="Stretch" />
 
-        <ScrollViewer  Grid.Row="15" Grid.Column="0" Grid.ColumnSpan="3" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="{Binding Path=Width, ElementName=LogColumn}" Margin="3.4,0,0,-0.4" Background="White">
+        <ScrollViewer  Grid.Row="15" Grid.Column="0" Grid.ColumnSpan="3" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="Auto" Margin="3.4,0,0,-0.4" Background="White">
             <ListBox x:Name="LogBox" FontSize="13" FontFamily="Arial Narrow" Background="White" ItemsSource="{Binding Log}" BorderThickness="0" SelectionMode="Multiple" Margin="5,0,0,0" >
 
             </ListBox>

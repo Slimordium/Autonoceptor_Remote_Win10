@@ -17,11 +17,7 @@ namespace Autonoceptor.Host
 
             try
             {
-                var appFolder = Windows.ApplicationModel.Package.Current.InstalledLocation;
-
-                Debug.WriteLine($"AppFolder {appFolder.Path}");
-
-                var storageFile = await appFolder.GetFileAsync(filename);
+                var storageFile = await ApplicationData.Current.LocalFolder.GetFileAsync(filename);
                 var stream = await storageFile.OpenAsync(FileAccessMode.Read);
                 var buffer = new Windows.Storage.Streams.Buffer((uint)stream.Size);
 

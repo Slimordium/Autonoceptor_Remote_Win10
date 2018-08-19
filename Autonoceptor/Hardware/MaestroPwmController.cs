@@ -141,9 +141,16 @@ namespace Autonoceptor.Service.Hardware
                     {
                         var channelValue = await GetChannelValue(channel.Key);
 
+                        var lastDigital = channel.Value.DigitalValue;
+
                         channel.Value.AnalogValue = channelValue;
 
-                        _channelSubject.OnNext(channel.Value);
+                        if (channel.Value.DigitalValue != lastDigital)
+                        {
+                            _channelSubject.OnNext(channel.Value);
+                        }
+
+                        //await Task.Delay(100);
                     }
                 }
             });
