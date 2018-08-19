@@ -27,15 +27,22 @@ namespace Autonoceptor.Service.Hardware
             _outputStream = new DataWriter(_serialDevice.OutputStream);
         }
 
+        private Subject<LidarData> _subject;
+
         public IObservable<LidarData> GetObservable(CancellationToken cancellationToken)
         {
-            var dataObservable = new Subject<LidarData>();
+            if (_subject != null)
+            {
+                return _subject.AsObservable();
+            }
+
+            _subject = new Subject<LidarData>();
 
             Task.Run(async () =>
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    var byteCount = await _inputStream.LoadAsync(16);
+                    var byteCount = await _inputStream.LoadAsync(8);
                     var bytes = new byte[byteCount];
                     _inputStream.ReadBytes(bytes);
 
@@ -46,24 +53,24 @@ namespace Autonoceptor.Service.Hardware
                     if (loc + 7 > byteList.Count)
                         continue;
 
-                    var lidarData = new LidarData();
+                    if (bytes[0] != 0x59 && bytes[1] != 0x59)
+                        continue;
 
-                    var packet = byteList.GetRange(loc, 8).ToArray();
-
-                    lidarData.Distance = (ushort)BitConverter.ToInt16(packet, 2);
-                    lidarData.Strength = (ushort)BitConverter.ToInt16(packet, 4);
-                    lidarData.Reliability = packet[6];
-
+                    var lidarData = new LidarData
+                    {
+                        Distance = (ushort) BitConverter.ToInt16(bytes, 2),
+                        Strength = (ushort) BitConverter.ToInt16(bytes, 4),
+                        Reliability = bytes[6]
+                    };
+                    
                     if (lidarData.Reliability <= 5 || lidarData.Reliability > 8) //If the value is a 7 or 8, it is reliable. Ignore the rest
                         continue;
 
-                    dataObservable.OnNext(lidarData);
-
-                    new ManualResetEventSlim(false).Wait(15);
+                    _subject.OnNext(lidarData);
                 }
             });
 
-            return dataObservable.AsObservable();
+            return _subject.AsObservable();
         }
     }
 }

@@ -21,7 +21,7 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task InitializeAsync()
         {
-            _lcdSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("A504WXPT", 9600, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+            _lcdSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("AH03FJHM", 9600, TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(50));
          
             if (_lcdSerialDevice == null)
                 return;
@@ -31,7 +31,7 @@ namespace Autonoceptor.Service.Hardware
 
         private async Task WriteAsync(string text, byte[] line, bool clear)
         {
-            if (text == null || _outputStream == null)
+            if (string.IsNullOrEmpty(text) || _outputStream == null)
                 return;
 
             var stringBuilder = new StringBuilder();
@@ -93,7 +93,7 @@ namespace Autonoceptor.Service.Hardware
         /// <returns></returns>
         public async Task WriteAsync(string text)
         {
-            if (text == null)
+            if (string.IsNullOrEmpty(text))
                 return;
 
             await WriteAsync(text, _startOfFirstLine, true);

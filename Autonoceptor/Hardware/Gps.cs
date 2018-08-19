@@ -28,9 +28,16 @@ namespace Autonoceptor.Service.Hardware
             _outputStream = new DataWriter(_serialDevice.OutputStream);
         }
 
+        private Subject<GpsFixData> _subject;
+
         public IObservable<GpsFixData> GetObservable(CancellationToken cancellationToken)
         {
-            var dataObservable = new Subject<GpsFixData>();
+            if (_subject != null)
+            {
+                return _subject.AsObservable();
+            }
+
+            _subject = new Subject<GpsFixData>();
 
             Task.Run(async () =>
             {
@@ -63,11 +70,11 @@ namespace Autonoceptor.Service.Hardware
                     }
 
                     //The data is accumulative, so only need to publish once
-                    dataObservable.OnNext(gpsFixData);
+                    _subject.OnNext(gpsFixData);
                 }
             });
 
-            return dataObservable.AsObservable();
+            return _subject.AsObservable();
         }
     }
 }

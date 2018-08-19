@@ -1,14 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Media.Capture;
 using Windows.Media.MediaProperties;
-using Windows.Storage;
-using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
 using Windows.UI.Xaml.Controls;
 using Autonoceptor.Service.Hardware;
@@ -24,20 +21,25 @@ namespace Autonoceptor.Host
 {
     public class Conductor
     {
+        private readonly Tf02Lidar _lidar = new Tf02Lidar();
+        private readonly SparkFunSerial16X2Lcd _lcd = new SparkFunSerial16X2Lcd();
         private readonly MaestroPwmController _maestroPwmController = new MaestroPwmController();
-        private CancellationToken _cancellationToken;
+        private readonly Gps _gps = new Gps();
 
+        private GpsFixData _gpsFixData = new GpsFixData();
+
+        private CancellationToken _cancellationToken;
         private CancellationTokenSource _remoteTokenSource = new CancellationTokenSource();
 
-        public Gps Gps { get; } = new Gps();
+        private readonly SemaphoreSlim _initMqttSemaphore = new SemaphoreSlim(1,1);
 
-        private int _rightMax = 1800;
-        private int _center = 1166;
-        private int _leftMax = 816;
+        private int _rightMax = 1696;
+        private int _center = 1155;
+        private int _leftMax = 832;
 
-        private int _forwardMax = 1800;
+        private int _reverseMax = 1800;
         private int _stopped = 1500;
-        private int _reverseMax = 1090;
+        private int _forwardMax = 1090;
 
         private ushort _movementChannel = 0;
         private ushort _steeringChannel = 1;
@@ -46,9 +48,9 @@ namespace Autonoceptor.Host
         private ushort _recordWaypointsChannel = 13;
         private ushort _enableRemoteChannel = 14;
 
-        private readonly string _brokerIp;
+        private bool _recordWaypoints;
 
-        private IDisposable _remoteDisposable;
+        private readonly string _brokerIp;
 
         private int _lidarRange;
         private bool _warn;
@@ -57,70 +59,74 @@ namespace Autonoceptor.Host
         private MqttClient _mqttClient;
 
         private readonly List<IDisposable> _disposables = new List<IDisposable>();
-
-        private bool _recordWaypoints;
-
-        private StorageFolder _waypointFolder = ApplicationData.Current.LocalCacheFolder;
-
+        private IDisposable _remoteDisposable;
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
 
-        private readonly Tf02Lidar _lidar = new Tf02Lidar();
-        private readonly SparkFunSerial16X2Lcd _lcd = new SparkFunSerial16X2Lcd();
+        private string _waypointFileName;
 
-        private string _waypointFile;// = await storageFolder.CreateFileAsync($"waypoints-{DateTime.Now:MMM-dd-HH:mm:ss.ff}.txt", CreationCollisionOption.OpenIfExists);
-
-        private GpsFixData _gpsFixData = new GpsFixData();
+        private bool _videoRunning;
 
         public async Task InitializeAsync(CancellationTokenSource cancellationTokenSource)
         {
             _cancellationToken = cancellationTokenSource.Token;
 
-            await Task.WhenAll(
-                Gps.InitializeAsync(),
-                _lidar.InitializeAsync(),
-                _lcd.InitializeAsync(),
-                _maestroPwmController.InitializeAsync(_cancellationToken)
-            );
+            await _lcd.InitializeAsync();
 
-            cancellationTokenSource.Token.Register(async () => { await Stop(); });
+            await Task.Delay(1000);
 
-            if (Gps != null)
+            await _lcd.WriteAsync("Initializing...", 1);
+
+            await _gps.InitializeAsync();
+            await _lidar.InitializeAsync();
+            await _maestroPwmController.InitializeAsync(_cancellationToken);
+
+            cancellationTokenSource.Token.Register(async () =>
             {
-                //Write GPS fix data to file, if switch is closed. Gps publishes fix data once a second
-                _disposables.Add(Gps.GetObservable(_cancellationToken)
-                    .ObserveOnDispatcher()
-                    .Subscribe(async gpsFixData =>
+                try
+                {
+                    await Stop();
+
+                    await DisableServos();
+                }
+                catch (Exception)
+                {
+                    //
+                }
+            });
+
+            //Write GPS fix data to file, if switch is closed. _gps publishes fix data once a second
+            _disposables.Add(_gps.GetObservable(_cancellationToken)
+                .ObserveOnDispatcher()
+                .Subscribe(async gpsFixData =>
+                {
+                    if (_waypointFileName == null || !_recordWaypoints || (gpsFixData.Lat == _gpsFixData.Lat && gpsFixData.Lon == _gpsFixData.Lon))
+                        return;
+
+                    Volatile.Write(ref _gpsFixData, gpsFixData);
+
+                    try
                     {
-                        if (_waypointFile == null || !_recordWaypoints || (gpsFixData.Lat == _gpsFixData.Lat && gpsFixData.Lon == _gpsFixData.Lon))
-                            return;
-
-                        _gpsFixData = gpsFixData;
-
-                        try
-                        {
-                            await FileExtensions.SaveStringToFile(_waypointFile, gpsFixData.ToString());
-                        }
-                        catch (Exception)
-                        {
-                            //
-                        }
-                    }));
-            }
-
-            if (_lidar != null)
-            {
-                _disposables.Add(_lidar.GetObservable(_cancellationToken)
-                    .ObserveOnDispatcher()
-                    .Subscribe(async rangeData =>
+                        await FileExtensions.SaveStringToFile(_waypointFileName, gpsFixData.ToString());
+                    }
+                    catch (Exception)
                     {
-                        await UpdateLidarRange(rangeData.Distance); 
-                    }));
-            }
+                        //
+                    }
+                }));
+
+            _disposables.Add(_lidar.GetObservable(_cancellationToken)
+                .ObserveOnDispatcher()
+                .Subscribe(async rangeData =>
+                {
+                    await UpdateLidarRange(rangeData.Distance); 
+                }));
+
+            await _lcd.WriteAsync("Initialized!", 1);
 
             if (_maestroPwmController == null)
                 return;
 
-            _disposables.Add(_maestroPwmController.GetDigitalChannelObservable(_navEnableChannel, TimeSpan.FromMilliseconds(200))
+            _disposables.Add(_maestroPwmController.GetDigitalChannelObservable(_navEnableChannel, TimeSpan.FromMilliseconds(500))
                 .ObserveOnDispatcher()
                 .Subscribe(
                 isSet =>
@@ -136,15 +142,21 @@ namespace Autonoceptor.Host
                 {
                     if (isSet)
                     {
+                        await _lcd.WriteAsync("Start pub...", 2);
+
                         _remoteTokenSource = new CancellationTokenSource();
 
-                        await Task.WhenAll(StartVideoStreamAsync(), PublishSensorData());
+                        await PublishSensorData();
+
+                        await ConnectToRemote();
+
+                        //StartVideoStreamAsync();
                     }
                     else
                     {
                         _remoteTokenSource.Cancel();
 
-                        _remoteDisposable.Dispose();
+                        _remoteDisposable?.Dispose();
 
                         foreach (var sensor in _sensorDisposables)
                         {
@@ -163,29 +175,31 @@ namespace Autonoceptor.Host
             _disposables.Add(_maestroPwmController.GetDigitalChannelObservable(_recordWaypointsChannel, TimeSpan.FromMilliseconds(500))
                 .ObserveOnDispatcher()
                 .Subscribe(
-                isSet =>
+                async isSet =>
                 {
                     if (isSet)
                     {
+                        await _lcd.WriteAsync("Saving WPs", 2);
+
                         _recordWaypoints = true;
 
-                        if (string.IsNullOrEmpty(_waypointFile))
+                        if (!string.IsNullOrEmpty(_waypointFileName))
+                            return;
+
+                        try
                         {
-                            try
-                            {
-                                _waypointFile = $"waypoints-{DateTime.Now:MMM-dd-HH-mm-ss-ff}.txt";
-                            }
-                            catch (Exception)
-                            {
-                                //
-                            }
+                            _waypointFileName = $"waypoints-{DateTime.Now:MMM-dd-HH-mm-ss-ff}.txt";
+                        }
+                        catch (Exception)
+                        {
+                            //
                         }
 
                         return;
                     }
 
                     _recordWaypoints = false;
-                    _waypointFile = null;
+                    _waypointFileName = null;
                 }));
         }
 
@@ -196,6 +210,8 @@ namespace Autonoceptor.Host
 
         private async Task<bool> InitMqtt()
         {
+            await _initMqttSemaphore.WaitAsync(_cancellationToken);
+
             if (_mqttClient == null)
             {
                 _mqttClient?.Dispose();
@@ -205,8 +221,19 @@ namespace Autonoceptor.Host
                 var status = await _mqttClient.InitializeAsync();
 
                 if (status != Status.Initialized)
+                {
+                    await _lcd.WriteAsync("MQTT Failed", 2);
+
+                    _mqttClient.Dispose();
+                    _mqttClient = null;
+
                     return false;
+                }
+
+                await _lcd.WriteAsync("MQTT Connected", 2);
             }
+
+            _initMqttSemaphore.Release(1);
 
             return true;
         }
@@ -240,8 +267,6 @@ namespace Autonoceptor.Host
                     }
 
                 });
-
-            await StartVideoStreamAsync();
         }
 
         public async Task PublishSensorData()
@@ -256,7 +281,7 @@ namespace Autonoceptor.Host
 
             _sensorDisposables = new List<IDisposable>();
 
-            _sensorDisposables.Add(Gps.GetObservable(_cancellationToken).ObserveOnDispatcher()
+            _sensorDisposables.Add(_gps.GetObservable(_cancellationToken).ObserveOnDispatcher()
                 .Where(fix => fix != null).Subscribe(async fix =>
                 {
                     if (_mqttClient == null)
@@ -270,11 +295,10 @@ namespace Autonoceptor.Host
                     {
                         //
                     }
-
                 }));
 
             _sensorDisposables.Add(_lidar.GetObservable(_cancellationToken).ObserveOnDispatcher()
-                .Where(lidarData => lidarData != null).Sample(TimeSpan.FromMilliseconds(150)).Subscribe(
+                .Where(lidarData => lidarData != null).Sample(TimeSpan.FromMilliseconds(100)).Subscribe(
                     async lidarData =>
                     {
                         if (_mqttClient == null)
@@ -288,44 +312,44 @@ namespace Autonoceptor.Host
                         {
                             //
                         }
-
-                        
                     }));
         }
 
         public async Task UpdateLidarRange(int range)
         {
-            _lidarRange = range;
+            if (range < 40)
+                range = 40;
 
-            if (range <= 90)
+            Volatile.Write(ref _lidarRange, range);
+
+            if (range <= 70)
             {
                 await EmergencyStop();
             }
 
-            if (range > 90 && range <= 130)
+            if (range > 70 && range <= 130)
             {
                 await EmergencyStop(true);
 
-                _warn = true;
+                Volatile.Write(ref _warn, true);
             }
 
             if (range > 130)
             {
                 await EmergencyStop(true);
 
-                _warn = false;
+                Volatile.Write(ref _warn, false);
             }
         }
 
         private async Task Stop()
         {
-            await Task.WhenAll(new[]
-            {
-                _maestroPwmController.SetChannelValue(_stopped, _movementChannel),
-                _maestroPwmController.SetChannelValue(_center, _steeringChannel)
-            });
-        }
+            await _maestroPwmController.SetChannelValue(1650 * 4, _movementChannel);
 
+            await Task.Delay(200);
+
+            await _maestroPwmController.SetChannelValue(_stopped * 4, _movementChannel);
+        }
 
         /// <summary>
         /// Valid for channels 12 - 23
@@ -334,9 +358,6 @@ namespace Autonoceptor.Host
         /// <returns></returns>
         public async Task<bool> GetDigitalChannelState(ushort channel)
         {
-            if (_maestroPwmController == null)
-                return false;
-
             var value = await _maestroPwmController.GetChannelValue(channel);
 
             return value > 200;
@@ -349,50 +370,52 @@ namespace Autonoceptor.Host
         /// <returns></returns>
         public async Task<int> GetAnalogChannelState(ushort channel)
         {
-            if (_maestroPwmController == null)
-                return 0;
-
             var value = await _maestroPwmController.GetChannelValue(channel);
 
             return value;
+        }
+
+        private async Task DisableServos()
+        {
+            await _maestroPwmController.SetChannelValue(0, _movementChannel);
+            await _maestroPwmController.SetChannelValue(0, _steeringChannel);
         }
 
         public async Task EmergencyStop(bool isCanceled = false)
         {
             if (isCanceled)
             {
-                _emergencyStopped = false;
+                if (!Volatile.Read(ref _emergencyStopped))
+                    return;
+
+                Volatile.Write(ref _emergencyStopped, false);
+
+                await _lcd.WriteAsync("E-Stop canceled", 2);
 
                 return;
             }
 
-            _emergencyStopped = true;
+            if (Volatile.Read(ref _emergencyStopped))
+            {
+                await _lcd.WriteAsync($"E-Stop {_lidarRange}in", 2);
+                return;
+            }
+
+            Volatile.Write(ref _emergencyStopped, true);
 
             await Stop();
         }
 
         public async Task MoveRequest(MoveRequest request)
         {
-            if (_maestroPwmController == null || _cancellationToken.IsCancellationRequested || _emergencyStopped)
+            if (_cancellationToken.IsCancellationRequested)
+            {
+                await EmergencyStop();
                 return;
+            }
 
             var moveValue = _stopped;
             var steerValue = _center;
-
-            switch (request.MovementDirection)
-            {
-                case MovementDirection.Forward:
-                    moveValue = Convert.ToUInt16(request.MovementMagnitude.Map(0, 100, _stopped, _forwardMax)) * 4;
-                    break;
-                case MovementDirection.Reverse:
-                    moveValue = Convert.ToUInt16(request.MovementMagnitude.Map(0, 100, _stopped, _reverseMax)) * 4;
-                    break;
-            }
-
-            if (_warn)
-            {
-                moveValue = moveValue / 2;
-            }
 
             switch (request.SteeringDirection)
             {
@@ -404,17 +427,28 @@ namespace Autonoceptor.Host
                     break;
             }
 
-            await Task.WhenAll(new[]
+            await _maestroPwmController.SetChannelValue(steerValue, _steeringChannel);
+
+            switch (request.MovementDirection)
             {
-                _maestroPwmController.SetChannelValue(moveValue, _movementChannel),
-                _maestroPwmController.SetChannelValue(steerValue, _steeringChannel)
-            });
+                case MovementDirection.Forward:
+                    moveValue = Convert.ToUInt16(request.MovementMagnitude.Map(0, 100, _stopped, _forwardMax)) * 4;
+                    break;
+                case MovementDirection.Reverse:
+                    moveValue = Convert.ToUInt16(request.MovementMagnitude.Map(0, 100, _stopped, _reverseMax)) * 4;
+                    break;
+            }
+
+            await _maestroPwmController.SetChannelValue(moveValue, _movementChannel);
         }
 
         public async Task OnNextXboxData(XboxData xboxData)
         {
-            if (_maestroPwmController == null || _cancellationToken.IsCancellationRequested || _emergencyStopped)
+            if (_cancellationToken.IsCancellationRequested)
+            {
+                await EmergencyStop();
                 return;
+            }
 
             var direction = _center;
 
@@ -434,19 +468,14 @@ namespace Autonoceptor.Host
 
             await _maestroPwmController.SetChannelValue(direction, _steeringChannel); //Channel 1 is Steering
 
-            var forwardMagnitude = Convert.ToUInt16(xboxData.LeftTrigger.Map(0, 33000, _stopped, _forwardMax)) * 4;
             var reverseMagnitude = Convert.ToUInt16(xboxData.RightTrigger.Map(0, 33000, _stopped, _reverseMax)) * 4;
+            var forwardMagnitude = Convert.ToUInt16(xboxData.LeftTrigger.Map(0, 33000, _stopped, _forwardMax)) * 4;
 
             var outputVal = forwardMagnitude;
 
-            if (reverseMagnitude > 6000)
+            if (reverseMagnitude > 6000 || Volatile.Read(ref _emergencyStopped))
             {
                 outputVal = reverseMagnitude;
-            }
-
-            if (_warn)
-            {
-                outputVal = outputVal / 2;
             }
 
             await _maestroPwmController.SetChannelValue(outputVal, _movementChannel); //Channel 0 is the motor driver
@@ -454,6 +483,11 @@ namespace Autonoceptor.Host
 
         private async Task<bool> StartVideoStreamAsync()
         {
+            if (Volatile.Read(ref _videoRunning))
+                return true;
+
+            Volatile.Write(ref _videoRunning, true);
+
             var mediaCapture = new MediaCapture();
 
             await mediaCapture.InitializeAsync();
@@ -470,7 +504,7 @@ namespace Autonoceptor.Host
             }
 
             // set resolution
-            await mediaCapture.VideoDeviceController.SetMediaStreamPropertiesAsync(MediaStreamType.VideoPreview, encodingProperties[Convert.ToInt32(6)]); //2, 8, 9 - 60fps = better
+            await mediaCapture.VideoDeviceController.SetMediaStreamPropertiesAsync(MediaStreamType.VideoPreview, encodingProperties[Convert.ToInt32(8)]); //2, 8, 9 - 60fps = better
 
             var captureElement = new CaptureElement { Source = mediaCapture };
 
@@ -521,6 +555,8 @@ namespace Autonoceptor.Host
                     }
                 }
             }
+
+            Volatile.Write(ref _videoRunning, false);
 
             return false;
         }

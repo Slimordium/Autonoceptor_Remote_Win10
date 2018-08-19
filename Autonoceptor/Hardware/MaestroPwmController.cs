@@ -39,7 +39,7 @@ namespace Autonoceptor.Service.Hardware
             if (_outputStream == null)
                 throw new InvalidOperationException("Output stream is null?");
 
-            await _readWriteSemaphore.WaitAsync(_cancellationToken);
+            await _readWriteSemaphore.WaitAsync();
 
             var lsb = Convert.ToByte(value & 0x7f);
             var msb = Convert.ToByte((value >> 7) & 0x7f);
@@ -55,7 +55,7 @@ namespace Autonoceptor.Service.Hardware
             if (_outputStream == null || _inputStream == null)
                 throw new InvalidOperationException("Output or Input stream is null?");
 
-            await _readWriteSemaphore.WaitAsync(_cancellationToken);
+            await _readWriteSemaphore.WaitAsync();
 
             _outputStream.WriteBytes(new[] { (byte)0xAA, (byte)0x0C, (byte)0x10, (byte)channel });//Forward / reverse
             await _outputStream.StoreAsync();

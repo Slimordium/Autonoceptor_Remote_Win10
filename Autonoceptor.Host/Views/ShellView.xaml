@@ -26,8 +26,8 @@
         <TextBox Name="BrokerIp" Grid.Row="0" Grid.Column="1" Height="28"></TextBox>
         <Button Name="StartConductor" Grid.Column="2" Grid.Row="0" Content="Init Hw" HorizontalAlignment="Center"></Button>
 
-        <ScrollViewer Grid.Row="0" Grid.Column="3" Grid.RowSpan="4" Grid.ColumnSpan="2" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="{Binding Path=Width, ElementName=LogColumn}" Margin="3.4,0,0,-0.4" Background="White">
-            <ListBox x:Name="LogBox" FontSize="13" FontFamily="Arial Narrow" Background="White" ItemsSource="{Binding Log}" BorderThickness="0" SelectionMode="Multiple" Margin="5,0,0,0" >
+        <ScrollViewer Grid.Row="0" Grid.Column="3" Grid.RowSpan="4" Grid.ColumnSpan="2" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="{Binding Path=Width, ElementName=LogColumn}" Margin="3.4,0,0,-0.4" Background="Black">
+            <ListBox x:Name="LogBox" FontSize="13" FontFamily="Arial Narrow" Background="Black" ItemsSource="{Binding Log}" BorderThickness="0" SelectionMode="Multiple" Margin="5,0,0,0" >
                 
             </ListBox>
         </ScrollViewer>
