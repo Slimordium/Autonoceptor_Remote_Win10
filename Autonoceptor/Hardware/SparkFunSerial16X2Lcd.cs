@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Reactive.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
@@ -19,6 +22,10 @@ namespace Autonoceptor.Service.Hardware
 
         private SerialDevice _lcdSerialDevice;
 
+        private IDisposable _writeDisposableOne;
+
+        private IDisposable _writeDisposableTwo;
+
         public async Task InitializeAsync()
         {
             _lcdSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("AH03FJHM", 9600, TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(50));
@@ -27,6 +34,50 @@ namespace Autonoceptor.Service.Hardware
                 return;
 
             _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
+
+            _writeDisposableOne = Observable.Interval(TimeSpan.FromMilliseconds(500)).Subscribe(async _ =>
+                {
+                    if (!_firstLineQueue.Any())
+                        return;
+
+                    try
+                    {
+                        if (_currentLineOneIndex > _firstLineQueue.Count)
+                        {
+                            _currentLineOneIndex = _firstLineQueue.Count - 1;
+                        }
+
+                        await WriteAsync(_firstLineQueue.ElementAt(_currentLineOneIndex).Value, 1);
+
+                        _currentLineOneIndex++;
+                    }
+                    catch (Exception)
+                    {
+                        //
+                    }
+                });
+
+            _writeDisposableTwo = Observable.Interval(TimeSpan.FromMilliseconds(500)).Subscribe(async _ =>
+            {
+                if (!_secondLineQueue.Any())
+                    return;
+
+                try
+                {
+                    if (_currentLineTwoIndex > _secondLineQueue.Count)
+                    {
+                        _currentLineTwoIndex = _secondLineQueue.Count - 1;
+                    }
+
+                    await WriteAsync(_secondLineQueue.ElementAt(_currentLineTwoIndex).Value, 2);
+
+                    _currentLineTwoIndex++;
+                }
+                catch (Exception)
+                {
+                    //
+                }
+            });
         }
 
         private async Task WriteAsync(string text, byte[] line, bool clear)
@@ -113,5 +164,47 @@ namespace Autonoceptor.Service.Hardware
             if (line == 2)
                 await WriteToSecondLineAsync(text);
         }
+
+        public void AddOrUpdateWriteQueue(string text, string key, int line)
+        {
+            if (line == 1)
+            {
+                if (_firstLineQueue.ContainsKey(key))
+                {
+                    _firstLineQueue[key] = text;
+                }
+                else
+                {
+                    _firstLineQueue.Add(key, text);
+                }
+            }
+            else
+            {
+                if (_secondLineQueue.ContainsKey(key))
+                {
+                    _secondLineQueue[key] = text;
+                }
+                else
+                {
+                    _secondLineQueue.Add(key, text);
+                }
+            }
+        }
+
+        public void ClearWriteQueue(int line)
+        {
+            if (line == 1)
+                _firstLineQueue = new SortedDictionary<string, string>();
+            else
+                _secondLineQueue = new SortedDictionary<string, string>();
+        }
+
+        private int _currentLineOneIndex;
+
+        private int _currentLineTwoIndex;
+
+        private SortedDictionary<string, string> _firstLineQueue = new SortedDictionary<string, string>();
+
+        private SortedDictionary<string, string> _secondLineQueue = new SortedDictionary<string, string>();
     }
 }

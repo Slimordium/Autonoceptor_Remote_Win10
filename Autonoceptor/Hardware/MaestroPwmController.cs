@@ -21,6 +21,9 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task InitializeAsync(CancellationToken cancellationToken)
         {
+            if (_maestroPwmDevice != null)
+                return;
+
             _cancellationToken = cancellationToken;
 
             _maestroPwmDevice = await SerialDeviceHelper.GetSerialDeviceAsync("142361d3&0&0000", 9600, TimeSpan.FromMilliseconds(30), TimeSpan.FromMilliseconds(30));

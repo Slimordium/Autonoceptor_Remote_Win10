@@ -27,7 +27,16 @@ namespace Autonoceptor.Host.ViewModels
             Application.Current.Resuming += CurrentOnResuming;
 
             _sessionDisposable = Observable.Interval(TimeSpan.FromMinutes(4)).Subscribe(async _ => { await RequestExtendedSession(); });
+
+            Observable.Timer(TimeSpan.FromSeconds(10))
+                .ObserveOnDispatcher()
+                .Subscribe(async _ =>
+                {
+                    await StartConductor(); 
+                });
         }
+
+        private bool _started;
 
         public string BrokerIp { get; set; } = "172.16.0.246";
 
@@ -35,6 +44,11 @@ namespace Autonoceptor.Host.ViewModels
 
         public async Task StartConductor()
         {
+            if (_started)
+                return;
+
+            _started = true;
+
             await _conductor.InitializeAsync(_cancellationTokenSource);
         }
 
