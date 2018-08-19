@@ -25,7 +25,7 @@ namespace Autonoceptor.Host
     {
         private readonly Tf02Lidar _lidar = new Tf02Lidar();
         private readonly SparkFunSerial16X2Lcd _lcd = new SparkFunSerial16X2Lcd();
-        private readonly MaestroPwmController _maestroPwm = new MaestroPwmController();
+        private MaestroPwmController _maestroPwm;
         private readonly Gps _gps = new Gps();
         private readonly XboxDevice _xboxDevice = new XboxDevice();
 
@@ -36,13 +36,13 @@ namespace Autonoceptor.Host
 
         private readonly SemaphoreSlim _initMqttSemaphore = new SemaphoreSlim(1,1);
 
-        private int _rightMax = 1696;
-        private int _center = 1155;
-        private int _leftMax = 832;
+        private int _rightMax = 1861;
+        private int _center = 1321;
+        private int _leftMax = 837;
 
-        private int _reverseMax = 1800;
+        private int _reverseMax = 1856;
         private int _stopped = 1500;
-        private int _forwardMax = 1090;
+        private int _forwardMax = 1072;
 
         private ushort _movementChannel = 0;
         private ushort _steeringChannel = 1;
@@ -75,6 +75,8 @@ namespace Autonoceptor.Host
         {
             _cancellationToken = cancellationTokenSource.Token;
 
+            _maestroPwm = new MaestroPwmController(new ushort[]{12, 13, 14 });
+
             await _maestroPwm.InitializeAsync(_cancellationToken);
 
             await _lcd.InitializeAsync();
@@ -91,6 +93,9 @@ namespace Autonoceptor.Host
 
                 _disposables.Add(_xboxDevice.GetObservable()
                     .Where(xboxData => xboxData != null)
+                    .Distinct(xbox => xbox.LeftTrigger)
+                    .Distinct(xbox => xbox.RightTrigger)
+                    .Distinct(xbox => xbox.RightStick)
                     .ObserveOnDispatcher()
                     .Subscribe(async xboxData =>
                     {
@@ -131,10 +136,12 @@ namespace Autonoceptor.Host
 
             //Write GPS fix data to file, if switch is closed. _gps publishes fix data once a second
             _disposables.Add(_gps.GetObservable(_cancellationToken)
+                .Distinct(gps => gps.Lat)
+                .Distinct(gps => gps.Lon)
                 .ObserveOnDispatcher()
                 .Subscribe(async gpsFixData =>
                 {
-                    if (string.IsNullOrEmpty(_waypointFileName) || !_recordWaypoints || (gpsFixData.Lat == _gpsFixData.Lat && gpsFixData.Lon == _gpsFixData.Lon))
+                    if (string.IsNullOrEmpty(_waypointFileName) || !_recordWaypoints)
                         return;
 
                     Volatile.Write(ref _gpsFixData, gpsFixData);
@@ -150,6 +157,7 @@ namespace Autonoceptor.Host
                 }));
 
             _disposables.Add(_lidar.GetObservable(_cancellationToken)
+                .Distinct(lidarData => lidarData.Distance)
                 .ObserveOnDispatcher()
                 .Subscribe(async rangeData =>
                 {
@@ -158,6 +166,7 @@ namespace Autonoceptor.Host
 
             _disposables.Add(_lidar.GetObservable(_cancellationToken)
                 .Sample(TimeSpan.FromMilliseconds(100))
+                .Distinct(lidarData => lidarData.Distance)
                 .ObserveOnDispatcher()
                 .Subscribe(async rangeData =>
                 {
@@ -169,7 +178,10 @@ namespace Autonoceptor.Host
             if (_maestroPwm == null)
                 return;
 
-            _disposables.Add(_maestroPwm.GetDigitalChannelObservable(_navEnableChannel, TimeSpan.FromMilliseconds(500))
+            //_navEnableChannel
+            _disposables.Add(_maestroPwm.GetObservable()
+                .Where(channel => channel.ChannelId == _navEnableChannel)
+                .Distinct()
                 .ObserveOnDispatcher()
                 .Subscribe(
                 isSet =>
@@ -177,13 +189,16 @@ namespace Autonoceptor.Host
                     //TODO: This should follow stored waypoints
                 }));
 
+            //_enableRemoteChannel
             //If the enable remote switch is closed, start streaming video/sensor data
-            _disposables.Add(_maestroPwm.GetDigitalChannelObservable(_enableRemoteChannel, TimeSpan.FromMilliseconds(500))
+            _disposables.Add(_maestroPwm.GetObservable()
+                .Where(channel => channel.ChannelId == _enableRemoteChannel)
+                .Distinct()
                 .ObserveOnDispatcher()
                 .Subscribe(
-                async isSet =>
+                async channel =>
                 {
-                    if (isSet)
+                    if (channel.DigitalValue)
                     {
                         await _lcd.WriteAsync("Start pub...", 2);
 
@@ -197,7 +212,7 @@ namespace Autonoceptor.Host
                     }
                     else
                     {
-                        _remoteTokenSource.Cancel();
+                        _remoteTokenSource?.Cancel();
 
                         _remoteDisposable?.Dispose();
 
@@ -208,19 +223,21 @@ namespace Autonoceptor.Host
 
                         _sensorDisposables = new List<IDisposable>();
 
-                        _mqttClient.Dispose();
+                        _mqttClient?.Dispose();
                         _mqttClient = null;
                     }
                     
                 }));
 
             //Set _recordWaypoints to "true" if the channel is pulled high
-            _disposables.Add(_maestroPwm.GetDigitalChannelObservable(_recordWaypointsChannel, TimeSpan.FromMilliseconds(500))
+            _disposables.Add(_maestroPwm.GetObservable()
+                .Where(channel => channel.ChannelId == _recordWaypointsChannel)
+                .Distinct()
                 .ObserveOnDispatcher()
                 .Subscribe(
-                async isSet =>
+                async channel =>
                 {
-                    if (isSet)
+                    if (channel.DigitalValue)
                     {
                         await _lcd.WriteAsync("Saving WPs", 2);
 
@@ -246,12 +263,13 @@ namespace Autonoceptor.Host
                 }));
         }
 
+
         public async Task InitializePwm()
         {
             await _maestroPwm.InitializeAsync(_cancellationToken);
 
-            await _maestroPwm.SetChannelValue(0, _steeringChannel);
-            await _maestroPwm.SetChannelValue(0, _movementChannel);
+            await _maestroPwm.SetChannelValue(0, _steeringChannel); //Turn off PWM
+            await _maestroPwm.SetChannelValue(0, _movementChannel); //Turn off PWM
         }
 
         public Conductor(string brokerIp)
@@ -499,7 +517,7 @@ namespace Autonoceptor.Host
                     break;
             }
 
-            await _maestroPwm.SetChannelValue(direction, _steeringChannel); //Channel 1 is Steering
+            await _maestroPwm.SetChannelValue(direction, _steeringChannel); //ChannelId 1 is Steering
 
             var reverseMagnitude = Convert.ToUInt16(xboxData.RightTrigger.Map(0, 33000, _stopped, _reverseMax)) * 4;
             var forwardMagnitude = Convert.ToUInt16(xboxData.LeftTrigger.Map(0, 33000, _stopped, _forwardMax)) * 4;
@@ -511,7 +529,7 @@ namespace Autonoceptor.Host
                 outputVal = reverseMagnitude;
             }
 
-            await _maestroPwm.SetChannelValue(outputVal, _movementChannel); //Channel 0 is the motor driver
+            await _maestroPwm.SetChannelValue(outputVal, _movementChannel); //ChannelId 0 is the motor driver
         }
 
         private async Task<bool> StartVideoStreamAsync()

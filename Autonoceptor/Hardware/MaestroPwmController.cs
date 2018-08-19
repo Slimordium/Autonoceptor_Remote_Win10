@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Threading;
@@ -8,6 +9,24 @@ using Windows.Storage.Streams;
 
 namespace Autonoceptor.Service.Hardware
 {
+    public class ChannelData
+    {
+        public ushort ChannelId { get; set; }
+
+        private int _analogValue;
+        public int AnalogValue
+        {
+            get => _analogValue;
+            set
+            {
+                DigitalValue = value > 1023;
+
+                _analogValue = value;
+            }
+        }
+        public bool DigitalValue { get; set; }
+    }
+
     public class MaestroPwmController
     {
         private SerialDevice _maestroPwmDevice;
@@ -17,7 +36,19 @@ namespace Autonoceptor.Service.Hardware
 
         private CancellationToken _cancellationToken;
 
-        private readonly SemaphoreSlim _readWriteSemaphore = new SemaphoreSlim(1,1); 
+        private readonly SemaphoreSlim _readWriteSemaphore = new SemaphoreSlim(1,1);
+
+        private Subject<ChannelData> _channelSubject;
+
+        private readonly Dictionary<ushort, ChannelData> _channelValues = new Dictionary<ushort, ChannelData>();
+
+        public MaestroPwmController(IEnumerable<ushort> inputChannels)
+        {
+            foreach (var c in inputChannels)
+            {
+                _channelValues.Add(c, new ChannelData {ChannelId = c});
+            }
+        }
 
         public async Task InitializeAsync(CancellationToken cancellationToken)
         {
@@ -93,85 +124,31 @@ namespace Autonoceptor.Service.Hardware
         //as a standard little-endian two-byte unsigned integer.For example, a position of 2567 corresponds to
         //a response 0x07, 0x0A.
 
-        /// <summary>
-        /// Pins 12-23 are digital
-        /// </summary>
-        /// <param name="channelNumber"></param>
-        /// <param name="updateInterval"></param>
-        /// <returns></returns>
-        public IObservable<bool> GetDigitalChannelObservable(ushort channelNumber, TimeSpan updateInterval)
+        public IObservable<ChannelData> GetObservable()
         {
-            //if (channelNumber < 12 || channelNumber > 23)
-            //    throw new InvalidOperationException("Valid Channels are 12 - 23");
+            if (_channelSubject != null)
+            {
+                return _channelSubject.AsObservable();
+            }
 
-            var dataObservable = new Subject<bool>();
+            _channelSubject = new Subject<ChannelData>();
 
             Task.Run(async () =>
             {
-                var lastChannelValue = 0;
-
                 while (!_cancellationToken.IsCancellationRequested)
                 {
-                    var channelValue = await GetChannelValue(channelNumber);
-
-                    if (channelValue <= 1023 && channelValue != lastChannelValue)
+                    foreach (var channel in _channelValues)
                     {
-                        dataObservable.OnNext(false);
+                        var channelValue = await GetChannelValue(channel.Key);
+
+                        channel.Value.AnalogValue = channelValue;
+
+                        _channelSubject.OnNext(channel.Value);
                     }
-
-                    if (channelValue > 1023 && channelValue != lastChannelValue)
-                    {
-                        dataObservable.OnNext(true);
-                    }
-
-                    lastChannelValue = channelValue;
-
-                    await Task.Delay(updateInterval, _cancellationToken);
                 }
             });
 
-            return dataObservable.AsObservable();
-        }
-
-        /// <summary>
-        /// Pins 0 - 11 are analog
-        /// </summary>
-        /// <param name="channelNumber"></param>
-        /// <param name="updateInterval"></param>
-        /// <param name="triggerAfter"> Current value must deviate by this ammount before a value will be returned</param>
-        /// <returns></returns>
-        public IObservable<int> GetAnalogChannelObservable(ushort channelNumber, TimeSpan updateInterval, ushort triggerAfter = 0)
-        {
-            if (channelNumber > 11)
-                throw new InvalidOperationException("Valid Channels are 0 - 11");
-
-            var dataObservable = new Subject<int>();
-
-            Task.Run(async () =>
-            {
-                var lastChannelValue = 0;
-
-                while (!_cancellationToken.IsCancellationRequested)
-                {
-                    var channelValue = await GetChannelValue(channelNumber);
-
-                    if (channelValue > lastChannelValue && channelValue > lastChannelValue + triggerAfter)
-                    {
-                        dataObservable.OnNext(channelValue);
-                    }
-
-                    if (channelValue < lastChannelValue && channelValue < lastChannelValue - triggerAfter)
-                    {
-                        dataObservable.OnNext(channelValue);
-                    }
-
-                    lastChannelValue = channelValue;
-
-                    await Task.Delay(updateInterval, _cancellationToken);
-                }
-            });
-
-            return dataObservable.AsObservable();
+            return _channelSubject.AsObservable();
         }
     }
 }
