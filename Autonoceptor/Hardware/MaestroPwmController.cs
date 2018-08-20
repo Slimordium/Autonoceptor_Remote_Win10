@@ -38,9 +38,13 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly SemaphoreSlim _readWriteSemaphore = new SemaphoreSlim(1,1);
 
-        private Subject<ChannelData> _channelSubject;
+        private Subject<ChannelData> _channelSubject = new Subject<ChannelData>();
 
         private readonly Dictionary<ushort, ChannelData> _channelValues = new Dictionary<ushort, ChannelData>();
+
+        private IDisposable _getChannelStatesDisposable;
+
+        private bool _running;
 
         public MaestroPwmController(IEnumerable<ushort> inputChannels)
         {
@@ -57,7 +61,7 @@ namespace Autonoceptor.Service.Hardware
 
             _cancellationToken = cancellationToken;
 
-            _maestroPwmDevice = await SerialDeviceHelper.GetSerialDeviceAsync("142361d3&0&0000", 9600, TimeSpan.FromMilliseconds(30), TimeSpan.FromMilliseconds(30));
+            _maestroPwmDevice = await SerialDeviceHelper.GetSerialDeviceAsync("142361d3&0&0000", 9600, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
 
             if (cancellationToken.IsCancellationRequested)
                 return;
@@ -66,6 +70,30 @@ namespace Autonoceptor.Service.Hardware
 
             _outputStream = new DataWriter(_maestroPwmDevice.OutputStream);
             _inputStream = new DataReader(_maestroPwmDevice.InputStream);
+
+            _getChannelStatesDisposable = Observable.Interval(TimeSpan.FromMilliseconds(200)).Subscribe(async _ =>
+            {
+                if (Volatile.Read(ref _running))
+                    return;
+
+                Volatile.Write(ref _running, true);
+
+                foreach (var channel in _channelValues)
+                {
+                    var channelValue = await GetChannelValue(channel.Key);
+
+                    var lastDigital = channel.Value.DigitalValue;
+
+                    channel.Value.AnalogValue = channelValue;
+
+                    if (channel.Value.DigitalValue != lastDigital)
+                    {
+                        _channelSubject.OnNext(channel.Value);
+                    }
+                }
+
+                Volatile.Write(ref _running, false);
+            });
         }
 
        public async Task SetChannelValue(int value, ushort channel)
@@ -126,35 +154,6 @@ namespace Autonoceptor.Service.Hardware
 
         public IObservable<ChannelData> GetObservable()
         {
-            if (_channelSubject != null)
-            {
-                return _channelSubject.AsObservable();
-            }
-
-            _channelSubject = new Subject<ChannelData>();
-
-            Task.Run(async () =>
-            {
-                while (!_cancellationToken.IsCancellationRequested)
-                {
-                    foreach (var channel in _channelValues)
-                    {
-                        var channelValue = await GetChannelValue(channel.Key);
-
-                        var lastDigital = channel.Value.DigitalValue;
-
-                        channel.Value.AnalogValue = channelValue;
-
-                        if (channel.Value.DigitalValue != lastDigital)
-                        {
-                            _channelSubject.OnNext(channel.Value);
-                        }
-
-                        await Task.Delay(400);
-                    }
-                }
-            });
-
             return _channelSubject.AsObservable();
         }
     }

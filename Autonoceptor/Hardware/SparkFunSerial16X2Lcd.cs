@@ -4,12 +4,21 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
 
 namespace Autonoceptor.Service.Hardware
 {
+    public class DisplayItem
+    {
+        public object GroupId { get; set; }
+
+        public int LineNumber { get; set; } = 1;
+
+        public string Text { get; set; }
+    }
 
     /// <summary>
     /// SparkFun Serial 16x2 LCD
@@ -22,9 +31,13 @@ namespace Autonoceptor.Service.Hardware
 
         private SerialDevice _lcdSerialDevice;
 
-        private IDisposable _writeDisposableOne;
+        private IDisposable _writeDisposable;
 
-        private IDisposable _writeDisposableTwo;
+        private readonly List<DisplayItem> _displayItems = new List<DisplayItem>();
+
+        private object _selectedDisplayGroup;
+
+        private readonly SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1, 1);
 
         public async Task InitializeAsync()
         {
@@ -35,55 +48,62 @@ namespace Autonoceptor.Service.Hardware
 
             _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
 
-            _writeDisposableOne = Observable.Interval(TimeSpan.FromMilliseconds(500)).Subscribe(async _ =>
-                {
-                    if (!_firstLineQueue.Any())
-                        return;
-
-                    try
-                    {
-                        if (_currentLineOneIndex > _firstLineQueue.Count)
-                        {
-                            _currentLineOneIndex = _firstLineQueue.Count - 1;
-                        }
-
-                        await WriteAsync(_firstLineQueue.ElementAt(_currentLineOneIndex).Value, 1);
-
-                        _currentLineOneIndex++;
-                    }
-                    catch (Exception)
-                    {
-                        //
-                    }
-                });
-
-            _writeDisposableTwo = Observable.Interval(TimeSpan.FromMilliseconds(500)).Subscribe(async _ =>
+            _writeDisposable = Observable.Interval(TimeSpan.FromMilliseconds(1000)).Subscribe(async _ =>
             {
-                if (!_secondLineQueue.Any())
-                    return;
+                await _semaphoreSlim.WaitAsync();
 
-                try
+                var selectedGroup = Volatile.Read(ref _selectedDisplayGroup);
+
+                if (selectedGroup != null)
                 {
-                    if (_currentLineTwoIndex > _secondLineQueue.Count)
+                    var item1 = _displayItems.FirstOrDefault(i => i.GroupId == selectedGroup && i.LineNumber == 1);
+                    var item2 = _displayItems.FirstOrDefault(i => i.GroupId == selectedGroup && i.LineNumber == 2);
+
+                    if (item1 != null)
                     {
-                        _currentLineTwoIndex = _secondLineQueue.Count - 1;
+                        await WriteAsync(item1.Text, 1);
                     }
-
-                    await WriteAsync(_secondLineQueue.ElementAt(_currentLineTwoIndex).Value, 2);
-
-                    _currentLineTwoIndex++;
+                    if (item2 != null)
+                    {
+                        await WriteAsync(item2.Text, 2);
+                    }
                 }
-                catch (Exception)
-                {
-                    //
-                }
+
+                _semaphoreSlim.Release(1);
             });
+        }
+
+        public async Task AddOrUpdateItem(DisplayItem displayItem)
+        {
+            if (displayItem.GroupId == null)
+                return; //Lets not tell anyone
+
+            await _semaphoreSlim.WaitAsync();
+
+            if (_displayItems.Any(i => i.GroupId == displayItem.GroupId && i.LineNumber == displayItem.LineNumber))
+            {
+                _displayItems.Add(displayItem);
+            }
+            else
+            {
+                _displayItems.First(i => i.GroupId == displayItem.GroupId && i.LineNumber == displayItem.LineNumber).Text = displayItem.Text;
+            }
+
+            _semaphoreSlim.Release(1);
+        }
+
+        public void SetCurrentDisplayGroup(object o)
+        {
+            Volatile.Write(ref _selectedDisplayGroup, o);
         }
 
         private async Task WriteAsync(string text, byte[] line, bool clear)
         {
             if (string.IsNullOrEmpty(text) || _outputStream == null)
                 return;
+
+            if (text.Length > 16)
+                text = text.Substring(0, 16);
 
             var stringBuilder = new StringBuilder();
             stringBuilder.Append(text);
@@ -165,46 +185,6 @@ namespace Autonoceptor.Service.Hardware
                 await WriteToSecondLineAsync(text);
         }
 
-        public void AddOrUpdateWriteQueue(string text, string key, int line)
-        {
-            if (line == 1)
-            {
-                if (_firstLineQueue.ContainsKey(key))
-                {
-                    _firstLineQueue[key] = text;
-                }
-                else
-                {
-                    _firstLineQueue.Add(key, text);
-                }
-            }
-            else
-            {
-                if (_secondLineQueue.ContainsKey(key))
-                {
-                    _secondLineQueue[key] = text;
-                }
-                else
-                {
-                    _secondLineQueue.Add(key, text);
-                }
-            }
-        }
 
-        public void ClearWriteQueue(int line)
-        {
-            if (line == 1)
-                _firstLineQueue = new SortedDictionary<string, string>();
-            else
-                _secondLineQueue = new SortedDictionary<string, string>();
-        }
-
-        private int _currentLineOneIndex;
-
-        private int _currentLineTwoIndex;
-
-        private SortedDictionary<string, string> _firstLineQueue = new SortedDictionary<string, string>();
-
-        private SortedDictionary<string, string> _secondLineQueue = new SortedDictionary<string, string>();
     }
 }

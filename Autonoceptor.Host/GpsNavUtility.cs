@@ -25,7 +25,7 @@ namespace Autonoceptor.Host.Utility.GpsNav
             if (Math.Abs(distanceForSpeedMap) < .01)
                 distanceForSpeedMap = distanceToWaypoint;
 
-            var travelMagnitude = (int)distanceToWaypoint.Map(0, distanceForSpeedMap, 1500, 1650);
+            var travelMagnitude = (int)distanceToWaypoint.Map(0, distanceForSpeedMap, 1500, 1750);
 
             //Adjust sensitivity of turn based on distance. These numbers will need to be adjusted.
             //var turnMagnitudeModifier = distanceToWaypoint.Map(0, distanceForSpeedMap, 1000, -1000); 
@@ -59,12 +59,6 @@ namespace Autonoceptor.Host.Utility.GpsNav
                     moveReq.SteeringDirection = SteeringDirection.Left;
                     moveReq.SteeringMagnitude = (int)Math.Abs(diff).Map(0, 360, 0, _turnMagnitudeMax);
                 }
-            }
-
-            if (distanceToWaypoint <= 35)
-            {
-                moveReq.MovementMagnitude = 0;
-                moveReq.MovementDirection = MovementDirection.Stopped;
             }
 
             return moveReq;

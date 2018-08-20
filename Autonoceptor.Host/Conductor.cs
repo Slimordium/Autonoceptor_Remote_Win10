@@ -87,7 +87,7 @@ namespace Autonoceptor.Host
 
             await Task.Delay(1000);
 
-            await _lcd.WriteAsync("Initializing...", 1);
+            await _lcd.WriteAsync("Initializing...");
 
             var initXbox = await _xboxDevice.InitializeAsync(_cancellationToken);
 
@@ -97,6 +97,7 @@ namespace Autonoceptor.Host
 
                 _disposables.Add(_xboxDevice.GetObservable()
                     .Where(xboxData => xboxData != null)
+                    //.Sample(TimeSpan.FromMilliseconds(30))
                     .ObserveOnDispatcher()
                     .Subscribe(async xboxData =>
                     {
@@ -134,10 +135,12 @@ namespace Autonoceptor.Host
             {
                 await DisableServos();
 
-                await _lcd.WriteAsync("Disposed...", 1);
+                await _lcd.WriteAsync("Disposed :]", 1);
                 await _lcd.WriteAsync("................", 2);
             });
 
+            //TODO: Check GPS fix type is "estimated" which means that DR is working, otherwise it is not! 
+            //TODO: Check odometer scaling factor in NS-DR module. Just set the NS-DR to pedestrian mode
             //Write GPS fix data to file, if switch is closed. _gps publishes fix data once a second
             _disposables.Add(_gps.GetObservable(_cancellationToken)
                 .Where(wp => wp.Lat != 0 && wp.Lon != 0)
@@ -207,7 +210,8 @@ namespace Autonoceptor.Host
 
                             var moveReq = GpsNavUtility.CalculateMoveRequest(_waypointList[_waypointIndex], gpsFixData, _cancellationToken);
 
-                            moveReq.MovementMagnitude = 1650;//Override for now
+                            //Override for now, 15 = 10%
+                            moveReq.MovementMagnitude = 15;
 
                             await MoveRequest(moveReq);
 
@@ -301,9 +305,6 @@ namespace Autonoceptor.Host
                 }));
         }
 
-        
-
-
         public async Task InitializePwm()
         {
             await _maestroPwm.InitializeAsync(_cancellationToken);
@@ -395,8 +396,6 @@ namespace Autonoceptor.Host
                 .ObserveOnDispatcher()
                 .Subscribe(async fix =>
                 {
-
-
                     if (_mqttClient == null)
                         return;
 
@@ -459,11 +458,13 @@ namespace Autonoceptor.Host
 
         private async Task Stop()
         {
-            // await _maestroPwm.SetChannelValue(1650 * 4, _movementChannel); //Momentary reverse ... helps stop quickly
+            await _maestroPwm.SetChannelValue(_stopped - 50 * 4, _movementChannel); //Momentary reverse ... helps stop quickly
 
-            //await Task.Delay(100);
+            await Task.Delay(50);
 
             await _maestroPwm.SetChannelValue(_stopped * 4, _movementChannel);
+
+            await DisableServos();
         }
 
         private async Task DisableServos()
@@ -499,6 +500,12 @@ namespace Autonoceptor.Host
             await Stop();
         }
 
+
+        /// <summary>
+        /// The magnitudes are in % 0 - 100
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         public async Task MoveRequest(MoveRequest request)
         {
             if (_cancellationToken.IsCancellationRequested || Volatile.Read(ref _emergencyStopped))
@@ -507,8 +514,8 @@ namespace Autonoceptor.Host
                 return;
             }
 
-            var moveValue = _stopped;
-            var steerValue = _center;
+            var moveValue = _stopped * 4;
+            var steerValue = _center * 4;
 
             switch (request.SteeringDirection)
             {
@@ -551,7 +558,7 @@ namespace Autonoceptor.Host
             if (Volatile.Read(ref _emergencyStopped))
                 return;
 
-            var direction = _center;
+            var direction = _center * 4;
 
             switch (xboxData.RightStick.Direction)
             {
