@@ -79,7 +79,7 @@ namespace Autonoceptor.Service.Hardware
             var msb = Convert.ToByte((value >> 7) & 0x7f);
 
             _outputStream.WriteBytes(new[] { (byte)0x84, (byte)channel, lsb, msb });
-            await _outputStream.StoreAsync();
+            var r = await _outputStream.StoreAsync();
 
             _readWriteSemaphore.Release(1);
         }
@@ -92,7 +92,7 @@ namespace Autonoceptor.Service.Hardware
             await _readWriteSemaphore.WaitAsync();
 
             _outputStream.WriteBytes(new[] { (byte)0xAA, (byte)0x0C, (byte)0x10, (byte)channel });//Forward / reverse
-            await _outputStream.StoreAsync();
+            var r = await _outputStream.StoreAsync();
 
             await _inputStream.LoadAsync(2);
             var inputBytes = new byte[2];
@@ -150,7 +150,7 @@ namespace Autonoceptor.Service.Hardware
                             _channelSubject.OnNext(channel.Value);
                         }
 
-                        //await Task.Delay(100);
+                        await Task.Delay(400);
                     }
                 }
             });

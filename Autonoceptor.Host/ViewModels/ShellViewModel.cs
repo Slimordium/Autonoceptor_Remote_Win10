@@ -28,7 +28,7 @@ namespace Autonoceptor.Host.ViewModels
 
             _sessionDisposable = Observable.Interval(TimeSpan.FromMinutes(4)).Subscribe(async _ => { await RequestExtendedSession(); });
 
-            Observable.Timer(TimeSpan.FromSeconds(10))
+            Observable.Timer(TimeSpan.FromSeconds(5))
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
