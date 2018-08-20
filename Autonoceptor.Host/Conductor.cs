@@ -41,9 +41,9 @@ namespace Autonoceptor.Host
         private int _center = 1321;
         private int _leftMax = 837;
 
-        private int _reverseMax = 1856;
+        private int _reverseMax = 1072;
         private int _stopped = 1471;
-        private int _forwardMax = 1072;
+        private int _forwardMax = 1856; //1856
 
         private ushort _movementChannel = 0;
         private ushort _steeringChannel = 1;
@@ -134,8 +134,8 @@ namespace Autonoceptor.Host
             {
                 await DisableServos();
 
-                await _lcd.WriteAsync("Disposed...");
-                await _lcd.WriteAsync("...............");
+                await _lcd.WriteAsync("Disposed...", 1);
+                await _lcd.WriteAsync("................", 2);
             });
 
             //Write GPS fix data to file, if switch is closed. _gps publishes fix data once a second
@@ -542,13 +542,14 @@ namespace Autonoceptor.Host
                 await EmergencyStop(true);
             }
 
-            if (_cancellationToken.IsCancellationRequested || 
-                xboxData.FunctionButtons.Contains(FunctionButton.X))
+            if (_cancellationToken.IsCancellationRequested || xboxData.FunctionButtons.Contains(FunctionButton.X))
             {
                 await EmergencyStop();
                 return;
             }
-            
+
+            if (Volatile.Read(ref _emergencyStopped))
+                return;
 
             var direction = _center;
 
@@ -568,12 +569,12 @@ namespace Autonoceptor.Host
 
             await _maestroPwm.SetChannelValue(direction, _steeringChannel); //ChannelId 1 is Steering
 
-            var forwardMagnitude = Convert.ToUInt16(xboxData.RightTrigger.Map(0, 33000, _stopped, _forwardMax)) * 4;
             var reverseMagnitude = Convert.ToUInt16(xboxData.LeftTrigger.Map(0, 33000, _stopped, _reverseMax)) * 4;
+            var forwardMagnitude = Convert.ToUInt16(xboxData.RightTrigger.Map(0, 33000, _stopped, _forwardMax)) * 4;
 
             var outputVal = forwardMagnitude;
 
-            if (reverseMagnitude > 6000 || Volatile.Read(ref _emergencyStopped))
+            if (reverseMagnitude < 5500 || Volatile.Read(ref _emergencyStopped))
             {
                 outputVal = reverseMagnitude;
             }

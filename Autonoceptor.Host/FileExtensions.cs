@@ -47,8 +47,10 @@ namespace Autonoceptor.Host
 
                 using (var stream = await file.OpenStreamForWriteAsync())
                 {
-                    stream.Position = stream.Length;
-                    stream.Write(bytesToAppend, 0, bytesToAppend.Length);
+                    await stream.WriteAsync(new byte[stream.Length], 0, (int) stream.Length);
+
+                    stream.Position = 0;
+                    await stream.WriteAsync(bytesToAppend, 0, bytesToAppend.Length);
                 }
             }
             catch (Exception)
