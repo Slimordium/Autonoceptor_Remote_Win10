@@ -10,7 +10,6 @@ using Windows.Media.Capture;
 using Windows.Media.MediaProperties;
 using Windows.Storage.Streams;
 using Windows.UI.Xaml.Controls;
-using Autonoceptor.Host.Utility.GpsNav;
 using Autonoceptor.Service.Hardware;
 using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Utilities;
@@ -36,6 +35,9 @@ namespace Autonoceptor.Host
         private CancellationTokenSource _remoteTokenSource = new CancellationTokenSource();
 
         private readonly SemaphoreSlim _initMqttSemaphore = new SemaphoreSlim(1,1);
+
+        private int _steerMagnitudeScale = 45;
+        private int _moveMagnitudeScale = 45;
 
         private int _rightMax = 1861;
         private int _center = 1321;
@@ -75,24 +77,7 @@ namespace Autonoceptor.Host
 
         private int _waypointIndex;
 
-        private async Task CheckXboxConnection()
-        {
-            var devices = await DeviceInformation.FindAllAsync(HidDevice.GetDeviceSelector(0x01, 0x05));
-
-            if (devices.Any())
-            {
-                return;
-            }
-
-            if (Volatile.Read(ref _xboxMissing))
-                return;
-
-            Volatile.Write(ref _xboxMissing, true);
-
-            await EmergencyStop();
-
-            await Stop();
-        }
+        private bool _followingWaypoints;
 
         public async Task InitializeAsync(CancellationTokenSource cancellationTokenSource)
         {
@@ -116,6 +101,7 @@ namespace Autonoceptor.Host
 
                 _disposables.Add(_xboxDevice.GetObservable()
                     .Where(xboxData => xboxData != null)
+                    //.Sample(TimeSpan.FromMilliseconds(30))
                     .ObserveOnDispatcher()
                     .Subscribe(async xboxData =>
                     {
@@ -125,7 +111,25 @@ namespace Autonoceptor.Host
                 //If the controller connection was lost, stop the car...
                 _disposables.Add(Observable.Interval(TimeSpan.FromMilliseconds(250))
                     .ObserveOnDispatcher()
-                    .Subscribe(async _ => { await CheckXboxConnection(); }));
+                    .Subscribe(
+                    async _ =>
+                    {
+                        var devices = await DeviceInformation.FindAllAsync(HidDevice.GetDeviceSelector(0x01, 0x05));
+
+                        if (devices.Any())
+                        {
+                            return;
+                        }
+
+                        if (Volatile.Read(ref _xboxMissing))
+                            return;
+
+                        Volatile.Write(ref _xboxMissing, true);
+
+                        await EmergencyStop();
+
+                        await Stop();
+                    }));
             }
 
             await _gps.InitializeAsync();
@@ -141,33 +145,40 @@ namespace Autonoceptor.Host
 
             //TODO: Check GPS fix type is "estimated" which means that DR is working, otherwise it is not! 
             //TODO: Check odometer scaling factor in NS-DR module. Just set the NS-DR to pedestrian mode
-            //Write GPS fix data to file, if switch is closed. _gps publishes fix data once a second
+            //The third decimal place is worth up to 110 m: it can identify a large agricultural field or institutional campus.
+            //The fourth decimal place is worth up to 11 m: it can identify a parcel of land.It is comparable to the typical accuracy of an uncorrected GPS unit with no interference.
+            //The fifth decimal place is worth up to 1.1 m: it distinguish trees from each other. Accuracy to this level with commercial GPS units can only be achieved with differential correction.            //Write GPS fix data to file, if switch is closed. _gps publishes fix data once a second
+            //The sixth decimal place is worth up to 0.11 m: you can use this for laying out structures in detail, for designing landscapes, building roads. It should be more than good enough for tracking movements of glaciers and rivers. This can be achieved by taking painstaking measures with GPS, such as differentially corrected GPS.
+            //The seventh decimal place is worth up to 11 mm: this is good for much surveying and is near the limit of what GPS-based techniques can achieve.
+            //The eighth decimal place is worth up to 1.1 mm: this is good for charting motions of tectonic plates and movements of volcanoes. Permanent, corrected, constantly-running GPS base stations might be able to achieve this level of accuracy.
+            //https://en.wikipedia.org/wiki/Decimal_degrees
+            //http://navspark.mybigcommerce.com/content/S1722DR8_v0.4.pdf
+
             _disposables.Add(_gps.GetObservable(_cancellationToken)
-                .Where(wp => wp.Lat != 0 && wp.Lon != 0)
+                .Where(wp => Math.Abs(wp.Lat) > 0 && Math.Abs(wp.Lon) > 0)
                 .ObserveOnDispatcher()
                 .Subscribe(async gpsFixData =>
                 {
-                    //await _lcd.WriteAsync($"{gpsFixData.Lat}", 1);
-                    //await _lcd.WriteAsync($"{gpsFixData.Lon}", 2);
-
                     if (!_recordWaypoints)
                         return;
 
-                    if (_waypointList.Any(data => data.Lat == gpsFixData.Lat && data.Lon == gpsFixData.Lon))
+                    if (_waypointList.Any(data => Math.Abs(data.Lat - gpsFixData.Lat) < .000001 && Math.Abs(data.Lon - gpsFixData.Lon) < .000001)) //gives accuracy of 1.1132m or 3.65223097ft
                     {
                         return; //Dont add multiples of the same point
                     }
 
                     _waypointList.Add(gpsFixData);
+
+                    await _lcd.WriteAsync($"WPs {_waypointList.Count}", 1);
+                    await _lcd.WriteAsync($"Fix {gpsFixData.Quality}", 2);
                 }));
 
-            _disposables.Add(
-                _lidar.LidarObservable
-                .ObserveOnDispatcher()
-                .Subscribe(async rangeData =>
-                {
-                    await UpdateLidarRange(rangeData.Distance); 
-                }));
+            //_disposables.Add(_lidar.GetObservable(_cancellationToken)
+            //    .ObserveOnDispatcher()
+            //    .Subscribe(async rangeData =>
+            //    {
+            //        await UpdateLidarRange(rangeData.Distance);
+            //    }));
 
             //_disposables.Add(_lidar.GetObservable(_cancellationToken)
             //    .Sample(TimeSpan.FromMilliseconds(100))
@@ -177,10 +188,7 @@ namespace Autonoceptor.Host
             //        await _lcd.WriteAsync($"LIDAR: {_lidarRange}cm", 2);
             //    }));
 
-            await _lcd.WriteAsync("Initialized", 1);
-
-            if (_maestroPwm == null)
-                return;
+            await _lcd.WriteAsync("Initialized");
 
             //_navEnableChannel
             _disposables.Add(_maestroPwm.GetObservable()
@@ -195,33 +203,36 @@ namespace Autonoceptor.Host
 
                         if (_waypointList == null || !_waypointList.Any())
                         {
-                            await _lcd.WriteAsync("No waypoints found", 1);
+                            await _lcd.WriteAsync("No waypoints found");
                             return;
                         }
 
-                        await _lcd.WriteAsync("Begining Waypoint follow", 1);
+                        await _lcd.WriteAsync($"Start {_waypointList.Count} WPs");
+
+                        Volatile.Write(ref _followingWaypoints, true);
 
                         _waypointNavigationDisposable = _gps.GetObservable(_cancellationToken).ObserveOnDispatcher().Subscribe(async gpsFixData =>
                         {
-                            if (_waypointIndex >= _waypointList.Count)
+                            if (_waypointIndex >= _waypointList.Count || !Volatile.Read(ref _followingWaypoints))
                             {
-                                await _lcd.WriteAsync($"Nav complete {_waypointIndex}", 1);
+                                await _lcd.WriteAsync($"Nav complete {_waypointIndex}");
                                 return;
                             }
 
-                            var moveReq = GpsNavUtility.CalculateMoveRequest(_waypointList[_waypointIndex], gpsFixData, _cancellationToken);
+                            var moveReq = CalculateMoveRequest(_waypointList[_waypointIndex], gpsFixData);
 
                             //Override for now, 15 = 10%
-                            moveReq.MovementMagnitude = 15;
+                            //moveReq.MovementMagnitude = 60;
+                            //moveReq.SteeringMagnitude = 100;
 
                             await MoveRequest(moveReq);
 
                             var distance = GpsExtensions.GetDistanceAndHeadingToDestination(gpsFixData.Lat, gpsFixData.Lon, _waypointList[_waypointIndex].Lat, _waypointList[_waypointIndex].Lon)[0];
 
-                            await _lcd.WriteAsync($"Direction {moveReq.SteeringDirection}", 1);
-                            await _lcd.WriteAsync($"Distance {distance}", 2);
+                            await _lcd.WriteAsync($"{moveReq.SteeringDirection} {moveReq.SteeringMagnitude}", 1);
+                            await _lcd.WriteAsync($"Dist {distance} {_waypointIndex}", 2);
 
-                            if (distance <= 28)
+                            if (distance <= 45)
                             {
                                 _waypointIndex++;
                             }
@@ -229,12 +240,17 @@ namespace Autonoceptor.Host
                             if (_waypointIndex >= _waypointList.Count)
                             {
                                 await EmergencyStop();
+
+                                Volatile.Write(ref _followingWaypoints, false);
                             }
                         });
                     }
                     else
                     {
-                        await _lcd.WriteAsync("Ending Waypoint follow", 1);
+                        await _lcd.WriteAsync("Canceled WP", 1);
+                        await _lcd.WriteAsync("following", 2);
+
+                        Volatile.Write(ref _followingWaypoints, false);
 
                         _waypointNavigationDisposable?.Dispose();
                         _waypointNavigationDisposable = null;
@@ -253,7 +269,7 @@ namespace Autonoceptor.Host
                 {
                     if (channel.DigitalValue)
                     {
-                        await _lcd.WriteAsync("Start pub...", 2);
+                        await _lcd.WriteAsync("Start pub...");
 
                         _remoteTokenSource = new CancellationTokenSource();
 
@@ -265,6 +281,8 @@ namespace Autonoceptor.Host
                     }
                     else
                     {
+                        await _lcd.WriteAsync("Stop pub...");
+
                         _remoteTokenSource?.Cancel();
 
                         _remoteDisposable?.Dispose();
@@ -291,7 +309,7 @@ namespace Autonoceptor.Host
                 {
                     if (channel.DigitalValue)
                     {
-                        await _lcd.WriteAsync("Start Waypoint Tracking", 2);
+                        await _lcd.WriteAsync("Save WP start");
 
                         _recordWaypoints = true;
 
@@ -299,6 +317,8 @@ namespace Autonoceptor.Host
                     }
                     else
                     {
+                        await _lcd.WriteAsync("Save WP stop");
+
                         await _waypointList.Save();
 
                         _recordWaypoints = false;
@@ -432,8 +452,8 @@ namespace Autonoceptor.Host
 
         private async Task UpdateLidarRange(int range)
         {
-            if (range < 40)
-                range = 40;
+            if (range < 30)
+                range = 30;
 
             Volatile.Write(ref _lidarRange, range);
 
@@ -521,22 +541,25 @@ namespace Autonoceptor.Host
             switch (request.SteeringDirection)
             {
                 case SteeringDirection.Left:
-                    steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, 100, _center, _leftMax)) * 4;
+                    steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, _steerMagnitudeScale, _center, _leftMax)) * 4;
                     break;
                 case SteeringDirection.Right:
-                    steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, 100, _center, _rightMax)) * 4;
+                    steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, _steerMagnitudeScale, _center, _rightMax)) * 4;
                     break;
             }
+
+            if (Volatile.Read(ref _followingWaypoints))
+                return;
 
             await _maestroPwm.SetChannelValue(steerValue, _steeringChannel);
 
             switch (request.MovementDirection)
             {
                 case MovementDirection.Forward:
-                    moveValue = Convert.ToUInt16(request.MovementMagnitude.Map(0, 100, _stopped, _forwardMax)) * 4;
+                    moveValue = Convert.ToUInt16(request.MovementMagnitude.Map(0, _moveMagnitudeScale, _stopped, _forwardMax)) * 4;
                     break;
                 case MovementDirection.Reverse:
-                    moveValue = Convert.ToUInt16(request.MovementMagnitude.Map(0, 100, _stopped, _reverseMax)) * 4;
+                    moveValue = Convert.ToUInt16(request.MovementMagnitude.Map(0, _moveMagnitudeScale, _stopped, _reverseMax)) * 4;
                     break;
             }
 
@@ -559,23 +582,26 @@ namespace Autonoceptor.Host
             if (Volatile.Read(ref _emergencyStopped))
                 return;
 
-            var direction = _center * 4;
-
-            switch (xboxData.RightStick.Direction)
+            if (!Volatile.Read(ref _followingWaypoints))
             {
-                case Direction.UpLeft:
-                case Direction.DownLeft:
-                case Direction.Left:
-                    direction = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, _center, _leftMax)) * 4;
-                    break;
-                case Direction.UpRight:
-                case Direction.DownRight:
-                case Direction.Right:
-                    direction = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, _center, _rightMax)) * 4;
-                    break;
-            }
+                var direction = _center * 4;
 
-            await _maestroPwm.SetChannelValue(direction, _steeringChannel); //ChannelId 1 is Steering
+                switch (xboxData.RightStick.Direction)
+                {
+                    case Direction.UpLeft:
+                    case Direction.DownLeft:
+                    case Direction.Left:
+                        direction = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, _center, _leftMax)) * 4;
+                        break;
+                    case Direction.UpRight:
+                    case Direction.DownRight:
+                    case Direction.Right:
+                        direction = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, _center, _rightMax)) * 4;
+                        break;
+                }
+
+                await _maestroPwm.SetChannelValue(direction, _steeringChannel); //ChannelId 1 is Steering
+            }
 
             var reverseMagnitude = Convert.ToUInt16(xboxData.LeftTrigger.Map(0, 33000, _stopped, _reverseMax)) * 4;
             var forwardMagnitude = Convert.ToUInt16(xboxData.RightTrigger.Map(0, 33000, _stopped, _forwardMax)) * 4;
@@ -668,6 +694,57 @@ namespace Autonoceptor.Host
             Volatile.Write(ref _videoRunning, false);
 
             return false;
+        }
+
+        private  MoveRequest CalculateMoveRequest(GpsFixData waypoint, GpsFixData gpsFixData)
+        {
+            var moveReq = new MoveRequest();
+
+            var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(gpsFixData.Lat, gpsFixData.Lon, waypoint.Lat, waypoint.Lon);
+            var distanceToWaypoint = distanceAndHeading[0];
+
+            var headingToWaypoint = distanceAndHeading[1];
+
+            //if (Math.Abs(distanceForSpeedMap) < .01)
+            //distanceForSpeedMap = distanceToWaypoint;
+
+           // var travelMagnitude = (int)distanceToWaypoint.Map(0, distanceToWaypoint, 1500, 1750);
+
+            //Adjust sensitivity of turn based on distance. These numbers will need to be adjusted.
+            //var turnMagnitudeModifier = distanceToWaypoint.Map(0, distanceToWaypoint, 1000, -1000); 
+
+            //moveReq.MovementMagnitude = travelMagnitude;
+
+            var diff = gpsFixData.Heading - headingToWaypoint;
+
+            if (diff < 0)
+            {
+                if (Math.Abs(diff) > 180)
+                {
+                    moveReq.SteeringDirection = SteeringDirection.Left;
+                    moveReq.SteeringMagnitude = (int)Math.Abs(diff + 360).Map(0, 360, 0, _steerMagnitudeScale);
+                }
+                else
+                {
+                    moveReq.SteeringDirection = SteeringDirection.Right;
+                    moveReq.SteeringMagnitude = (int)Math.Abs(diff).Map(0, 360, 0, _steerMagnitudeScale);
+                }
+            }
+            else
+            {
+                if (Math.Abs(diff) > 180)
+                {
+                    moveReq.SteeringDirection = SteeringDirection.Right;
+                    moveReq.SteeringMagnitude = (int)Math.Abs(diff - 360).Map(0, 360, 0, _steerMagnitudeScale);
+                }
+                else
+                {
+                    moveReq.SteeringDirection = SteeringDirection.Left;
+                    moveReq.SteeringMagnitude = (int)Math.Abs(diff).Map(0, 360, 0, _steerMagnitudeScale);
+                }
+            }
+
+            return moveReq;
         }
     }
 }
