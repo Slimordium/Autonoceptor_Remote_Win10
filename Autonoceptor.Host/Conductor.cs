@@ -75,6 +75,25 @@ namespace Autonoceptor.Host
 
         private int _waypointIndex;
 
+        private async Task CheckXboxConnection()
+        {
+            var devices = await DeviceInformation.FindAllAsync(HidDevice.GetDeviceSelector(0x01, 0x05));
+
+            if (devices.Any())
+            {
+                return;
+            }
+
+            if (Volatile.Read(ref _xboxMissing))
+                return;
+
+            Volatile.Write(ref _xboxMissing, true);
+
+            await EmergencyStop();
+
+            await Stop();
+        }
+
         public async Task InitializeAsync(CancellationTokenSource cancellationTokenSource)
         {
             _cancellationToken = cancellationTokenSource.Token;
@@ -97,7 +116,6 @@ namespace Autonoceptor.Host
 
                 _disposables.Add(_xboxDevice.GetObservable()
                     .Where(xboxData => xboxData != null)
-                    //.Sample(TimeSpan.FromMilliseconds(30))
                     .ObserveOnDispatcher()
                     .Subscribe(async xboxData =>
                     {
@@ -107,25 +125,7 @@ namespace Autonoceptor.Host
                 //If the controller connection was lost, stop the car...
                 _disposables.Add(Observable.Interval(TimeSpan.FromMilliseconds(250))
                     .ObserveOnDispatcher()
-                    .Subscribe(
-                    async _ =>
-                    {
-                        var devices = await DeviceInformation.FindAllAsync(HidDevice.GetDeviceSelector(0x01, 0x05));
-
-                        if (devices.Any())
-                        {
-                            return;
-                        }
-
-                        if (Volatile.Read(ref _xboxMissing))
-                            return;
-
-                        Volatile.Write(ref _xboxMissing, true);
-
-                        await EmergencyStop();
-
-                        await Stop();
-                    }));
+                    .Subscribe(async _ => { await CheckXboxConnection(); }));
             }
 
             await _gps.InitializeAsync();
@@ -161,7 +161,8 @@ namespace Autonoceptor.Host
                     _waypointList.Add(gpsFixData);
                 }));
 
-            _disposables.Add(_lidar.GetObservable(_cancellationToken)
+            _disposables.Add(
+                _lidar.LidarObservable
                 .ObserveOnDispatcher()
                 .Subscribe(async rangeData =>
                 {

@@ -1,9 +1,7 @@
 ﻿using System;
-using System.IO;
+using System.Reactive.Concurrency;
 using System.Reactive.Linq;
-using System.Reactive.Subjects;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
@@ -17,23 +15,26 @@ namespace Autonoceptor.Service.Hardware
 
         private DataReader _inputStream;
 
+        public IObservable<ImuData> ImuObservable { get; private set; }
+
+        private readonly EventLoopScheduler _eventLoopScheduler = new EventLoopScheduler();
+
         public async Task InitializeAsync()
         {
-            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("N01E09J", 57600, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
+            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("N01E09J", 57600, TimeSpan.FromMilliseconds(30), TimeSpan.FromMilliseconds(30));
 
             if (_serialDevice == null)
                 return;
 
             _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
+
+            ImuObservable = GetReadObservable();
         }
 
-        public IObservable<ImuData> GetObservable(CancellationToken cancellationToken)
+        private IObservable<ImuData> GetReadObservable()
         {
-            var imuDataSubject = new Subject<ImuData>();
-
-            Task.Run(async () =>
-            {
-                while (!cancellationToken.IsCancellationRequested)
+            return Observable.Create<ImuData>(observer =>
+                _eventLoopScheduler.Schedule(async self =>
                 {
                     var byteCount = await _inputStream.LoadAsync(64);
 
@@ -43,8 +44,7 @@ namespace Autonoceptor.Service.Hardware
 
                     var readings = Encoding.ASCII.GetString(buffer);
 
-                    var yprReadings = readings.Replace("\r", "").Replace("\n", "").Replace("Y", "").Replace("P", "")
-                        .Replace("R", "").Replace("=", "").Split('#');
+                    var yprReadings = readings.Replace("\r", "").Replace("\n", "").Replace("Y", "").Replace("P", "").Replace("R", "").Replace("=", "").Split('#');
 
                     foreach (var reading in yprReadings)
                     {
@@ -74,17 +74,16 @@ namespace Autonoceptor.Service.Hardware
                                 Roll = roll
                             };
 
-                            imuDataSubject.OnNext(imuData);
+                            observer.OnNext(imuData);
                         }
                         catch (Exception e)
                         {
-                            //
+                            observer.OnError(e);
                         }
                     }
-                }
-            });
 
-            return imuDataSubject.AsObservable();
+                    self();
+                }));
         }
     }
 }

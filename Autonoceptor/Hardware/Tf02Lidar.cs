@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Threading;
@@ -16,6 +17,10 @@ namespace Autonoceptor.Service.Hardware
         private DataReader _inputStream;
         private DataWriter _outputStream;
 
+        public IObservable<LidarData> LidarObservable { get; private set; }
+
+        private readonly EventLoopScheduler _eventLoopScheduler = new EventLoopScheduler();
+
         public async Task InitializeAsync()
         {
             _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("A105BLG5", 115200, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
@@ -25,22 +30,14 @@ namespace Autonoceptor.Service.Hardware
 
             _inputStream = new DataReader(_serialDevice.InputStream) {InputStreamOptions = InputStreamOptions.Partial};
             _outputStream = new DataWriter(_serialDevice.OutputStream);
+
+            LidarObservable = GetObservable();
         }
 
-        private Subject<LidarData> _subject;
-
-        public IObservable<LidarData> GetObservable(CancellationToken cancellationToken)
+        private IObservable<LidarData> GetObservable()
         {
-            if (_subject != null)
-            {
-                return _subject.AsObservable();
-            }
-
-            _subject = new Subject<LidarData>();
-
-            Task.Run(async () =>
-            {
-                while (!cancellationToken.IsCancellationRequested)
+            return Observable.Create<LidarData>(observer =>
+                _eventLoopScheduler.Schedule(async self =>
                 {
                     var byteCount = await _inputStream.LoadAsync(8);
                     var bytes = new byte[byteCount];
@@ -51,26 +48,27 @@ namespace Autonoceptor.Service.Hardware
                     var loc = byteList.IndexOf(0x59);
 
                     if (loc + 7 > byteList.Count)
-                        continue;
+                    {
+                        self();
+                    }
 
                     if (bytes[0] != 0x59 && bytes[1] != 0x59)
-                        continue;
+                        self(); 
 
                     var lidarData = new LidarData
                     {
-                        Distance = (ushort) BitConverter.ToInt16(bytes, 2),
-                        Strength = (ushort) BitConverter.ToInt16(bytes, 4),
+                        Distance = (ushort)BitConverter.ToInt16(bytes, 2),
+                        Strength = (ushort)BitConverter.ToInt16(bytes, 4),
                         Reliability = bytes[6]
                     };
-                    
+
                     if (lidarData.Reliability <= 5 || lidarData.Reliability > 8) //If the value is a 7 or 8, it is reliable. Ignore the rest
-                        continue;
+                        self();
 
-                    _subject.OnNext(lidarData);
-                }
-            });
+                    observer.OnNext(lidarData);
 
-            return _subject.AsObservable();
+                    self();
+                }));
         }
     }
 }
