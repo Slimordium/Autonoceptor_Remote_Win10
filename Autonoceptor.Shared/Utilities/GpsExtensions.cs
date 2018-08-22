@@ -144,7 +144,7 @@ namespace Autonoceptor.Shared.Utilities
             if (ns.StartsWith("S"))
                 med = -med;
 
-            return Math.Round(med, 6); //gives accuracy of 1.1132m or 3.65223097ft
+            return Math.Round(med, 7); //gives accuracy of 1.1132m or 3.65223097ft
         }
 
         public static double Longitude2Double(this string lon, string we)
@@ -169,7 +169,7 @@ namespace Autonoceptor.Shared.Utilities
             if (we.StartsWith("W"))
                 med = -med;
 
-            return Math.Round(med, 6); //gives accuracy of 1.1132m or 3.65223097ft
+            return Math.Round(med, 7); //gives accuracy of 1.1132m or 3.65223097ft
         }
 
         public static GpsFixData ParseNmea(string data)

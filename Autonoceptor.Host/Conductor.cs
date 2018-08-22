@@ -159,11 +159,17 @@ namespace Autonoceptor.Host
                 .ObserveOnDispatcher()
                 .Subscribe(async gpsFixData =>
                 {
+
+
                     if (!_recordWaypoints)
+                    {
+                        await _lcd.WriteAsync($"Fix {gpsFixData.Quality}", 2);
                         return;
+                    }
 
                     if (_waypointList.Any(data => Math.Abs(data.Lat - gpsFixData.Lat) < .000001 && Math.Abs(data.Lon - gpsFixData.Lon) < .000001)) //gives accuracy of 1.1132m or 3.65223097ft
                     {
+                        await _lcd.WriteAsync($"Skipping WP...", 2);
                         return; //Dont add multiples of the same point
                     }
 
@@ -430,7 +436,7 @@ namespace Autonoceptor.Host
                     }
                 }));
 
-            _sensorDisposables.Add(_lidar.LidarObservable
+            _sensorDisposables.Add(_lidar.GetObservable(_cancellationToken)
                 .Where(lidarData => lidarData != null)
                 .Sample(TimeSpan.FromMilliseconds(100))
                 .ObserveOnDispatcher()
@@ -538,6 +544,9 @@ namespace Autonoceptor.Host
             var moveValue = _stopped * 4;
             var steerValue = _center * 4;
 
+            if (request.SteeringMagnitude > 45)
+                request.SteeringMagnitude = 45;
+
             switch (request.SteeringDirection)
             {
                 case SteeringDirection.Left:
@@ -548,10 +557,10 @@ namespace Autonoceptor.Host
                     break;
             }
 
+            await _maestroPwm.SetChannelValue(steerValue, _steeringChannel);
+
             if (Volatile.Read(ref _followingWaypoints))
                 return;
-
-            await _maestroPwm.SetChannelValue(steerValue, _steeringChannel);
 
             switch (request.MovementDirection)
             {

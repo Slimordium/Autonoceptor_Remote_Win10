@@ -24,7 +24,7 @@ namespace Autonoceptor.Service.Hardware
             if (_serialDevice == null)
                 return;
 
-            _inputStream = new DataReader(_serialDevice.InputStream) {InputStreamOptions = InputStreamOptions.Partial};
+            _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
             _outputStream = new DataWriter(_serialDevice.OutputStream);
         }
 
