@@ -36,7 +36,7 @@ namespace Autonoceptor.Host
 
         private readonly SemaphoreSlim _initMqttSemaphore = new SemaphoreSlim(1,1);
 
-        private int _steerMagnitudeScale = 45;
+        private int _steerMagnitudeScale = 180;
         private int _moveMagnitudeScale = 45;
 
         private int _rightMax = 1861;
@@ -430,7 +430,7 @@ namespace Autonoceptor.Host
                     }
                 }));
 
-            _sensorDisposables.Add(_lidar.GetObservable(_cancellationToken)
+            _sensorDisposables.Add(_lidar.LidarObservable
                 .Where(lidarData => lidarData != null)
                 .Sample(TimeSpan.FromMilliseconds(100))
                 .ObserveOnDispatcher()
@@ -481,7 +481,7 @@ namespace Autonoceptor.Host
         {
             await _maestroPwm.SetChannelValue(_stopped - 50 * 4, _movementChannel); //Momentary reverse ... helps stop quickly
 
-            await Task.Delay(50);
+            await Task.Delay(30);
 
             await _maestroPwm.SetChannelValue(_stopped * 4, _movementChannel);
 
@@ -541,10 +541,10 @@ namespace Autonoceptor.Host
             switch (request.SteeringDirection)
             {
                 case SteeringDirection.Left:
-                    steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, _steerMagnitudeScale, _center, _leftMax)) * 4;
+                    steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, 45, _center, _leftMax)) * 4;
                     break;
                 case SteeringDirection.Right:
-                    steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, _steerMagnitudeScale, _center, _rightMax)) * 4;
+                    steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, 45, _center, _rightMax)) * 4;
                     break;
             }
 
