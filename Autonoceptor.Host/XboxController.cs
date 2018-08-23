@@ -44,7 +44,7 @@ namespace Autonoceptor.Host
             await base.InitializeAsync();
 
             _xboxConnectedCheckDisposable = Observable
-                .Interval(TimeSpan.FromMilliseconds(250))
+                .Interval(TimeSpan.FromMilliseconds(500))
                 .ObserveOnDispatcher()
                 .Subscribe(
                     async _ =>

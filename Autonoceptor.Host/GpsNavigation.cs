@@ -33,7 +33,7 @@ namespace Autonoceptor.Host
         private IDisposable _gpsNavDisposable;
         private IDisposable _gpsNavSwitchDisposable;
 
-        private double _gpsNavMoveMagnitude = 30;
+        private double _gpsNavMoveMagnitude = 20;
         protected double GpsNavMoveMagnitude
         {
             get => Volatile.Read(ref _gpsNavMoveMagnitude);
@@ -63,14 +63,6 @@ namespace Autonoceptor.Host
         {
             await base.InitializeAsync();
 
-            _steerMagnitudeDecayDisposable = Observable
-                .Interval(TimeSpan.FromMilliseconds(100))
-                .ObserveOnDispatcher()
-                .Subscribe(async _ =>
-                {
-                    await DecaySteeringMagnitude();
-                });
-
             _currentLocationUpdater = Gps
                 .GetObservable()
                 .ObserveOnDispatcher()
@@ -92,11 +84,11 @@ namespace Autonoceptor.Host
         {
             var moveRequest = CurrentGpsMoveRequest;
 
-            if (moveRequest == null || Math.Abs(moveRequest.SteeringMagnitude) < 5)
+            if (moveRequest == null || Math.Abs(moveRequest.SteeringMagnitude) < 30)
                 return;
 
             moveRequest.SteeringDirection = moveRequest.SteeringDirection;
-            moveRequest.SteeringMagnitude = moveRequest.SteeringMagnitude * .6;
+            moveRequest.SteeringMagnitude = moveRequest.SteeringMagnitude * .7;
 
             await WriteToHardware(moveRequest);
         }
@@ -110,6 +102,14 @@ namespace Autonoceptor.Host
                 await Lcd.WriteAsync($"Started Nav to", 1);
                 await Lcd.WriteAsync($"{Waypoints.Count} WPs", 2);
 
+                _steerMagnitudeDecayDisposable = Observable
+                    .Interval(TimeSpan.FromMilliseconds(300))
+                    .ObserveOnDispatcher()
+                    .Subscribe(async _ =>
+                    {
+                        await DecaySteeringMagnitude();
+                    });
+
                 _gpsNavDisposable = Gps.GetObservable()
                     .ObserveOnDispatcher()
                     .Subscribe(async fix =>
@@ -122,6 +122,7 @@ namespace Autonoceptor.Host
 
             await Lcd.WriteAsync("GPS Nav stopped");
 
+            _steerMagnitudeDecayDisposable?.Dispose();
             _gpsNavDisposable?.Dispose();
         }
 
@@ -146,7 +147,7 @@ namespace Autonoceptor.Host
             await Lcd.WriteAsync($"{moveReq.SteeringDirection} {moveReq.SteeringMagnitude}", 1);
             await Lcd.WriteAsync($"Dist {moveReq.Distance} {_currentWaypointIndex}", 2);
 
-            if (moveReq.Distance <= 40) //This should probably be slightly larger than the turning radius?
+            if (moveReq.Distance <= 36) //This should probably be slightly larger than the turning radius?
             {
                 _currentWaypointIndex++;
             }
