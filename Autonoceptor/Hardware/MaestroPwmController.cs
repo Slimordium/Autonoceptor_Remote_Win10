@@ -24,7 +24,8 @@ namespace Autonoceptor.Service.Hardware
                 _analogValue = value;
             }
         }
-        public bool DigitalValue { get; set; }
+
+        public bool DigitalValue { get; private set; }
     }
 
     public class MaestroPwmController
@@ -34,15 +35,13 @@ namespace Autonoceptor.Service.Hardware
         private DataWriter _outputStream;
         private DataReader _inputStream;
 
-        private readonly SemaphoreSlim _readWriteSemaphore = new SemaphoreSlim(1,1);
-
         private readonly Subject<ChannelData> _channelSubject = new Subject<ChannelData>();
 
         private readonly Dictionary<ushort, ChannelData> _channelValues = new Dictionary<ushort, ChannelData>();
 
         private IDisposable _getChannelStatesDisposable;
 
-        private bool _running;
+        private bool _locked;
 
         public MaestroPwmController(IEnumerable<ushort> inputChannels)
         {
@@ -71,11 +70,6 @@ namespace Autonoceptor.Service.Hardware
 
             _getChannelStatesDisposable = Observable.Interval(TimeSpan.FromMilliseconds(200)).Subscribe(async _ =>
             {
-                if (Volatile.Read(ref _running))
-                    return;
-
-                Volatile.Write(ref _running, true);
-
                 foreach (var channel in _channelValues)
                 {
                     var channelValue = await GetChannelValue(channel.Key);
@@ -89,8 +83,6 @@ namespace Autonoceptor.Service.Hardware
                         _channelSubject.OnNext(channel.Value);
                     }
                 }
-
-                Volatile.Write(ref _running, false);
             });
         }
 
@@ -99,7 +91,12 @@ namespace Autonoceptor.Service.Hardware
             if (_outputStream == null)
                 throw new InvalidOperationException("Output stream is null?");
 
-            await _readWriteSemaphore.WaitAsync();
+            while (Volatile.Read(ref _locked))
+            {
+                Thread.Sleep(1);
+            }
+
+            Volatile.Write(ref _locked, true);
 
             var lsb = Convert.ToByte(value & 0x7f);
             var msb = Convert.ToByte((value >> 7) & 0x7f);
@@ -107,7 +104,7 @@ namespace Autonoceptor.Service.Hardware
             _outputStream.WriteBytes(new[] { (byte)0x84, (byte)channel, lsb, msb });
             var r = await _outputStream.StoreAsync();
 
-            _readWriteSemaphore.Release(1);
+            Volatile.Write(ref _locked, false);
         }
 
         public async Task<int> GetChannelValue(ushort channel)
@@ -115,7 +112,12 @@ namespace Autonoceptor.Service.Hardware
             if (_outputStream == null || _inputStream == null)
                 throw new InvalidOperationException("Output or Input stream is null?");
 
-            await _readWriteSemaphore.WaitAsync();
+            while (Volatile.Read(ref _locked))
+            {
+                Thread.Sleep(1);
+            }
+
+            Volatile.Write(ref _locked, true);
 
             _outputStream.WriteBytes(new[] { (byte)0xAA, (byte)0x0C, (byte)0x10, (byte)channel });//Forward / reverse
             var r = await _outputStream.StoreAsync();
@@ -124,7 +126,7 @@ namespace Autonoceptor.Service.Hardware
             var inputBytes = new byte[2];
             _inputStream.ReadBytes(inputBytes);
 
-            _readWriteSemaphore.Release(1);
+            Volatile.Write(ref _locked, false);
 
             return await Task.FromResult(BitConverter.ToUInt16(inputBytes, 0) * 4);
         }

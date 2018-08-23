@@ -79,9 +79,9 @@ namespace Autonoceptor.Host
 
         private bool _followingWaypoints;
 
-        private async Task EnableDisableNav(ChannelData channel)
+        private async Task EnableNav(bool enable)
         {
-            if (channel.DigitalValue)
+            if (enable)
             {
                 _waypointList = await _waypointList.Load();
 
@@ -201,7 +201,7 @@ namespace Autonoceptor.Host
                 .Where(channel => channel.ChannelId == _navEnableChannel)
                 .ObserveOnDispatcher()
                 .Subscribe(
-                async channel => { await EnableDisableNav(channel); }));
+                async channel => { await EnableNav(channel.DigitalValue); }));
 
             //_enableRemoteChannel
             //If the enable remote switch is closed, start streaming video/sensor data
@@ -243,32 +243,6 @@ namespace Autonoceptor.Host
                     }
                     
                 }));
-
-            //TODO: DO NOT need this, using button "B" on controller to save waypoint
-            //Set _recordWaypoints to "true" if the channel is pulled high
-            //_disposables.Add(_maestroPwm.GetObservable()
-            //    .Where(channel => channel.ChannelId == _recordWaypointsChannel)
-            //    .ObserveOnDispatcher()
-            //    .Subscribe(
-            //    async channel =>
-            //    {
-            //        if (channel.DigitalValue)
-            //        {
-            //            await _lcd.WriteAsync("Save WP start");
-
-            //            _recordWaypoints = true;
-
-            //            _waypointList = new WaypointList();
-            //        }
-            //        else
-            //        {
-            //            await _lcd.WriteAsync("Save WP stop");
-
-            //            await _waypointList.Save();
-
-            //            _recordWaypoints = false;
-            //        }
-            //    }));
         }
 
         private async Task UpdateNav(GpsFixData gpsFixData)
@@ -284,7 +258,7 @@ namespace Autonoceptor.Host
             var moveReq = CalculateMoveRequest(currentWp, gpsFixData);
 
             //Override for now, 15 = 10%
-            //moveReq.MovementMagnitude = 60;
+            moveReq.MovementMagnitude = 30;
             //moveReq.SteeringMagnitude = 100;
 
             await MoveRequest(moveReq);
@@ -502,6 +476,9 @@ namespace Autonoceptor.Host
             await Stop();
         }
 
+        private IDisposable _steeringMagnitudeSmootherrrrr;
+
+
 
         /// <summary>
         /// The magnitudes are in % 0 - 100
@@ -521,6 +498,22 @@ namespace Autonoceptor.Host
 
             if (request.SteeringMagnitude > 45)
                 request.SteeringMagnitude = 45;
+
+            if (request.SteeringMagnitude > 30)
+            {
+                _steeringMagnitudeSmootherrrrr?.Dispose();
+
+                _steeringMagnitudeSmootherrrrr = Observable.Timer(TimeSpan.FromMilliseconds(400)).Subscribe(async _ =>
+                {
+                    var mr = new MoveRequest
+                    {
+                        SteeringDirection = request.SteeringDirection,
+                        SteeringMagnitude = request.SteeringMagnitude * .6
+                    };
+
+                    await MoveRequest(mr);
+                });
+            }
 
             switch (request.SteeringDirection)
             {
@@ -566,8 +559,15 @@ namespace Autonoceptor.Host
                 return;
             }
 
+            if (xboxData.FunctionButtons.Contains(FunctionButton.Start))
+            {
+                await EnableNav(true);
+                return;
+            }
+
             if (_cancellationToken.IsCancellationRequested || xboxData.FunctionButtons.Contains(FunctionButton.X))
             {
+                await EnableNav(false);
                 await EmergencyStop();
                 return;
             }
