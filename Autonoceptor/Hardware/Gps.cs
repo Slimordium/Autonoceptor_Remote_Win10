@@ -61,7 +61,7 @@ namespace Autonoceptor.Service.Hardware
                         }
                     }
 
-                    if (Math.Abs(gpsFixData.Lat) < 0 || Math.Abs(gpsFixData.Altitude) < 0 || Math.Abs(gpsFixData.Lon) < 0)
+                    if (gpsFixData.DateTime == DateTime.MinValue)
                     {
                         continue; //Most likely bad data, toss and continue
                     }

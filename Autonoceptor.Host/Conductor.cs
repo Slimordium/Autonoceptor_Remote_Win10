@@ -29,7 +29,7 @@ namespace Autonoceptor.Host
         private readonly Gps _gps = new Gps();
         private readonly XboxDevice _xboxDevice = new XboxDevice();
 
-        private readonly GpsFixData _gpsFixData = new GpsFixData();
+        private GpsFixData _gpsFixData = new GpsFixData();
 
         private CancellationToken _cancellationToken;
         private CancellationTokenSource _remoteTokenSource = new CancellationTokenSource();
@@ -181,6 +181,8 @@ namespace Autonoceptor.Host
                 .ObserveOnDispatcher()
                 .Subscribe(async gpsFixData =>
                 {
+                    Volatile.Write(ref _gpsFixData, gpsFixData);
+
                     await _lcd.WriteAsync($"WPs {_waypointList.Count}", 1);
                     await _lcd.WriteAsync($"Fix {gpsFixData.Quality}", 2);
                 }));
@@ -287,12 +289,12 @@ namespace Autonoceptor.Host
 
             await MoveRequest(moveReq);
 
-            var distance = _waypointList.GetInchesToNextWaypoint(_waypointIndex);
+            //var distance = _waypointList.GetInchesToNextWaypoint(_waypointIndex); //TODO: This seems fairly useless
 
             await _lcd.WriteAsync($"{moveReq.SteeringDirection} {moveReq.SteeringMagnitude}", 1);
-            await _lcd.WriteAsync($"Dist {distance} {_waypointIndex}", 2);
+            await _lcd.WriteAsync($"Dist {moveReq.Distance} {_waypointIndex}", 2);
 
-            if (distance <= 40) //This should probably be slightly larger than the turning radius?
+            if (moveReq.Distance <= 40) //This should probably be slightly larger than the turning radius?
             {
                 _waypointIndex++;
             }
@@ -570,6 +572,14 @@ namespace Autonoceptor.Host
                 return;
             }
 
+            if (_cancellationToken.IsCancellationRequested || xboxData.FunctionButtons.Contains(FunctionButton.Y))
+            {
+                _waypointList = new WaypointList();
+
+                await _lcd.WriteAsync($"WPs cleared");
+                return;
+            }
+
             if (Volatile.Read(ref _emergencyStopped))
                 return;
 
@@ -692,7 +702,7 @@ namespace Autonoceptor.Host
             var moveReq = new MoveRequest();
 
             var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(gpsFixData.Lat, gpsFixData.Lon, waypoint.Lat, waypoint.Lon);
-            var distanceToWaypoint = distanceAndHeading[0];
+            moveReq.Distance = distanceAndHeading[0];
 
             var headingToWaypoint = distanceAndHeading[1];
 

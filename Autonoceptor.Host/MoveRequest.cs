@@ -15,6 +15,8 @@
         public SteeringDirection SteeringDirection { get; set; } = SteeringDirection.Center;
 
         public MovementDirection MovementDirection { get; set; } = MovementDirection.Forward;
+
+        public double Distance { get; set; }
     }
 
     public enum SteeringDirection
