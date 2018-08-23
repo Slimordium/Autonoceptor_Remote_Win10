@@ -19,7 +19,6 @@ namespace Autonoceptor.Host
         public XboxController(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
             : base(cancellationTokenSource, brokerHostnameOrIp)
         {
-
         }
 
         private async Task ConfigureXboxObservable()
@@ -78,6 +77,7 @@ namespace Autonoceptor.Host
             if (xboxData.FunctionButtons.Contains(FunctionButton.A))
             {
                 await EmergencyBrake(true);
+                return;
             }
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.B))
@@ -117,26 +117,24 @@ namespace Autonoceptor.Host
             if (FollowingWaypoints)
                 return;
 
-            var direction = CenterPwm * 4;
+            ushort direction = CenterPwm * 4;
 
             switch (xboxData.RightStick.Direction)
             {
                 case Direction.UpLeft:
                 case Direction.DownLeft:
                 case Direction.Left:
-                    direction = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, LeftPwmMax)) * 4;
+                    direction = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, LeftPwmMax) * 4);
                     break;
                 case Direction.UpRight:
                 case Direction.DownRight:
                 case Direction.Right:
-                    direction = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, RightPwmMax)) * 4;
+                    direction = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, RightPwmMax) * 4);
                     break;
             }
 
-            await PwmController.SetChannelValue(direction, SteeringChannel); //ChannelId 1 is Steering
-
-            var reverseMagnitude = Convert.ToUInt16(xboxData.LeftTrigger.Map(0, 33000, StoppedPwm, ReversePwmMax)) * 4;
-            var forwardMagnitude = Convert.ToUInt16(xboxData.RightTrigger.Map(0, 33000, StoppedPwm, ForwardPwmMax)) * 4;
+            var reverseMagnitude = Convert.ToUInt16(xboxData.LeftTrigger.Map(0, 33000, StoppedPwm, ReversePwmMax) * 4);
+            var forwardMagnitude = Convert.ToUInt16(xboxData.RightTrigger.Map(0, 33000, StoppedPwm, ForwardPwmMax) * 4);
 
             var outputVal = forwardMagnitude;
 
@@ -145,7 +143,7 @@ namespace Autonoceptor.Host
                 outputVal = reverseMagnitude;
             }
 
-            await PwmController.SetChannelValue(outputVal, MovementChannel); //ChannelId 0 is the motor driver
+            await WriteToHardware(direction, outputVal); //ChannelId 1 is Steering
         }
     }
 }

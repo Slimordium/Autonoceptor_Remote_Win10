@@ -27,7 +27,7 @@ namespace Hardware.Xbox
 
             var deviceInformationCollection = await DeviceInformation.FindAllAsync(HidDevice.GetDeviceSelector(0x01, 0x05));
 
-            if (deviceInformationCollection.Count > 0)
+            if (!deviceInformationCollection.Any())
                 return false;
 
             var isConnected = await ConnectToController(deviceInformationCollection);

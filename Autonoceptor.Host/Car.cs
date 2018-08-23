@@ -73,9 +73,6 @@ namespace Autonoceptor.Host
         {
             if (isCanceled)
             {
-                if (Stopped)
-                    return;
-
                 Stopped = false;
 
                 await Lcd.WriteAsync("E-Brake canceled");

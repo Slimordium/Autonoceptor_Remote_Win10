@@ -7,7 +7,7 @@ using Autonoceptor.Shared.Utilities;
 
 namespace Autonoceptor.Host
 {
-    public class GpsNavigation : Car
+    public class GpsNavigation : LidarNavOverride
     {
         private int _currentWaypointIndex;
 
@@ -50,36 +50,55 @@ namespace Autonoceptor.Host
             private set => Volatile.Write(ref _currentGpsMoveRequest, value);
         }
 
-        protected GpsNavigation(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) : base(cancellationTokenSource, brokerHostnameOrIp)
+        protected GpsNavigation(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
+            : base(cancellationTokenSource, brokerHostnameOrIp)
         {
-            cancellationTokenSource.Token.Register(async () => { await WaypointFollowEnable(false); });
-
-            _steerMagnitudeDecayDisposable = Observable.Interval(TimeSpan.FromMilliseconds(100))
-                .ObserveOnDispatcher()
-                .Subscribe(async _ =>
-                {
-                    var moveRequest = CurrentGpsMoveRequest;
-
-                    if (moveRequest == null || Math.Abs(moveRequest.SteeringMagnitude) < 5)
-                        return;
-
-                    moveRequest.SteeringDirection = moveRequest.SteeringDirection;
-                    moveRequest.SteeringMagnitude = moveRequest.SteeringMagnitude * .6;
-
-                    await WriteToHardware(moveRequest);
-                });
+            cancellationTokenSource.Token.Register(async () =>
+            {
+                await WaypointFollowEnable(false);
+            });
         }
 
         protected new async Task InitializeAsync()
         {
             await base.InitializeAsync();
 
-            _currentLocationUpdater = Gps.GetObservable().ObserveOnDispatcher().Subscribe(fix => { CurrentLocation = fix; });
+            _steerMagnitudeDecayDisposable = Observable
+                .Interval(TimeSpan.FromMilliseconds(100))
+                .ObserveOnDispatcher()
+                .Subscribe(async _ =>
+                {
+                    await DecaySteeringMagnitude();
+                });
+
+            _currentLocationUpdater = Gps
+                .GetObservable()
+                .ObserveOnDispatcher()
+                .Subscribe(fix =>
+                {
+                    CurrentLocation = fix; 
+                });
 
             _gpsNavSwitchDisposable = PwmController.GetObservable()
                 .Where(channel => channel.ChannelId == GpsNavEnabledChannel)
                 .ObserveOnDispatcher()
-                .Subscribe(async channelData => { await WaypointFollowEnable(channelData.DigitalValue); });
+                .Subscribe(async channelData =>
+                {
+                    await WaypointFollowEnable(channelData.DigitalValue);
+                });
+        }
+
+        private async Task DecaySteeringMagnitude()
+        {
+            var moveRequest = CurrentGpsMoveRequest;
+
+            if (moveRequest == null || Math.Abs(moveRequest.SteeringMagnitude) < 5)
+                return;
+
+            moveRequest.SteeringDirection = moveRequest.SteeringDirection;
+            moveRequest.SteeringMagnitude = moveRequest.SteeringMagnitude * .6;
+
+            await WriteToHardware(moveRequest);
         }
 
         public async Task WaypointFollowEnable(bool enabled)
