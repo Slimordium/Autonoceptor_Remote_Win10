@@ -15,8 +15,10 @@ namespace Autonoceptor.Service.Hardware
         private SerialDevice _serialDevice;
         private DataReader _inputStream;
         private DataWriter _outputStream;
+        private Task _lidarTask;
+        private readonly Subject<LidarData> _subject = new Subject<LidarData>();
 
-        public async Task InitializeAsync()
+        public async Task InitializeAsync(CancellationToken cancellationToken)
         {
             _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("A105BLG5", 115200, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
 
@@ -25,20 +27,8 @@ namespace Autonoceptor.Service.Hardware
 
             _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
             _outputStream = new DataWriter(_serialDevice.OutputStream);
-        }
 
-        private Subject<LidarData> _subject;
-
-        public IObservable<LidarData> GetObservable(CancellationToken cancellationToken)
-        {
-            if (_subject != null)
-            {
-                return _subject.AsObservable();
-            }
-
-            _subject = new Subject<LidarData>();
-
-            Task.Run(async () =>
+            _lidarTask = new Task(async () =>
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
@@ -69,7 +59,11 @@ namespace Autonoceptor.Service.Hardware
                     _subject.OnNext(lidarData);
                 }
             });
+            _lidarTask.Start();
+        }
 
+        public IObservable<LidarData> GetObservable()
+        {
             return _subject.AsObservable();
         }
     }

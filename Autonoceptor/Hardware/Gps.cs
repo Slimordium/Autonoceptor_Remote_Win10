@@ -17,7 +17,11 @@ namespace Autonoceptor.Service.Hardware
         private DataReader _inputStream;
         private DataWriter _outputStream;
 
-        public async Task InitializeAsync()
+        private Task _gpsReadTask;
+
+        private readonly Subject<GpsFixData> _subject = new Subject<GpsFixData>();
+
+        public async Task InitializeAsync(CancellationToken cancellationToken)
         {
             _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 115200, TimeSpan.FromMilliseconds(25), TimeSpan.FromMilliseconds(25));
 
@@ -26,20 +30,8 @@ namespace Autonoceptor.Service.Hardware
 
             _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
             _outputStream = new DataWriter(_serialDevice.OutputStream);
-        }
 
-        private Subject<GpsFixData> _subject;
-
-        public IObservable<GpsFixData> GetObservable(CancellationToken cancellationToken)
-        {
-            if (_subject != null)
-            {
-                return _subject.AsObservable();
-            }
-
-            _subject = new Subject<GpsFixData>();
-
-            Task.Run(async () =>
+            _gpsReadTask = new Task(async () =>
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
@@ -53,7 +45,7 @@ namespace Autonoceptor.Service.Hardware
 
                     foreach (var sentence in sentences)
                     {
-                        if (!sentence.StartsWith("$"))
+                        if (!sentence.StartsWith("$") || !sentence.EndsWith('\r'))
                             continue;
 
                         try
@@ -69,11 +61,21 @@ namespace Autonoceptor.Service.Hardware
                         }
                     }
 
+                    if (Math.Abs(gpsFixData.Lat) < 0 || Math.Abs(gpsFixData.Altitude) < 0 || Math.Abs(gpsFixData.Lon) < 0)
+                    {
+                        continue; //Most likely bad data, toss and continue
+                    }
+
                     //The data is accumulative, so only need to publish once
                     _subject.OnNext(gpsFixData);
                 }
             });
 
+            _gpsReadTask.Start();
+        }
+
+        public IObservable<GpsFixData> GetObservable()
+        {
             return _subject.AsObservable();
         }
     }

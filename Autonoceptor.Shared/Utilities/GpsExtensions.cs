@@ -20,7 +20,6 @@ namespace Autonoceptor.Shared.Utilities
         private static double _rtkAge;
         private static double _rtkRatio;
         private static double _hdop;
-        private static GpsFixData _lastGpsFixSaved = new GpsFixData();
 
         private static bool _odometerCalibrated;
 
@@ -34,40 +33,6 @@ namespace Autonoceptor.Shared.Utilities
         private static double _rotationRate;
         private static double _distance;
 
-        public static async Task<List<GpsFixData>> LoadWaypoints()
-        {
-            var waypoints = new List<GpsFixData>();
-
-            //var config = await "waypoints.txt".ReadStringFromFile();
-
-            var config = string.Empty;
-
-            if (string.IsNullOrEmpty(config))
-                return waypoints;
-
-            var wps = config.Split('\n');
-
-            foreach (var wp in wps)
-            {
-                try
-                {
-                    if (string.IsNullOrEmpty(wp))
-                        continue;
-
-                    var newWp = new GpsFixData(wp);
-                    if (newWp.DateTime > DateTime.MinValue)
-                    {
-                        waypoints.Add(new GpsFixData(wp));
-                    }
-                }
-                catch
-                {
-                    //Write to display insetad
-                }
-            }
-
-            return waypoints;
-        }
 
         /// <summary>
         ///     Returns double[] [0] = distance to heading in inches. [1] = heading to destination waypoint
@@ -127,16 +92,12 @@ namespace Autonoceptor.Shared.Utilities
             if (lat.Length < 2 || string.IsNullOrEmpty(ns))
                 return _lat;
 
-            var med = 0d;
-
-            if (!double.TryParse(lat.Substring(2), out med))
+            if (!double.TryParse(lat.Substring(2), out double med))
                 return _lat;
 
             med = med / 60.0d;
 
-            var temp = 0d;
-
-            if (!double.TryParse(lat.Substring(0, 2), out temp))
+            if (!double.TryParse(lat.Substring(0, 2), out double temp))
                 return _lat;
 
             med += temp;
@@ -152,16 +113,13 @@ namespace Autonoceptor.Shared.Utilities
             if (lon.Length < 2 || string.IsNullOrEmpty(we))
                 return _lon;
 
-            var med = 0d;
-
-            if (!double.TryParse(lon.Substring(3), out med))
+            if (!double.TryParse(lon.Substring(3), out var med))
                 return _lon;
 
             med = med / 60.0d;
 
-            var temp = 0d;
 
-            if (!double.TryParse(lon.Substring(0, 3), out temp))
+            if (!double.TryParse(lon.Substring(0, 3), out var temp))
                 return _lon;
 
             med += temp;
@@ -281,9 +239,6 @@ namespace Autonoceptor.Shared.Utilities
                     default:
                         return null;
                 }
-
-                //if (Math.Abs(_lat) < .1 || Math.Abs(_lon) < .1)
-                //    return null;
             }
             catch
             {
@@ -297,7 +252,7 @@ namespace Autonoceptor.Shared.Utilities
                 Lon = _lon,
                 Altitude = _altitude,
                 FeetPerSecond = _feetPerSecond,
-                Quality = _quality,
+                Quality = _quality.ToString(),
                 SatellitesInView = _satellitesInView,
                 SignalToNoiseRatio = _signalToNoiseRatio,
                 Heading = _heading,

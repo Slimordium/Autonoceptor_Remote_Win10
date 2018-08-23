@@ -6,29 +6,9 @@ namespace Autonoceptor.Shared.Gps
 {
     public class GpsFixData
     {
-        public GpsFixData() { }
-
-        public GpsFixData(string rawData)
-        {
-            var aParsed = rawData.Split(',');
-
-            if (aParsed.Length < 5)
-            {
-                Debug.WriteLine($"Could not parse waypoint data - {rawData}");
-                return;
-            }
-
-            DateTime = Convert.ToDateTime(aParsed[0]);
-            Lat = double.Parse(aParsed[1]);
-            Lon = double.Parse(aParsed[2]);
-            Heading = double.Parse(aParsed[3]);
-            FeetPerSecond = double.Parse(aParsed[4]);
-            Quality = (GpsFixQuality)Enum.Parse(typeof(GpsFixQuality), aParsed[5]);
-        }
-
         public double Lat { get; set; } = 0;
         public double Lon { get; set; } = 0;
-        public GpsFixQuality Quality { get; set; } = GpsFixQuality.NoFix;
+        public string Quality { get; set; } = GpsFixQuality.NoFix.ToString();
         public double Heading { get; set; } = 0;
         public float Altitude { get; set; } = 0;
         public double FeetPerSecond { get; set; } = 0;
@@ -50,10 +30,5 @@ namespace Autonoceptor.Shared.Gps
         public double OdometerScalingFactor { get; set; }
         public double RotationRate { get; set; }
         public double Distance { get; set; }
-
-        public override string ToString()
-        {
-            return $"{DateTime},{Lat},{Lon},{Heading}{'\r'}{'\n'}";
-        }
     }
 }

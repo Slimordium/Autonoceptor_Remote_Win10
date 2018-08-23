@@ -29,14 +29,14 @@ namespace Autonoceptor.Host
         private readonly Gps _gps = new Gps();
         private readonly XboxDevice _xboxDevice = new XboxDevice();
 
-        private GpsFixData _gpsFixData = new GpsFixData();
+        private readonly GpsFixData _gpsFixData = new GpsFixData();
 
         private CancellationToken _cancellationToken;
         private CancellationTokenSource _remoteTokenSource = new CancellationTokenSource();
 
         private readonly SemaphoreSlim _initMqttSemaphore = new SemaphoreSlim(1,1);
 
-        private int _steerMagnitudeScale = 180;
+        private static int _steerMagnitudeScale = 180;
         private int _moveMagnitudeScale = 45;
 
         private int _rightMax = 1861;
@@ -79,6 +79,41 @@ namespace Autonoceptor.Host
 
         private bool _followingWaypoints;
 
+        private async Task EnableDisableNav(ChannelData channel)
+        {
+            if (channel.DigitalValue)
+            {
+                _waypointList = await _waypointList.Load();
+
+                if (_waypointList == null || !_waypointList.Any())
+                {
+                    await _lcd.WriteAsync("No waypoints found");
+                    return;
+                }
+
+                await _lcd.WriteAsync($"Start {_waypointList.Count} WPs");
+
+                Volatile.Write(ref _followingWaypoints, true);
+
+                _waypointNavigationDisposable = _gps.GetObservable().ObserveOnDispatcher().Subscribe(async gpsFixData =>
+                {
+                    await UpdateNav(gpsFixData);
+                });
+            }
+            else
+            {
+                await _lcd.WriteAsync("Canceled WP", 1);
+                await _lcd.WriteAsync("following...", 2);
+
+                Volatile.Write(ref _followingWaypoints, false);
+
+                _waypointNavigationDisposable?.Dispose();
+                _waypointNavigationDisposable = null;
+
+                _waypointIndex = 0;
+            }
+        }
+
         public async Task InitializeAsync(CancellationTokenSource cancellationTokenSource)
         {
             _cancellationToken = cancellationTokenSource.Token;
@@ -101,7 +136,6 @@ namespace Autonoceptor.Host
 
                 _disposables.Add(_xboxDevice.GetObservable()
                     .Where(xboxData => xboxData != null)
-                    //.Sample(TimeSpan.FromMilliseconds(30))
                     .ObserveOnDispatcher()
                     .Subscribe(async xboxData =>
                     {
@@ -132,8 +166,8 @@ namespace Autonoceptor.Host
                     }));
             }
 
-            await _gps.InitializeAsync();
-            await _lidar.InitializeAsync();
+            await _gps.InitializeAsync(_cancellationToken);
+            await _lidar.InitializeAsync(_cancellationToken);
 
             cancellationTokenSource.Token.Register(async () =>
             {
@@ -142,57 +176,21 @@ namespace Autonoceptor.Host
                 await _lcd.WriteAsync("Disposed :]", 1);
                 await _lcd.WriteAsync("................", 2);
             });
-
-            //TODO: Check GPS fix type is "estimated" which means that DR is working, otherwise it is not! 
-            //TODO: Check odometer scaling factor in NS-DR module. Just set the NS-DR to pedestrian mode
-            //The third decimal place is worth up to 110 m: it can identify a large agricultural field or institutional campus.
-            //The fourth decimal place is worth up to 11 m: it can identify a parcel of land.It is comparable to the typical accuracy of an uncorrected GPS unit with no interference.
-            //The fifth decimal place is worth up to 1.1 m: it distinguish trees from each other. Accuracy to this level with commercial GPS units can only be achieved with differential correction.            //Write GPS fix data to file, if switch is closed. _gps publishes fix data once a second
-            //The sixth decimal place is worth up to 0.11 m: you can use this for laying out structures in detail, for designing landscapes, building roads. It should be more than good enough for tracking movements of glaciers and rivers. This can be achieved by taking painstaking measures with GPS, such as differentially corrected GPS.
-            //The seventh decimal place is worth up to 11 mm: this is good for much surveying and is near the limit of what GPS-based techniques can achieve.
-            //The eighth decimal place is worth up to 1.1 mm: this is good for charting motions of tectonic plates and movements of volcanoes. Permanent, corrected, constantly-running GPS base stations might be able to achieve this level of accuracy.
-            //https://en.wikipedia.org/wiki/Decimal_degrees
-            //http://navspark.mybigcommerce.com/content/S1722DR8_v0.4.pdf
-
-            _disposables.Add(_gps.GetObservable(_cancellationToken)
-                .Where(wp => Math.Abs(wp.Lat) > 0 && Math.Abs(wp.Lon) > 0)
+         
+            _disposables.Add(_gps.GetObservable()
                 .ObserveOnDispatcher()
                 .Subscribe(async gpsFixData =>
                 {
-
-
-                    if (!_recordWaypoints)
-                    {
-                        await _lcd.WriteAsync($"Fix {gpsFixData.Quality}", 2);
-                        return;
-                    }
-
-                    if (_waypointList.Any(data => Math.Abs(data.Lat - gpsFixData.Lat) < .000001 && Math.Abs(data.Lon - gpsFixData.Lon) < .000001)) //gives accuracy of 1.1132m or 3.65223097ft
-                    {
-                        await _lcd.WriteAsync($"Skipping WP...", 2);
-                        return; //Dont add multiples of the same point
-                    }
-
-                    _waypointList.Add(gpsFixData);
-
                     await _lcd.WriteAsync($"WPs {_waypointList.Count}", 1);
                     await _lcd.WriteAsync($"Fix {gpsFixData.Quality}", 2);
                 }));
 
-            //_disposables.Add(_lidar.GetObservable(_cancellationToken)
-            //    .ObserveOnDispatcher()
-            //    .Subscribe(async rangeData =>
-            //    {
-            //        await UpdateLidarRange(rangeData.Distance);
-            //    }));
-
-            //_disposables.Add(_lidar.GetObservable(_cancellationToken)
-            //    .Sample(TimeSpan.FromMilliseconds(100))
-            //    .ObserveOnDispatcher()
-            //    .Subscribe(async rangeData =>
-            //    {
-            //        await _lcd.WriteAsync($"LIDAR: {_lidarRange}cm", 2);
-            //    }));
+            _disposables.Add(_lidar.GetObservable()
+                .ObserveOnDispatcher()
+                .Subscribe(async rangeData =>
+                {
+                    await UpdateLidarRange(rangeData.Distance);
+                }));
 
             await _lcd.WriteAsync("Initialized");
 
@@ -201,69 +199,7 @@ namespace Autonoceptor.Host
                 .Where(channel => channel.ChannelId == _navEnableChannel)
                 .ObserveOnDispatcher()
                 .Subscribe(
-                async channel =>
-                {
-                    if (channel.DigitalValue)
-                    {
-                        _waypointList = await _waypointList.Load();
-
-                        if (_waypointList == null || !_waypointList.Any())
-                        {
-                            await _lcd.WriteAsync("No waypoints found");
-                            return;
-                        }
-
-                        await _lcd.WriteAsync($"Start {_waypointList.Count} WPs");
-
-                        Volatile.Write(ref _followingWaypoints, true);
-
-                        _waypointNavigationDisposable = _gps.GetObservable(_cancellationToken).ObserveOnDispatcher().Subscribe(async gpsFixData =>
-                        {
-                            if (_waypointIndex >= _waypointList.Count || !Volatile.Read(ref _followingWaypoints))
-                            {
-                                await _lcd.WriteAsync($"Nav complete {_waypointIndex}");
-                                return;
-                            }
-
-                            var moveReq = CalculateMoveRequest(_waypointList[_waypointIndex], gpsFixData);
-
-                            //Override for now, 15 = 10%
-                            //moveReq.MovementMagnitude = 60;
-                            //moveReq.SteeringMagnitude = 100;
-
-                            await MoveRequest(moveReq);
-
-                            var distance = GpsExtensions.GetDistanceAndHeadingToDestination(gpsFixData.Lat, gpsFixData.Lon, _waypointList[_waypointIndex].Lat, _waypointList[_waypointIndex].Lon)[0];
-
-                            await _lcd.WriteAsync($"{moveReq.SteeringDirection} {moveReq.SteeringMagnitude}", 1);
-                            await _lcd.WriteAsync($"Dist {distance} {_waypointIndex}", 2);
-
-                            if (distance <= 45)
-                            {
-                                _waypointIndex++;
-                            }
-
-                            if (_waypointIndex >= _waypointList.Count)
-                            {
-                                await EmergencyStop();
-
-                                Volatile.Write(ref _followingWaypoints, false);
-                            }
-                        });
-                    }
-                    else
-                    {
-                        await _lcd.WriteAsync("Canceled WP", 1);
-                        await _lcd.WriteAsync("following", 2);
-
-                        Volatile.Write(ref _followingWaypoints, false);
-
-                        _waypointNavigationDisposable?.Dispose();
-                        _waypointNavigationDisposable = null;
-
-                        _waypointIndex = 0;
-                    }
-                }));
+                async channel => { await EnableDisableNav(channel); }));
 
             //_enableRemoteChannel
             //If the enable remote switch is closed, start streaming video/sensor data
@@ -306,30 +242,67 @@ namespace Autonoceptor.Host
                     
                 }));
 
+            //TODO: DO NOT need this, using button "B" on controller to save waypoint
             //Set _recordWaypoints to "true" if the channel is pulled high
-            _disposables.Add(_maestroPwm.GetObservable()
-                .Where(channel => channel.ChannelId == _recordWaypointsChannel)
-                .ObserveOnDispatcher()
-                .Subscribe(
-                async channel =>
-                {
-                    if (channel.DigitalValue)
-                    {
-                        await _lcd.WriteAsync("Save WP start");
+            //_disposables.Add(_maestroPwm.GetObservable()
+            //    .Where(channel => channel.ChannelId == _recordWaypointsChannel)
+            //    .ObserveOnDispatcher()
+            //    .Subscribe(
+            //    async channel =>
+            //    {
+            //        if (channel.DigitalValue)
+            //        {
+            //            await _lcd.WriteAsync("Save WP start");
 
-                        _recordWaypoints = true;
+            //            _recordWaypoints = true;
 
-                        _waypointList = new WaypointList();
-                    }
-                    else
-                    {
-                        await _lcd.WriteAsync("Save WP stop");
+            //            _waypointList = new WaypointList();
+            //        }
+            //        else
+            //        {
+            //            await _lcd.WriteAsync("Save WP stop");
 
-                        await _waypointList.Save();
+            //            await _waypointList.Save();
 
-                        _recordWaypoints = false;
-                    }
-                }));
+            //            _recordWaypoints = false;
+            //        }
+            //    }));
+        }
+
+        private async Task UpdateNav(GpsFixData gpsFixData)
+        {
+            if (_waypointIndex >= _waypointList.Count || !Volatile.Read(ref _followingWaypoints))
+            {
+                await _lcd.WriteAsync($"Nav complete {_waypointIndex}");
+                return;
+            }
+
+            var currentWp = _waypointList[_waypointIndex];
+
+            var moveReq = CalculateMoveRequest(currentWp, gpsFixData);
+
+            //Override for now, 15 = 10%
+            //moveReq.MovementMagnitude = 60;
+            //moveReq.SteeringMagnitude = 100;
+
+            await MoveRequest(moveReq);
+
+            var distance = _waypointList.GetInchesToNextWaypoint(_waypointIndex);
+
+            await _lcd.WriteAsync($"{moveReq.SteeringDirection} {moveReq.SteeringMagnitude}", 1);
+            await _lcd.WriteAsync($"Dist {distance} {_waypointIndex}", 2);
+
+            if (distance <= 40) //This should probably be slightly larger than the turning radius?
+            {
+                _waypointIndex++;
+            }
+
+            if (_waypointIndex >= _waypointList.Count)
+            {
+                await EmergencyStop();
+
+                Volatile.Write(ref _followingWaypoints, false);
+            }
         }
 
         public async Task InitializePwm()
@@ -418,7 +391,7 @@ namespace Autonoceptor.Host
 
             _sensorDisposables = new List<IDisposable>();
 
-            _sensorDisposables.Add(_gps.GetObservable(_cancellationToken)
+            _sensorDisposables.Add(_gps.GetObservable()
                 .Where(fix => fix != null)
                 .ObserveOnDispatcher()
                 .Subscribe(async fix =>
@@ -436,7 +409,7 @@ namespace Autonoceptor.Host
                     }
                 }));
 
-            _sensorDisposables.Add(_lidar.GetObservable(_cancellationToken)
+            _sensorDisposables.Add(_lidar.GetObservable()
                 .Where(lidarData => lidarData != null)
                 .Sample(TimeSpan.FromMilliseconds(100))
                 .ObserveOnDispatcher()
@@ -582,6 +555,15 @@ namespace Autonoceptor.Host
                 await EmergencyStop(true);
             }
 
+            if (xboxData.FunctionButtons.Contains(FunctionButton.B))
+            {
+                _waypointList.Add(_gpsFixData);
+                await _lcd.WriteAsync($"WP {_waypointList.Count} added");
+
+                await _waypointList.Save();
+                return;
+            }
+
             if (_cancellationToken.IsCancellationRequested || xboxData.FunctionButtons.Contains(FunctionButton.X))
             {
                 await EmergencyStop();
@@ -705,7 +687,7 @@ namespace Autonoceptor.Host
             return false;
         }
 
-        private  MoveRequest CalculateMoveRequest(GpsFixData waypoint, GpsFixData gpsFixData)
+        public static MoveRequest CalculateMoveRequest(GpsFixData waypoint, GpsFixData gpsFixData)
         {
             var moveReq = new MoveRequest();
 

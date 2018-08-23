@@ -34,11 +34,9 @@ namespace Autonoceptor.Service.Hardware
         private DataWriter _outputStream;
         private DataReader _inputStream;
 
-        private CancellationToken _cancellationToken;
-
         private readonly SemaphoreSlim _readWriteSemaphore = new SemaphoreSlim(1,1);
 
-        private Subject<ChannelData> _channelSubject = new Subject<ChannelData>();
+        private readonly Subject<ChannelData> _channelSubject = new Subject<ChannelData>();
 
         private readonly Dictionary<ushort, ChannelData> _channelValues = new Dictionary<ushort, ChannelData>();
 
@@ -59,12 +57,12 @@ namespace Autonoceptor.Service.Hardware
             if (_maestroPwmDevice != null)
                 return;
 
-            _cancellationToken = cancellationToken;
-
             _maestroPwmDevice = await SerialDeviceHelper.GetSerialDeviceAsync("142361d3&0&0000", 9600, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
 
-            if (cancellationToken.IsCancellationRequested)
-                return;
+            cancellationToken.Register(() =>
+            {
+                _getChannelStatesDisposable?.Dispose();
+            });
 
             _maestroPwmDevice.DataBits = 7;
 

@@ -9,8 +9,6 @@ using Windows.Devices.HumanInterfaceDevice;
 using Windows.Storage;
 using Hardware.Xbox.Enums;
 
-// ReSharper disable PrivateFieldCanBeConvertedToLocalVariable
-
 namespace Hardware.Xbox
 {
     public class XboxDevice
@@ -20,18 +18,7 @@ namespace Hardware.Xbox
 
         private HidDevice _deviceHandle;
 
-
-        /// <summary>
-        /// True when connected
-        /// </summary>
-        internal event EventHandler<ConnectionEventArgs> DisconnectedEvent;
-
-        //private static bool _isConnected;
-
-        public bool IsConnected { get; private set; }
-
         private readonly Subject<XboxData> _subject = new Subject<XboxData>();
-
 
         public async Task<bool> InitializeAsync(CancellationToken cancellationToken)
         {
@@ -45,7 +32,7 @@ namespace Hardware.Xbox
 
             while (deviceInformationCollection == null && tryCount < 5)
             {
-                deviceInformationCollection = await GetDeviceInformationCollection();
+                deviceInformationCollection = await DeviceInformation.FindAllAsync(HidDevice.GetDeviceSelector(0x01, 0x05));
 
                 if (deviceInformationCollection.Count > 0)
                     break;
@@ -58,9 +45,9 @@ namespace Hardware.Xbox
             if (deviceInformationCollection != null && (tryCount == 30 && deviceInformationCollection.Count == 0))
                 return false;
 
-            IsConnected = await ConnectToController(deviceInformationCollection);
+            var isConnected = await ConnectToController(deviceInformationCollection);
 
-            return IsConnected;
+            return isConnected;
         }
 
         public IObservable<XboxData> GetObservable()
@@ -87,39 +74,7 @@ namespace Hardware.Xbox
             return true;
         }
 
-        private async Task<DeviceInformationCollection> GetDeviceInformationCollection()
-        {
-            var deviceInformationCollection = await DeviceInformation.FindAllAsync(HidDevice.GetDeviceSelector(0x01, 0x05));
-
-            //if (deviceInformationCollection.Count == 0)
-            //    await _display.WriteAsync("No Xbox controller");
-
-            return deviceInformationCollection;
-        }
-
-        //private async void DisconnectCheckTimer(object sender)
-        //{
-        //    var deviceInformationCollection = await DeviceInformation.FindAllAsync(HidDevice.GetDeviceSelector(0x01, 0x05));
-
-        //    if (_isConnected && deviceInformationCollection.Count == 0)
-        //    {
-        //        _deviceHandle.Dispose();
-        //        _deviceHandle = null;
-
-        //        _isConnected = false;
-        //        DisconnectedEvent?.Invoke(null, new ConnectionEventArgs { IsConnected = false });
-        //    }
-
-        //    if (!_isConnected && deviceInformationCollection.Count > 0)
-        //    {
-        //        await ConnectToController(deviceInformationCollection);
-
-        //        DisconnectedEvent?.Invoke(null, new ConnectionEventArgs { IsConnected = true });
-        //    }
-        //}
-
         private bool _lock;
-
 
         private void InputReportReceived(HidDevice hidDevice, HidInputReportReceivedEventArgs args)
         {
@@ -157,8 +112,6 @@ namespace Hardware.Xbox
                 FunctionButtons = args.Report.ActivatedBooleanControls.Select(btn => (int)(btn.Id - 5)).Select(id => (FunctionButton)id)
             };
 
-            //Debug.WriteLine($"{xboxEvent.RightStick.Direction} {xboxEvent.RightStick.Magnitude}");
-
             _subject.OnNext(xboxEvent);
 
             Volatile.Write(ref _lock, false);
@@ -180,6 +133,7 @@ namespace Hardware.Xbox
             {
                 // Scale so deadzone is removed, and max value is 10000
                 magnitude = (magnitude - _deadzoneTolerance) / (32768 - _deadzoneTolerance) * 10000;
+
                 if (magnitude > 10000)
                     magnitude = 10000;
             }
@@ -211,10 +165,5 @@ namespace Hardware.Xbox
 
             return (Direction)direction;
         }
-    }
-
-    internal class ConnectionEventArgs : EventArgs
-    {
-        internal bool IsConnected { get; set; } = false;
     }
 }

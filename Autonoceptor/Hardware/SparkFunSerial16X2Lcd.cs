@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -11,13 +12,10 @@ using Windows.Storage.Streams;
 
 namespace Autonoceptor.Service.Hardware
 {
-    public class DisplayItem
+    public class DisplayGroup
     {
-        public object GroupId { get; set; }
-
-        public int LineNumber { get; set; } = 1;
-
-        public string Text { get; set; }
+        public int GroupId { get; set; }
+        public Dictionary<int, string> DisplayItems = new Dictionary<int, string>();
     }
 
     /// <summary>
@@ -31,11 +29,9 @@ namespace Autonoceptor.Service.Hardware
 
         private SerialDevice _lcdSerialDevice;
 
-        private IDisposable _writeDisposable;
+        private readonly ConcurrentDictionary<int, DisplayGroup> _displayGroups = new ConcurrentDictionary<int, DisplayGroup>();
 
-        private readonly List<DisplayItem> _displayItems = new List<DisplayItem>();
-
-        private object _selectedDisplayGroup;
+        private int _selectedGroupIndex;
 
         private readonly SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1, 1);
 
@@ -47,55 +43,59 @@ namespace Autonoceptor.Service.Hardware
                 return;
 
             _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
-
-            _writeDisposable = Observable.Interval(TimeSpan.FromMilliseconds(1000)).Subscribe(async _ =>
-            {
-                await _semaphoreSlim.WaitAsync();
-
-                var selectedGroup = Volatile.Read(ref _selectedDisplayGroup);
-
-                if (selectedGroup != null)
-                {
-                    var item1 = _displayItems.FirstOrDefault(i => i.GroupId == selectedGroup && i.LineNumber == 1);
-                    var item2 = _displayItems.FirstOrDefault(i => i.GroupId == selectedGroup && i.LineNumber == 2);
-
-                    if (item1 != null)
-                    {
-                        await WriteAsync(item1.Text, 1);
-                    }
-                    if (item2 != null)
-                    {
-                        await WriteAsync(item2.Text, 2);
-                    }
-                }
-
-                _semaphoreSlim.Release(1);
-            });
         }
 
-        public async Task AddOrUpdateItem(DisplayItem displayItem)
+        public void AddDisplayGroup(DisplayGroup displayGroup)
         {
-            if (displayItem.GroupId == null)
-                return; //Lets not tell anyone
-
-            await _semaphoreSlim.WaitAsync();
-
-            if (_displayItems.Any(i => i.GroupId == displayItem.GroupId && i.LineNumber == displayItem.LineNumber))
-            {
-                _displayItems.Add(displayItem);
-            }
-            else
-            {
-                _displayItems.First(i => i.GroupId == displayItem.GroupId && i.LineNumber == displayItem.LineNumber).Text = displayItem.Text;
-            }
-
-            _semaphoreSlim.Release(1);
+            _displayGroups.TryAdd(_displayGroups.Count + 1, displayGroup);
         }
 
-        public void SetCurrentDisplayGroup(object o)
-        {
-            Volatile.Write(ref _selectedDisplayGroup, o);
-        }
+        //public void UpdateDisplayGroup(DisplayGroup displayGroup)
+        //{
+        //    _displayGroups.AddOrUpdate(displayGroup.GroupId, displayGroup)
+        //}
+
+        //public async Task IncrementGroup()
+        //{
+        //    _selectedGroupIndex++;
+
+        //    if (_selectedGroupIndex > _displayGroups.Count)
+        //    {
+        //        _selectedGroupIndex = 0;
+        //    }
+
+        //    var dg = _displayGroups.Where(d => d.GroupId == _selectedGroupIndex).ToList();
+
+        //    var lineOne = dg.FirstOrDefault(d => d.LineNumber == 1);
+        //    var lineTwo = dg.FirstOrDefault(d => d.LineNumber == 2);
+
+        //    if (lineOne != null)
+        //        await WriteAsync(lineOne.Text, 1);
+
+        //    if (lineTwo != null)
+        //        await WriteAsync(lineTwo.Text, 2);
+        //}
+
+        //public async Task DecrementGroup()
+        //{
+        //    _selectedGroupIndex--;
+
+        //    if (_selectedGroupIndex < 0)
+        //    {
+        //        _selectedGroupIndex = _displayGroups.Count;
+        //    }
+
+        //    var dg = _displayGroups.Where(d => d.GroupId == _selectedGroupIndex).ToList();
+
+        //    var lineOne = dg.FirstOrDefault(d => d.LineNumber == 1);
+        //    var lineTwo = dg.FirstOrDefault(d => d.LineNumber == 2);
+
+        //    if (lineOne != null)
+        //        await WriteAsync(lineOne.Text, 1);
+
+        //    if (lineTwo != null)
+        //        await WriteAsync(lineTwo.Text, 2);
+        //}
 
         private async Task WriteAsync(string text, byte[] line, bool clear)
         {

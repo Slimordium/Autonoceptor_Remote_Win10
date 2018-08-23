@@ -1,7 +1,8 @@
 ﻿using System;
-using System.Reactive.Concurrency;
 using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
@@ -15,11 +16,11 @@ namespace Autonoceptor.Service.Hardware
 
         private DataReader _inputStream;
 
-        public IObservable<ImuData> ImuObservable { get; private set; }
+        private readonly Subject<ImuData> _subject = new Subject<ImuData>();
 
-        private readonly EventLoopScheduler _eventLoopScheduler = new EventLoopScheduler();
+        private Task _readTask;
 
-        public async Task InitializeAsync()
+        public async Task InitializeAsync(CancellationToken cancellationToken)
         {
             _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("N01E09J", 57600, TimeSpan.FromMilliseconds(30), TimeSpan.FromMilliseconds(30));
 
@@ -28,13 +29,9 @@ namespace Autonoceptor.Service.Hardware
 
             _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
 
-            ImuObservable = GetReadObservable();
-        }
-
-        private IObservable<ImuData> GetReadObservable()
-        {
-            return Observable.Create<ImuData>(observer =>
-                _eventLoopScheduler.Schedule(async self =>
+            _readTask = new Task(async() =>
+            {
+                while (!cancellationToken.IsCancellationRequested)
                 {
                     var byteCount = await _inputStream.LoadAsync(64);
 
@@ -74,16 +71,21 @@ namespace Autonoceptor.Service.Hardware
                                 Roll = roll
                             };
 
-                            observer.OnNext(imuData);
+                            _subject.OnNext(imuData);
                         }
-                        catch (Exception e)
+                        catch (Exception)
                         {
-                            observer.OnError(e);
+                            //break
                         }
                     }
+                }
+            });
+            _readTask.Start();
+        }
 
-                    self();
-                }));
+        public IObservable<ImuData> GetReadObservable()
+        {
+            return _subject.AsObservable();
         }
     }
 }
