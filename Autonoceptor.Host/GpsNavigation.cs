@@ -54,15 +54,13 @@ namespace Autonoceptor.Host
         {
             cancellationTokenSource.Token.Register(async () => { await WaypointFollowEnable(false); });
 
-            _currentLocationUpdater = Gps.GetObservable().ObserveOnDispatcher().Subscribe(fix => { CurrentLocation = fix; });
-
             _steerMagnitudeDecayDisposable = Observable.Interval(TimeSpan.FromMilliseconds(100))
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
                     var moveRequest = CurrentGpsMoveRequest;
 
-                    if (Math.Abs(moveRequest.SteeringMagnitude) < 5)
+                    if (moveRequest == null || Math.Abs(moveRequest.SteeringMagnitude) < 5)
                         return;
 
                     moveRequest.SteeringDirection = moveRequest.SteeringDirection;
@@ -70,6 +68,13 @@ namespace Autonoceptor.Host
 
                     await WriteToHardware(moveRequest);
                 });
+        }
+
+        protected new async Task InitializeAsync()
+        {
+            await base.InitializeAsync();
+
+            _currentLocationUpdater = Gps.GetObservable().ObserveOnDispatcher().Subscribe(fix => { CurrentLocation = fix; });
 
             _gpsNavSwitchDisposable = PwmController.GetObservable()
                 .Where(channel => channel.ChannelId == GpsNavEnabledChannel)

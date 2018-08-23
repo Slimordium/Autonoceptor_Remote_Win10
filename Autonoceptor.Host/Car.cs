@@ -45,6 +45,12 @@ namespace Autonoceptor.Host
 
             cancellationTokenSource.Token.Register(async () => { await EmergencyBrake(); });
 
+        }
+
+        protected new async Task InitializeAsync()
+        {
+            await base.InitializeAsync();
+
             _enableMqttDisposable = PwmController.GetObservable()
                 .Where(channel => channel.ChannelId == _enableMqttChannel)
                 .ObserveOnDispatcher()
@@ -53,7 +59,7 @@ namespace Autonoceptor.Host
                     {
                         if (channel.DigitalValue)
                         {
-                            await InitializeMqtt(brokerHostnameOrIp);
+                            await InitializeMqtt(BrokerHostnameOrIp);
 
                             return;
                         }
