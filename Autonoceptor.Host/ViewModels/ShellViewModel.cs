@@ -21,13 +21,14 @@ namespace Autonoceptor.Host.ViewModels
 
         public ShellViewModel()
         {
-            _conductor = new Conductor(BrokerIp);
+            _conductor = new Conductor(_cancellationTokenSource, BrokerIp);
 
             Application.Current.Suspending += CurrentOnSuspending;
             Application.Current.Resuming += CurrentOnResuming;
 
             _sessionDisposable = Observable.Interval(TimeSpan.FromMinutes(4)).Subscribe(async _ => { await RequestExtendedSession(); });
 
+            //Automatically start...
             Observable.Timer(TimeSpan.FromSeconds(5))
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
@@ -49,7 +50,7 @@ namespace Autonoceptor.Host.ViewModels
 
             _started = true;
 
-            await _conductor.InitializeAsync(_cancellationTokenSource);
+            await _conductor.InitializeAsync();
         }
 
         private void CurrentOnResuming(object sender, object o)

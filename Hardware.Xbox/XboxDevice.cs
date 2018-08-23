@@ -13,7 +13,6 @@ namespace Hardware.Xbox
 {
     public class XboxDevice
     {
-
         private double _deadzoneTolerance = 1000; //Was 1000
 
         private HidDevice _deviceHandle;
@@ -26,23 +25,9 @@ namespace Hardware.Xbox
             //USB\VID_045E & PID_02A1 & IG_00\6 & F079888 & 0 & 00  - XboxIkController
             //0x01, 0x05 = game controllers
 
-            DeviceInformationCollection deviceInformationCollection = null;
+            var deviceInformationCollection = await DeviceInformation.FindAllAsync(HidDevice.GetDeviceSelector(0x01, 0x05));
 
-            int tryCount = 0;
-
-            while (deviceInformationCollection == null && tryCount < 5)
-            {
-                deviceInformationCollection = await DeviceInformation.FindAllAsync(HidDevice.GetDeviceSelector(0x01, 0x05));
-
-                if (deviceInformationCollection.Count > 0)
-                    break;
-
-                await Task.Delay(500);
-
-                tryCount++;
-            }
-
-            if (deviceInformationCollection != null && (tryCount == 30 && deviceInformationCollection.Count == 0))
+            if (deviceInformationCollection.Count > 0)
                 return false;
 
             var isConnected = await ConnectToController(deviceInformationCollection);

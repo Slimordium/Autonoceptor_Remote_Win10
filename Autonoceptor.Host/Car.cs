@@ -1,106 +1,154 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Autonoceptor.Service.Hardware;
-using Autonoceptor.Shared.Utilities;
+using Newtonsoft.Json;
 
 namespace Autonoceptor.Host
 {
-    public class Car : Hardware
+    public class Car : Chassis
     {
-        private IDisposable _steerMagnitudeDecayDisposable;
+        protected const int RightPwmMax = 1861;
+        protected const int CenterPwm = 1321;
+        protected const int LeftPwmMax = 837;
 
-        private MoveRequest _moveRequest = new MoveRequest();
+        protected const int ReversePwmMax = 1072;
+        protected const int StoppedPwm = 1471;
+        protected const int ForwardPwmMax = 1856;
 
-        private int _rightMax = 1861;
-        private int _center = 1321;
-        private int _leftMax = 837;
+        protected const ushort MovementChannel = 0;
+        protected const ushort SteeringChannel = 1;
 
-        private int _reverseMax = 1072;
-        private int _stopped = 1471;
-        private int _forwardMax = 1856; //1856
+        protected const ushort GpsNavEnabledChannel = 12;
+        protected const ushort _extraInputChannel = 13;
+        private const ushort _enableMqttChannel = 14;
 
-        private ushort _movementChannel = 0;
-        private ushort _steeringChannel = 1;
+        private IDisposable _enableMqttDisposable;
 
-        public Car()
+        private List<IDisposable> _sensorDisposables = new List<IDisposable>();
+
+        private bool _stopped;
+        protected bool Stopped
         {
-            _steerMagnitudeDecayDisposable = Observable.Interval(TimeSpan.FromMilliseconds(100)).Subscribe(async _ =>
-            {
-                if (Math.Abs(_moveRequest.SteeringMagnitude) < 5)
-                    return;
-
-                var moveRequest = Volatile.Read(ref _moveRequest);
-
-                moveRequest.SteeringDirection = _moveRequest.SteeringDirection;
-                moveRequest.SteeringMagnitude = _moveRequest.SteeringMagnitude * .6;
-
-                await RequestMove(moveRequest);
-            });
+            get => Volatile.Read(ref _stopped);
+            set => Volatile.Write(ref _stopped, value);
         }
 
-        public async Task RequestMove(MoveRequest request)
+        protected string BrokerHostnameOrIp { get; set; }
+
+        protected Car(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
+            : base(cancellationTokenSource)
         {
-            _moveRequest = request;
+            BrokerHostnameOrIp = brokerHostnameOrIp;
 
-            var moveValue = _stopped * 4;
-            var steerValue = _center * 4;
+            cancellationTokenSource.Token.Register(async () => { await EmergencyBrake(); });
 
-            if (request.SteeringMagnitude > 45)
-                request.SteeringMagnitude = 45;
-          
-            switch (request.SteeringDirection)
-            {
-                case SteeringDirection.Left:
-                    steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, 45, _center, _leftMax)) * 4;
-                    break;
-                case SteeringDirection.Right:
-                    steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, 45, _center, _rightMax)) * 4;
-                    break;
-            }
+            _enableMqttDisposable = PwmController.GetObservable()
+                .Where(channel => channel.ChannelId == _enableMqttChannel)
+                .ObserveOnDispatcher()
+                .Subscribe(
+                    async channel =>
+                    {
+                        if (channel.DigitalValue)
+                        {
+                            await InitializeMqtt(brokerHostnameOrIp);
 
-            await _maestroPwm.SetChannelValue(steerValue, _steeringChannel);
+                            return;
+                        }
 
-            //if (Volatile.Read(ref _followingWaypoints))
-            //    return;
-
-            switch (request.MovementDirection)
-            {
-                case MovementDirection.Forward:
-                    moveValue = Convert.ToUInt16(request.MovementMagnitude.Map(0, 45, _stopped, _forwardMax)) * 4;
-                    break;
-                case MovementDirection.Reverse:
-                    moveValue = Convert.ToUInt16(request.MovementMagnitude.Map(0, 45, _stopped, _reverseMax)) * 4;
-                    break;
-            }
-
-            await _maestroPwm.SetChannelValue(moveValue, _movementChannel);
+                        MqttClient?.Dispose();
+                        MqttClient = null;
+                    });
         }
 
-        public async Task EmergencyStop(bool isCanceled = false)
+        public async Task EmergencyBrake(bool isCanceled = false)
         {
             if (isCanceled)
             {
-                if (!Volatile.Read(ref _emergencyStopped))
+                if (Stopped)
                     return;
 
-                Volatile.Write(ref _emergencyStopped, false);
+                Stopped = false;
 
-                await _lcd.WriteAsync("E-Stop canceled", 2);
+                await Lcd.WriteAsync("E-Brake canceled");
 
                 return;
             }
 
-            if (Volatile.Read(ref _emergencyStopped))
-            {
-                await _lcd.WriteAsync($"E-Stop @ {_lidarRange}cm", 2);
+            if (Stopped)
                 return;
-            }
 
-            Volatile.Write(ref _emergencyStopped, true);
+            Stopped = true;
 
             await Stop();
+        }
+
+        protected void ConfigureSensorPublish()
+        {
+            if (MqttClient == null)
+                return;
+
+            if (_sensorDisposables.Any())
+            {
+                _sensorDisposables.ForEach(disposable =>
+                {
+                    disposable.Dispose();
+                });
+            }
+
+            _sensorDisposables = new List<IDisposable>();
+
+            _sensorDisposables.Add(
+                Gps.GetObservable()
+                    .ObserveOnDispatcher()
+                    .Subscribe(async gpsFixData =>
+                    {
+                        try
+                        {
+                            await MqttClient.PublishAsync(JsonConvert.SerializeObject(gpsFixData), "autono-gps");
+                        }
+                        catch (Exception)
+                        {
+                            //Yum
+                        }
+                    }));
+
+            _sensorDisposables.Add(
+                Lidar.GetObservable()
+                    .ObserveOnDispatcher()
+                    .Subscribe(async lidarData =>
+                    {
+                        try
+                        {
+                            await MqttClient.PublishAsync(JsonConvert.SerializeObject(lidarData), "autono-lidar");
+                        }
+                        catch (Exception)
+                        {
+                            //Yum
+                        }
+                    }));
+
+        }
+
+        private async Task Stop()
+        {
+            await PwmController.SetChannelValue(StoppedPwm - 40 * 4, MovementChannel); //Momentary reverse ... helps stop quickly
+
+            await Task.Delay(30);
+
+            await PwmController.SetChannelValue(StoppedPwm * 4, MovementChannel);
+
+            await DisableServos();
+        }
+
+        public async Task DisableServos()
+        {
+            await PwmController.SetChannelValue(0, MovementChannel);
+            await PwmController.SetChannelValue(0, SteeringChannel);
+
+            await Task.Delay(100);
         }
     }
 }
