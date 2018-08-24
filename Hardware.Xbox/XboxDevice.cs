@@ -13,7 +13,7 @@ namespace Hardware.Xbox
 {
     public class XboxDevice
     {
-        private double _deadzoneTolerance = 3000; //Was 1000
+        private double _deadzoneTolerance = 5000; //Was 1000
 
         private HidDevice _deviceHandle;
 

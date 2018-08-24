@@ -50,7 +50,7 @@ namespace Autonoceptor.Host.ViewModels
             Log.Insert(0, entry);
 
             if (Log.Count > 600)
-                Log.RemoveAt(599);
+                Log.RemoveAt(598);
         }
 
         private bool _started;

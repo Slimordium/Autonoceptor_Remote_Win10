@@ -1,6 +1,7 @@
 ﻿using System;
 using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Gps.Enums;
+using NLog;
 
 namespace Autonoceptor.Shared.Utilities
 {
@@ -30,6 +31,8 @@ namespace Autonoceptor.Shared.Utilities
         private static double _odometerScalingFactor;
         private static double _rotationRate;
         private static double _distance;
+
+        private static ILogger _logger = LogManager.GetCurrentClassLogger();
 
         //.000001 should only record waypoint every 1.1132m or 3.65223097ft
         //The third decimal place is worth up to 110 m: it can identify a large agricultural field or institutional campus.
@@ -88,8 +91,10 @@ namespace Autonoceptor.Shared.Utilities
 
                 return new[] { Math.Round(distCalc, 1), Math.Round(heading, 1) };
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                _logger.Log(LogLevel.Error, e);
+
                 return new double[] { 0, 0 };
             }
         }
@@ -245,8 +250,10 @@ namespace Autonoceptor.Shared.Utilities
                         return null;
                 }
             }
-            catch
+            catch (Exception e)
             {
+                _logger.Log(LogLevel.Error, e);
+
                 //No fix yet or malformed sentence
                 return null;
             }

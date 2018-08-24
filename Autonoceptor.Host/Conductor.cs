@@ -1,4 +1,6 @@
 ﻿using System.Threading;
+using Windows.UI.Xaml;
+using NLog;
 
 namespace Autonoceptor.Host
 {
@@ -7,7 +9,23 @@ namespace Autonoceptor.Host
     /// </summary>
     public class Conductor : XboxController
     {
-        public Conductor(CancellationTokenSource cancellationTokenSource, string brokerIpOrHostname) 
-            : base(cancellationTokenSource, brokerIpOrHostname) { }
+        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
+
+        public Conductor(CancellationTokenSource cancellationTokenSource, string brokerIpOrHostname)
+            : base(cancellationTokenSource, brokerIpOrHostname)
+        {
+            Application.Current.UnhandledException += Current_UnhandledException;
+            Application.Current.Suspending += Current_Suspending;
+        }
+
+        private void Current_Suspending(object sender, Windows.ApplicationModel.SuspendingEventArgs e)
+        {
+            _logger.Log(LogLevel.Error, $"Suspending {e.SuspendingOperation.Deadline}");
+        }
+
+        private void Current_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            _logger.Log(LogLevel.Error, e);
+        }
     }
 }

@@ -12,7 +12,7 @@ namespace Autonoceptor.Host
 {
     public class Car : Chassis
     {
-        private ILogger _logger = LogManager.GetCurrentClassLogger();
+        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         protected const int RightPwmMax = 1861;
         protected const int CenterPwm = 1321;

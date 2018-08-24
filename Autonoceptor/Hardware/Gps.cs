@@ -7,11 +7,14 @@ using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
 using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Utilities;
+using NLog;
 
 namespace Autonoceptor.Service.Hardware
 {
     public class Gps
     {
+        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
+
         private SerialDevice _serialDevice;
 
         private DataReader _inputStream;
@@ -37,7 +40,7 @@ namespace Autonoceptor.Service.Hardware
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    var byteCount = await _inputStream.LoadAsync(1024);
+                    var byteCount = await _inputStream.LoadAsync(1128);
                     var sentences = _inputStream.ReadString(byteCount).Split('\n');
 
                     if (sentences.Length == 0)
@@ -57,9 +60,9 @@ namespace Autonoceptor.Service.Hardware
                             if (tempData != null)
                                 gpsFixData = tempData;
                         }
-                        catch (Exception)
+                        catch (Exception e)
                         {
-                            //Yum
+                            _logger.Log(LogLevel.Error, e);
                         }
                     }
 

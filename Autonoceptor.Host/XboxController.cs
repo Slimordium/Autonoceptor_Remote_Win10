@@ -14,6 +14,8 @@ namespace Autonoceptor.Host
 {
     public class XboxController : GpsNavigation
     {
+        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
+
         private IDisposable _xboxDisposable;
         private IDisposable _xboxConnectedCheckDisposable;
 
@@ -31,6 +33,7 @@ namespace Autonoceptor.Host
 
             _xboxDisposable = XboxDevice.GetObservable()
                 .Where(xboxData => xboxData != null)
+                .Sample(TimeSpan.FromMilliseconds(30))
                 .ObserveOnDispatcher()
                 .Subscribe(async xboxData =>
                 {
@@ -88,7 +91,7 @@ namespace Autonoceptor.Host
                 Waypoints.Add(wp);
                 await Lcd.WriteAsync($"WP {Waypoints.Count} added");
 
-                Logger.Log(LogLevel.Info, $"WP @ Lat: {wp.Lat}, Lon: { wp.Lon}");
+                _logger.Log(LogLevel.Info, $"WP @ Lat: {wp.Lat}, Lon: { wp.Lon}");
 
                 await Waypoints.Save();
                 return;
@@ -96,14 +99,17 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.Start))
             {
-                Logger.Log(LogLevel.Info, $"Starting WP follow {Waypoints.Count} WPs");
+                if (FollowingWaypoints)
+                    return;
+
+                _logger.Log(LogLevel.Info, $"Starting WP follow {Waypoints.Count} WPs");
                 await WaypointFollowEnable(true);
                 return;
             }
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.X))
             {
-                Logger.Log(LogLevel.Info, "Stopping...");
+                _logger.Log(LogLevel.Info, "Stopping...");
                 await WaypointFollowEnable(false);
                 await EmergencyBrake();
                 return;
@@ -113,7 +119,7 @@ namespace Autonoceptor.Host
             {
                 Waypoints = new WaypointList();
 
-                Logger.Log(LogLevel.Info, "WPs Cleared");
+                _logger.Log(LogLevel.Info, "WPs Cleared");
                 await Lcd.WriteAsync($"WPs cleared");
                 return;
             }

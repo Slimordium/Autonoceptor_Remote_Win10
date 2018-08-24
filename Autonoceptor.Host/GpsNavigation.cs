@@ -10,6 +10,8 @@ namespace Autonoceptor.Host
 {
     public class GpsNavigation : LidarNavOverride
     {
+        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
+
         private int _currentWaypointIndex;
 
         private bool _followingWaypoints;
@@ -84,6 +86,9 @@ namespace Autonoceptor.Host
 
         public async Task WaypointFollowEnable(bool enabled)
         {
+            if (FollowingWaypoints == enabled)
+                return;
+
             FollowingWaypoints = enabled;
 
             if (enabled)
@@ -111,7 +116,7 @@ namespace Autonoceptor.Host
 
             await Lcd.WriteAsync("GPS Nav stopped");
 
-            Logger.Log(LogLevel.Info, "GPS Nav stopped");
+            _logger.Log(LogLevel.Info, "GPS Nav stopped");
 
             _steerMagnitudeDecayDisposable?.Dispose();
             _gpsNavDisposable?.Dispose();
@@ -121,7 +126,7 @@ namespace Autonoceptor.Host
         {
             if (_currentWaypointIndex >= Waypoints.Count || !FollowingWaypoints)
             {
-                Logger.Log(LogLevel.Info, $"Nav finished {Waypoints.Count} WPs");
+                _logger.Log(LogLevel.Info, $"Nav finished {Waypoints.Count} WPs");
 
                 await EmergencyBrake();
 
@@ -143,8 +148,6 @@ namespace Autonoceptor.Host
             if (moveReq.Distance <= 36) //This should probably be slightly larger than the turning radius?
             {
                 _currentWaypointIndex++;
-
-                Logger.Log(LogLevel.Info, $"Next WP ({_currentWaypointIndex}) {Waypoints[_currentWaypointIndex].Lat}, {Waypoints[_currentWaypointIndex].Lon}");
             }
         }
 
@@ -169,8 +172,8 @@ namespace Autonoceptor.Host
 
             var diff = currentLocation.Heading - headingToWaypoint;
 
-            Logger.Log(LogLevel.Info, $"Current Heading: {currentLocation.Heading}, Heading to WP: {headingToWaypoint}");
-            Logger.Log(LogLevel.Info, $"Distance to WP: {moveReq.Distance}in");
+            _logger.Log(LogLevel.Trace, $"Current Heading: {currentLocation.Heading}, Heading to WP: {headingToWaypoint}");
+            _logger.Log(LogLevel.Trace, $"Distance to WP: {moveReq.Distance}in");
 
             if (diff < 0)
             {
