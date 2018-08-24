@@ -8,6 +8,7 @@ using Windows.Devices.HumanInterfaceDevice;
 using Autonoceptor.Shared.Utilities;
 using Hardware.Xbox;
 using Hardware.Xbox.Enums;
+using NLog;
 
 namespace Autonoceptor.Host
 {
@@ -82,8 +83,12 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.B))
             {
-                Waypoints.Add(CurrentLocation);
+                var wp = Gps.CurrentLocation;
+
+                Waypoints.Add(wp);
                 await Lcd.WriteAsync($"WP {Waypoints.Count} added");
+
+                Logger.Log(LogLevel.Info, $"WP @ Lat: {wp.Lat}, Lon: { wp.Lon}");
 
                 await Waypoints.Save();
                 return;
@@ -91,12 +96,14 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.Start))
             {
+                Logger.Log(LogLevel.Info, $"Starting WP follow {Waypoints.Count} WPs");
                 await WaypointFollowEnable(true);
                 return;
             }
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.X))
             {
+                Logger.Log(LogLevel.Info, "Stopping...");
                 await WaypointFollowEnable(false);
                 await EmergencyBrake();
                 return;
@@ -106,12 +113,10 @@ namespace Autonoceptor.Host
             {
                 Waypoints = new WaypointList();
 
+                Logger.Log(LogLevel.Info, "WPs Cleared");
                 await Lcd.WriteAsync($"WPs cleared");
                 return;
             }
-
-            if (Stopped)
-                return;
 
             //TODO: Fix D-Pad functionality in xbox, use it to increase/decrease speed while navigating waypoints
             if (FollowingWaypoints)
@@ -138,7 +143,7 @@ namespace Autonoceptor.Host
 
             var outputVal = forwardMagnitude;
 
-            if (reverseMagnitude < 5500 || Stopped)
+            if (reverseMagnitude < 5500)
             {
                 outputVal = reverseMagnitude;
             }

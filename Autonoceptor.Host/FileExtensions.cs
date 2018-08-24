@@ -5,11 +5,14 @@ using System.Text;
 using System.Threading.Tasks;
 using Windows.Storage;
 using Windows.Storage.Streams;
+using NLog;
 
 namespace Autonoceptor.Host
 {
     internal static class FileExtensions
     {
+        private static ILogger _logger = LogManager.GetCurrentClassLogger();
+
         internal static async Task<string> ReadStringFromFile(this string filename)
         {
             var text = string.Empty;
@@ -25,9 +28,9 @@ namespace Autonoceptor.Host
                 if (buffer.Length > 0)
                     text = Encoding.UTF8.GetString(buffer.ToArray());
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                //await Display.Write($"Read failed {filename}");
+                _logger.Log(LogLevel.Error, e.Message);
             }
 
             return text;
@@ -42,8 +45,6 @@ namespace Autonoceptor.Host
             {
                 var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(filename, CreationCollisionOption.OpenIfExists).AsTask();
 
-                //await Display.Write($"Write {file.Path}");
-
                 using (var stream = await file.OpenStreamForWriteAsync())
                 {
                     await stream.WriteAsync(new byte[stream.Length], 0, (int) stream.Length);
@@ -52,9 +53,9 @@ namespace Autonoceptor.Host
                     await stream.WriteAsync(bytesToAppend, 0, bytesToAppend.Length);
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                //await Display.Write($"Save failed {filename}");
+                _logger.Log(LogLevel.Error, e.Message);
             }
         }
     }

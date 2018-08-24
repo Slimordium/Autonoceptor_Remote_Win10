@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using Autonoceptor.Service.Hardware;
 using Hardware.Xbox;
+using NLog;
 using RxMqtt.Client;
 using RxMqtt.Shared;
 
@@ -9,6 +10,8 @@ namespace Autonoceptor.Host
 {
     public class Chassis
     {
+        protected ILogger Logger = LogManager.GetLogger("Autonoceptor");
+
         protected Tf02Lidar Lidar { get; } = new Tf02Lidar();
         protected SparkFunSerial16X2Lcd Lcd { get; } = new SparkFunSerial16X2Lcd();
         protected MaestroPwmController PwmController { get; private set; }
@@ -24,6 +27,8 @@ namespace Autonoceptor.Host
 
         protected async Task InitializeAsync()
         {
+            Logger.Log(LogLevel.Info, "Initializing");
+
             await Lcd.InitializeAsync();
             await Lcd.WriteAsync("Initializing...");
 
@@ -37,6 +42,7 @@ namespace Autonoceptor.Host
             await Lidar.InitializeAsync(CancellationToken);
 
             await Lcd.WriteAsync("Initialized");
+            Logger.Log(LogLevel.Info, "Initialized");
         }
 
         protected async Task<bool> InitializeXboxController()
@@ -45,6 +51,8 @@ namespace Autonoceptor.Host
                 XboxDevice = new XboxDevice();
 
             var initXbox = await XboxDevice.InitializeAsync(CancellationToken);
+
+            Logger.Log(LogLevel.Info, $"XBox init => {initXbox}");
 
             return await Task.FromResult(initXbox);
         }
@@ -63,6 +71,8 @@ namespace Autonoceptor.Host
             var status = await MqttClient.InitializeAsync();
 
             await Lcd.WriteAsync($"MQTT {status}");
+
+            Logger.Log(LogLevel.Info, $"MQTT Init => {status}");
 
             return status;
         }

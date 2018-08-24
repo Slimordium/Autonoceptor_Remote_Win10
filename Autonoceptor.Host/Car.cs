@@ -5,11 +5,15 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using NLog;
+using RxMqtt.Shared;
 
 namespace Autonoceptor.Host
 {
     public class Car : Chassis
     {
+        private ILogger _logger = LogManager.GetCurrentClassLogger();
+
         protected const int RightPwmMax = 1861;
         protected const int CenterPwm = 1321;
         protected const int LeftPwmMax = 837;
@@ -44,7 +48,6 @@ namespace Autonoceptor.Host
             BrokerHostnameOrIp = brokerHostnameOrIp;
 
             cancellationTokenSource.Token.Register(async () => { await EmergencyBrake(); });
-
         }
 
         protected new async Task InitializeAsync()
@@ -59,7 +62,10 @@ namespace Autonoceptor.Host
                     {
                         if (channel.DigitalValue)
                         {
-                            await InitializeMqtt(BrokerHostnameOrIp);
+                            var status = await InitializeMqtt(BrokerHostnameOrIp);
+
+                            if (status == Status.Initialized)
+                                ConfigureSensorPublish();
 
                             return;
                         }
@@ -77,6 +83,7 @@ namespace Autonoceptor.Host
 
                 await Lcd.WriteAsync("E-Brake canceled");
 
+                _logger.Log(LogLevel.Trace, "E-Brake canceled");
                 return;
             }
 
@@ -142,6 +149,8 @@ namespace Autonoceptor.Host
             await Task.Delay(30);
 
             await PwmController.SetChannelValue(StoppedPwm * 4, MovementChannel);
+
+            _logger.Log(LogLevel.Trace, "Stopped");
 
             await DisableServos();
         }

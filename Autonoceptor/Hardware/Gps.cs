@@ -21,6 +21,8 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly Subject<GpsFixData> _subject = new Subject<GpsFixData>();
 
+        public GpsFixData CurrentLocation { get; set; } = new GpsFixData();
+
         public async Task InitializeAsync(CancellationToken cancellationToken)
         {
             _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 115200, TimeSpan.FromMilliseconds(25), TimeSpan.FromMilliseconds(25));
@@ -65,6 +67,8 @@ namespace Autonoceptor.Service.Hardware
                     {
                         continue; //Most likely bad data, toss and continue
                     }
+
+                    CurrentLocation = gpsFixData;
 
                     //The data is accumulative, so only need to publish once
                     _subject.OnNext(gpsFixData);

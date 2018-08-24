@@ -6,6 +6,8 @@ using Windows.ApplicationModel;
 using Windows.ApplicationModel.ExtendedExecution;
 using Windows.UI.Xaml;
 using Caliburn.Micro;
+using NLog;
+using NLog.Targets.Rx;
 
 namespace Autonoceptor.Host.ViewModels
 {
@@ -16,6 +18,8 @@ namespace Autonoceptor.Host.ViewModels
         private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
 
         private ExtendedExecutionSession _session;
+
+        public BindableCollection<string> Log { get; set; } = new BindableCollection<string>();
 
         private IDisposable _sessionDisposable;
 
@@ -33,8 +37,20 @@ namespace Autonoceptor.Host.ViewModels
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
-                    await StartConductor(); 
+                    await StartConductor().ConfigureAwait(false);
+                    
+                    Log.Add("Initialized");
                 });
+
+            RxTarget.LogObservable.ObserveOnDispatcher().Subscribe(AddToLog);
+        }
+
+        private void AddToLog(string entry)
+        {
+            Log.Insert(0, entry);
+
+            if (Log.Count > 600)
+                Log.RemoveAt(599);
         }
 
         private bool _started;
@@ -50,6 +66,8 @@ namespace Autonoceptor.Host.ViewModels
 
             _started = true;
 
+            AddToLog("Starting conductor");
+
             await _conductor.InitializeAsync();
         }
 
@@ -58,6 +76,13 @@ namespace Autonoceptor.Host.ViewModels
             _sessionDisposable?.Dispose();
 
             _sessionDisposable = Observable.Interval(TimeSpan.FromMinutes(4)).Subscribe(async _ => { await RequestExtendedSession(); });
+
+            Observable.Timer(TimeSpan.FromSeconds(5))
+                .ObserveOnDispatcher()
+                .Subscribe(async _ =>
+                {
+                    await StartConductor().ConfigureAwait(false);
+                });
         }
 
         private void NewSessionOnRevoked(object sender, ExtendedExecutionRevokedEventArgs args)
@@ -84,6 +109,39 @@ namespace Autonoceptor.Host.ViewModels
                 case ExtendedExecutionResult.Denied:
                     //AddToLog("Session extend denied");
                     break;
+            }
+        }
+
+        public int GpsNavSpeed { get; set; } = 25;
+
+        public int WpBoundryIn { get; set; } = 32;
+
+        public void SetGpsNavSpeed()
+        {
+            _conductor.GpsNavMoveMagnitude = GpsNavSpeed;
+
+            AddToLog($"Set GPS nav speed %{GpsNavSpeed}");
+        }
+            
+        public void SetWpBoundry()
+        {
+            _conductor.WpTriggerDistance = WpBoundryIn;
+
+            AddToLog($"WP Trigger distance {WpBoundryIn}in");
+        }
+
+        public void GetCurrentPosition()
+        {
+            AddToLog($"At Lat: {_conductor.CurrentLocation.Lat}, Lon: {_conductor.CurrentLocation.Lon}");
+        }
+
+        public void ListWaypoints()
+        {
+            var wps = _conductor.Waypoints;
+
+            foreach (var gpsFixData in wps)
+            {
+                AddToLog($"Lat: {gpsFixData.Lat} Lon: {gpsFixData.Lon} - {gpsFixData.Quality}");
             }
         }
 

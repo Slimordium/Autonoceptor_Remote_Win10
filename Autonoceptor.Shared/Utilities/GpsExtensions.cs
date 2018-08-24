@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Gps.Enums;
 
@@ -178,15 +176,13 @@ namespace Autonoceptor.Shared.Utilities
                         if (tokens.Length < 9)
                             return null;
 
-                        _lat = Latitude2Double(tokens[3], tokens[4]);
-                        _lon = Longitude2Double(tokens[5], tokens[6]);
+                        //_lat = Latitude2Double(tokens[3], tokens[4]);
+                        //_lon = Longitude2Double(tokens[5], tokens[6]);
 
-                        double fps = 0;
-                        if (double.TryParse(tokens[7], out fps))
+                        if (double.TryParse(tokens[7], out var fps))
                             _feetPerSecond = Math.Round(fps * 1.68781, 2); //Convert knots to feet per second or "Speed over ground"
 
-                        double dir = 0;
-                        if (double.TryParse(tokens[8], out dir))
+                        if (double.TryParse(tokens[8], out var dir))
                             _heading = dir; //angle from true north that you are traveling or "Course made good"
 
                         break;
@@ -224,18 +220,18 @@ namespace Autonoceptor.Shared.Utilities
                             _sensorInputAvailable = tokens[4].Equals("1");
                             _odometerPulseCount = Convert.ToDouble(tokens[5]);
 
-                            switch (tokens[6])
-                            {
-                                case "A":
-                                    _quality = GpsFixQuality.StandardGps;
-                                    break;
-                                case "N":
-                                    _quality = GpsFixQuality.NoFix;
-                                    break;
-                                case "E": //Estimated, or Dead Reckoning
-                                    _quality = GpsFixQuality.DeadReckoning;
-                                    break;
-                            }
+                            //switch (tokens[6])
+                            //{
+                            //    case "A":
+                            //        _quality = GpsFixQuality.StandardGps;
+                            //        break;
+                            //    case "N":
+                            //        _quality = GpsFixQuality.NoFix;
+                            //        break;
+                            //    case "E": //Estimated, or Dead Reckoning
+                            //        _quality = GpsFixQuality.DeadReckoning;
+                            //        break;
+                            //}
 
                             _movingBackward = tokens[7].Equals("1");
                             _gyroBias = Convert.ToDouble(tokens[9]);

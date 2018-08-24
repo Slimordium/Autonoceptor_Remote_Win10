@@ -13,7 +13,7 @@ namespace Hardware.Xbox
 {
     public class XboxDevice
     {
-        private double _deadzoneTolerance = 1000; //Was 1000
+        private double _deadzoneTolerance = 3000; //Was 1000
 
         private HidDevice _deviceHandle;
 
@@ -32,7 +32,7 @@ namespace Hardware.Xbox
 
             var isConnected = await ConnectToController(deviceInformationCollection);
 
-            return isConnected;
+            return await Task.FromResult(isConnected);
         }
 
         public IObservable<XboxData> GetObservable()
@@ -49,25 +49,17 @@ namespace Hardware.Xbox
                 if (_deviceHandle == null)
                     continue;
 
-                
                 _deviceHandle.InputReportReceived += InputReportReceived;
             }
 
             if (_deviceHandle == null)
-                return false;
+                return await Task.FromResult(false);
 
-            return true;
+            return await Task.FromResult(true);
         }
-
-        private bool _lock;
 
         private void InputReportReceived(HidDevice hidDevice, HidInputReportReceivedEventArgs args)
         {
-            if (Volatile.Read(ref _lock))
-                return;
-
-            Volatile.Write(ref _lock, true);
-
             var dPad = args.Report.GetNumericControl(0x01, 0x39).Value;
 
             var lstickX = args.Report.GetNumericControl(0x01, 0x30).Value - 32768d;
@@ -98,8 +90,6 @@ namespace Hardware.Xbox
             };
 
             _subject.OnNext(xboxEvent);
-
-            Volatile.Write(ref _lock, false);
         }
 
         /// <summary>

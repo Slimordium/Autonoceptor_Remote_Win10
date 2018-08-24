@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Utilities;
+using NLog;
 
 namespace Autonoceptor.Host
 {
@@ -17,24 +18,20 @@ namespace Autonoceptor.Host
             get => Volatile.Read(ref _followingWaypoints);
             set => Volatile.Write(ref _followingWaypoints, value);
         }
+        public GpsFixData CurrentLocation => Gps.CurrentLocation;
 
-        protected WaypointList Waypoints { get; set; } = new WaypointList();
+        public WaypointList Waypoints { get; set; } = new WaypointList();
 
         private int _steerMagnitudeScale = 180;
-
-        private GpsFixData _currentLocation;
-        protected GpsFixData CurrentLocation
-        {
-            get => Volatile.Read(ref _currentLocation);
-            set => Volatile.Write(ref _currentLocation, value);
-        } 
 
         private IDisposable _currentLocationUpdater;
         private IDisposable _gpsNavDisposable;
         private IDisposable _gpsNavSwitchDisposable;
 
+        public int WpTriggerDistance { get; set; }
+
         private double _gpsNavMoveMagnitude = 20;
-        protected double GpsNavMoveMagnitude
+        public double GpsNavMoveMagnitude
         {
             get => Volatile.Read(ref _gpsNavMoveMagnitude);
             set => Volatile.Write(ref _gpsNavMoveMagnitude, value);
@@ -62,14 +59,6 @@ namespace Autonoceptor.Host
         protected new async Task InitializeAsync()
         {
             await base.InitializeAsync();
-
-            _currentLocationUpdater = Gps
-                .GetObservable()
-                .ObserveOnDispatcher()
-                .Subscribe(fix =>
-                {
-                    CurrentLocation = fix; 
-                });
 
             _gpsNavSwitchDisposable = PwmController.GetObservable()
                 .Where(channel => channel.ChannelId == GpsNavEnabledChannel)
@@ -122,6 +111,8 @@ namespace Autonoceptor.Host
 
             await Lcd.WriteAsync("GPS Nav stopped");
 
+            Logger.Log(LogLevel.Info, "GPS Nav stopped");
+
             _steerMagnitudeDecayDisposable?.Dispose();
             _gpsNavDisposable?.Dispose();
         }
@@ -130,6 +121,8 @@ namespace Autonoceptor.Host
         {
             if (_currentWaypointIndex >= Waypoints.Count || !FollowingWaypoints)
             {
+                Logger.Log(LogLevel.Info, $"Nav finished {Waypoints.Count} WPs");
+
                 await EmergencyBrake();
 
                 await WaypointFollowEnable(false);
@@ -150,6 +143,8 @@ namespace Autonoceptor.Host
             if (moveReq.Distance <= 36) //This should probably be slightly larger than the turning radius?
             {
                 _currentWaypointIndex++;
+
+                Logger.Log(LogLevel.Info, $"Next WP ({_currentWaypointIndex}) {Waypoints[_currentWaypointIndex].Lat}, {Waypoints[_currentWaypointIndex].Lon}");
             }
         }
 
@@ -173,6 +168,9 @@ namespace Autonoceptor.Host
             //moveReq.MovementMagnitude = travelMagnitude;
 
             var diff = currentLocation.Heading - headingToWaypoint;
+
+            Logger.Log(LogLevel.Info, $"Current Heading: {currentLocation.Heading}, Heading to WP: {headingToWaypoint}");
+            Logger.Log(LogLevel.Info, $"Distance to WP: {moveReq.Distance}in");
 
             if (diff < 0)
             {
