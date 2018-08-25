@@ -10,11 +10,11 @@ namespace Autonoceptor.Host
     public class LidarNavOverride : Car
     {
         private IDisposable _lidarDataDisposable;
-        private IDisposable _lidarServoDisposable;
+        private IDisposable _sweepDisposable;
 
         private const ushort _lidarServoChannel = 17;
 
-        private Task _sweepTask;
+        private bool toggle;
 
         private const int _rightPwm = 1056;
         private const int _centerPwm = 1486;
@@ -25,31 +25,27 @@ namespace Autonoceptor.Host
         {
         }
 
-        private bool toggle;
-
-        private IDisposable _sweepDisposable;
-
         //TODO: Implement servo sweep, query servo position, and associating servo position with lidar data as a sort of radar sweep. 
         protected new async Task InitializeAsync()
         {
             await base.InitializeAsync();
 
-            _sweepDisposable = Observable
-                .Interval(TimeSpan.FromMilliseconds(1500))
-                .ObserveOnDispatcher()
-                .Subscribe(async _ =>
-                {
-                    if (toggle)
-                    {
-                        await PwmController.SetChannelValue(_rightPwm * 4, _lidarServoChannel);
-                    }
-                    else
-                    {
-                        await PwmController.SetChannelValue(_leftPwm * 4, _lidarServoChannel);
-                    }
+            //_sweepDisposable = Observable
+            //    .Interval(TimeSpan.FromMilliseconds(1500))
+            //    .ObserveOnDispatcher()
+            //    .Subscribe(async _ =>
+            //    {
+            //        if (toggle)
+            //        {
+            //            await PwmController.SetChannelValue(_rightPwm * 4, _lidarServoChannel);
+            //        }
+            //        else
+            //        {
+            //            await PwmController.SetChannelValue(_leftPwm * 4, _lidarServoChannel);
+            //        }
 
-                    toggle = !toggle;
-                });
+            //        toggle = !toggle;
+            //    });
 
             _lidarDataDisposable = Lidar
                 .GetObservable()
@@ -63,7 +59,7 @@ namespace Autonoceptor.Host
 
         private async Task UpdateLidarNavOverride(LidarData lidarData, int location) //Implement 2D map. Modify "write to hardware method" to with values to avoid ?
         {
-            if (lidarData.Distance < 60)
+            if (lidarData.Distance < 40)
             {
                 await EmergencyBrake();
             }
