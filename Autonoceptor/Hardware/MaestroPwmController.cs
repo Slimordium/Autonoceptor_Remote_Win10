@@ -42,8 +42,6 @@ namespace Autonoceptor.Service.Hardware
 
         private IDisposable _getChannelStatesDisposable;
 
-        private bool _locked;
-
         private readonly AsyncLock _mutex = new AsyncLock();
 
         public MaestroPwmController(IEnumerable<ushort> inputChannels)
