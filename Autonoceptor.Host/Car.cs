@@ -146,7 +146,7 @@ namespace Autonoceptor.Host
         {
             await PwmController.SetChannelValue(StoppedPwm - 40 * 4, MovementChannel); //Momentary reverse ... helps stop quickly
 
-            await Task.Delay(30);
+            await Task.Delay(20);
 
             await PwmController.SetChannelValue(StoppedPwm * 4, MovementChannel);
 

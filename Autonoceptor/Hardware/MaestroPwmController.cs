@@ -30,6 +30,18 @@ namespace Autonoceptor.Service.Hardware
 
     public class MaestroPwmController
     {
+        private const ushort SetTargetCommand = 0x84;
+        private const ushort SetSpeedCommand = 0x87;
+        private const ushort SetAccelerationCommand = 0x89;
+        private const ushort GetPositionCommand = 0x90;
+        private const ushort GetMovingStateCommand = 0x93;
+        private const ushort GetErrorsCommand = 0xA1;
+        private const ushort GoHomeCommand = 0xA2;
+        private const ushort StopScriptCommand = 0xA4;
+        private const ushort RestartScriptAtSubroutineCommand = 0xA7;
+        private const ushort RestartScriptAtSubroutineWithParameterCommand = 0xA8;
+        private const ushort GetScriptStatusCommand = 0xAE;
+
         private SerialDevice _maestroPwmDevice;
 
         private DataWriter _outputStream;
@@ -41,9 +53,7 @@ namespace Autonoceptor.Service.Hardware
 
         private IDisposable _getChannelStatesDisposable;
 
-        private bool _locked;
-
-        private SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1,1);
+        private readonly SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1,1);
 
         public MaestroPwmController(IEnumerable<ushort> inputChannels)
         {
