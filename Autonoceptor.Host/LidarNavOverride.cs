@@ -12,36 +12,56 @@ namespace Autonoceptor.Host
         private IDisposable _lidarDataDisposable;
         private IDisposable _lidarServoDisposable;
 
-        private const ushort _lidarServoChannel = 18;
+        private const ushort _lidarServoChannel = 17;
+
+        private Task _sweepTask;
+
+        private const int _rightPwm = 1056;
+        private const int _centerPwm = 1486;
+        private const int _leftPwm = 1880;
 
         protected LidarNavOverride(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
             : base(cancellationTokenSource, brokerHostnameOrIp)
         {
         }
 
+        private bool toggle;
+
+        private IDisposable _sweepDisposable;
+
         //TODO: Implement servo sweep, query servo position, and associating servo position with lidar data as a sort of radar sweep. 
         protected new async Task InitializeAsync()
         {
             await base.InitializeAsync();
+
+            _sweepDisposable = Observable
+                .Interval(TimeSpan.FromMilliseconds(1500))
+                .ObserveOnDispatcher()
+                .Subscribe(async _ =>
+                {
+                    if (toggle)
+                    {
+                        await PwmController.SetChannelValue(_rightPwm * 4, _lidarServoChannel);
+                    }
+                    else
+                    {
+                        await PwmController.SetChannelValue(_leftPwm * 4, _lidarServoChannel);
+                    }
+
+                    toggle = !toggle;
+                });
 
             _lidarDataDisposable = Lidar
                 .GetObservable()
                 .ObserveOnDispatcher()
                 .Subscribe(async lidarData =>
                 {
-                    await UpdateLidarNavOverride(lidarData);
+                    //var location = await PwmController.GetChannelValue(_lidarServoChannel);
+                    await UpdateLidarNavOverride(lidarData, 0);// location value goes here
                 });
-
-            //_lidarServoDisposable = Observable
-            //    .Interval(TimeSpan.FromMilliseconds(10))
-            //    .ObserveOnDispatcher()
-            //    .Subscribe(_ =>
-            //    {
-
-            //    });
         }
 
-        private async Task UpdateLidarNavOverride(LidarData lidarData)
+        private async Task UpdateLidarNavOverride(LidarData lidarData, int location) //Implement 2D map. Modify "write to hardware method" to with values to avoid ?
         {
             if (lidarData.Distance < 60)
             {
