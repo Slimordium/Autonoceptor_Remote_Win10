@@ -32,7 +32,7 @@ namespace Autonoceptor.Host
 
         public int WpTriggerDistance { get; set; }
 
-        private double _gpsNavMoveMagnitude = 20;
+        private double _gpsNavMoveMagnitude = 19;
         public double GpsNavMoveMagnitude
         {
             get => Volatile.Read(ref _gpsNavMoveMagnitude);
@@ -79,7 +79,7 @@ namespace Autonoceptor.Host
                 return;
 
             moveRequest.SteeringDirection = moveRequest.SteeringDirection;
-            moveRequest.SteeringMagnitude = moveRequest.SteeringMagnitude * .7;
+            moveRequest.SteeringMagnitude = moveRequest.SteeringMagnitude * .6;
 
             await WriteToHardware(moveRequest);
         }
@@ -124,13 +124,9 @@ namespace Autonoceptor.Host
 
         private async Task UpdateMoveRequest(GpsFixData gpsFixData)
         {
-            if (_currentWaypointIndex >= Waypoints.Count || !FollowingWaypoints)
+            if (!FollowingWaypoints)
             {
                 _logger.Log(LogLevel.Info, $"Nav finished {Waypoints.Count} WPs");
-
-                await EmergencyBrake();
-
-                await WaypointFollowEnable(false);
                 return;
             }
 
@@ -145,9 +141,18 @@ namespace Autonoceptor.Host
             await Lcd.WriteAsync($"{moveReq.SteeringDirection} {moveReq.SteeringMagnitude}", 1);
             await Lcd.WriteAsync($"Dist {moveReq.Distance} {_currentWaypointIndex}", 2);
 
-            if (moveReq.Distance <= 36) //This should probably be slightly larger than the turning radius?
+            //This is wrong....
+            if (moveReq.Distance >= 55) //This should probably be slightly larger than the turning radius?
             {
                 _currentWaypointIndex++;
+            }
+            else
+            {
+                _currentWaypointIndex = 0;
+
+                await EmergencyBrake();
+
+                await WaypointFollowEnable(false);
             }
         }
 
