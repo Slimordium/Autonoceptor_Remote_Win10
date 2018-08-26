@@ -12,7 +12,7 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-        private int _currentWaypointIndex;
+        private int _currentWaypointIndex = 0;
 
         private bool _followingWaypoints;
         protected bool FollowingWaypoints
@@ -32,7 +32,7 @@ namespace Autonoceptor.Host
 
         public int WpTriggerDistance { get; set; }
 
-        private double _gpsNavMoveMagnitude = 19;
+        private double _gpsNavMoveMagnitude = 21;
         public double GpsNavMoveMagnitude
         {
             get => Volatile.Read(ref _gpsNavMoveMagnitude);
@@ -149,7 +149,7 @@ namespace Autonoceptor.Host
             await Lcd.WriteAsync($"Dist {moveReq.Distance} {_currentWaypointIndex}", 2);
 
             //This is wrong....
-            if (moveReq.Distance <= 55) //This should probably be slightly larger than the turning radius?
+            if (moveReq.Distance <= 36) //This should probably be slightly larger than the turning radius?
             {
                 _currentWaypointIndex++;
             }
@@ -184,12 +184,12 @@ namespace Autonoceptor.Host
                 if (Math.Abs(diff) > 180)
                 {
                     moveReq.SteeringDirection = SteeringDirection.Left;
-                    moveReq.SteeringMagnitude = (int)Math.Abs(diff + 360).Map(0, 360, CenterPwm, LeftPwmMax - 400);
+                    moveReq.SteeringMagnitude = (int) Math.Abs(diff + 360).Map(0, 360, 0, 360);
                 }
                 else
                 {
                     moveReq.SteeringDirection = SteeringDirection.Right;
-                    moveReq.SteeringMagnitude = (int)Math.Abs(diff).Map(0, 360, CenterPwm, RightPwmMax + 400);
+                    moveReq.SteeringMagnitude = (int) Math.Abs(diff).Map(0, 360, 0, 360);
                 }
             }
             else
@@ -197,12 +197,12 @@ namespace Autonoceptor.Host
                 if (Math.Abs(diff) > 180)
                 {
                     moveReq.SteeringDirection = SteeringDirection.Right;
-                    moveReq.SteeringMagnitude = (int)Math.Abs(diff - 360).Map(0, 360, CenterPwm, RightPwmMax + 400);
+                    moveReq.SteeringMagnitude = (int) Math.Abs(diff - 360).Map(0, 360, 0, 360);
                 }
                 else
                 {
                     moveReq.SteeringDirection = SteeringDirection.Left;
-                    moveReq.SteeringMagnitude = (int)Math.Abs(diff).Map(0, 360, CenterPwm, LeftPwmMax - 400);
+                    moveReq.SteeringMagnitude = (int) Math.Abs(diff).Map(0, 360, 0, 360);
                 }
             }
 
@@ -216,26 +216,26 @@ namespace Autonoceptor.Host
             var moveValue = StoppedPwm * 4;
             var steerValue = CenterPwm * 4;
 
-            //if (request.SteeringMagnitude > 45)
-            //    request.SteeringMagnitude = 45;
+            if (request.SteeringMagnitude > 45)
+                request.SteeringMagnitude = 45;
 
-            //switch (request.SteeringDirection)
-            //{
-            //    case SteeringDirection.Left:
-            //        steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, 45, CenterPwm, LeftPwmMax)) * 4;
-            //        break;
-            //    case SteeringDirection.Right:
-            //        steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, 45, CenterPwm, RightPwmMax)) * 4;
-            //        break;
-            //}
+            switch (request.SteeringDirection)
+            {
+                case SteeringDirection.Left:
+                    steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, 45, CenterPwm, LeftPwmMax)) * 4;
+                    break;
+                case SteeringDirection.Right:
+                    steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, 45, CenterPwm, RightPwmMax)) * 4;
+                    break;
+            }
 
-            if (request.SteeringMagnitude < LeftPwmMax)
-                request.SteeringMagnitude = LeftPwmMax;
+            //if (request.SteeringMagnitude < LeftPwmMax)
+            //    request.SteeringMagnitude = LeftPwmMax;
 
-            if (request.SteeringMagnitude > RightPwmMax)
-                request.SteeringMagnitude = RightPwmMax;
+            //if (request.SteeringMagnitude > RightPwmMax)
+            //    request.SteeringMagnitude = RightPwmMax;
 
-            request.SteeringMagnitude = request.SteeringMagnitude * 4;
+            //request.SteeringMagnitude = request.SteeringMagnitude * 4;
 
             await PwmController.SetChannelValue(steerValue, SteeringChannel);
 
