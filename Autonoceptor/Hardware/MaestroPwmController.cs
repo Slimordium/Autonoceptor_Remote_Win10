@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
+using Nito.AsyncEx;
 
 namespace Autonoceptor.Service.Hardware
 {
@@ -30,18 +31,6 @@ namespace Autonoceptor.Service.Hardware
 
     public class MaestroPwmController
     {
-        private const ushort SetTargetCommand = 0x84;
-        private const ushort SetSpeedCommand = 0x87;
-        private const ushort SetAccelerationCommand = 0x89;
-        private const ushort GetPositionCommand = 0x90;
-        private const ushort GetMovingStateCommand = 0x93;
-        private const ushort GetErrorsCommand = 0xA1;
-        private const ushort GoHomeCommand = 0xA2;
-        private const ushort StopScriptCommand = 0xA4;
-        private const ushort RestartScriptAtSubroutineCommand = 0xA7;
-        private const ushort RestartScriptAtSubroutineWithParameterCommand = 0xA8;
-        private const ushort GetScriptStatusCommand = 0xAE;
-
         private SerialDevice _maestroPwmDevice;
 
         private DataWriter _outputStream;
@@ -53,7 +42,7 @@ namespace Autonoceptor.Service.Hardware
 
         private IDisposable _getChannelStatesDisposable;
 
-        private readonly SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1,1);
+        private readonly AsyncLock _mutex = new AsyncLock();
 
         public MaestroPwmController(IEnumerable<ushort> inputChannels)
         {
@@ -82,6 +71,7 @@ namespace Autonoceptor.Service.Hardware
 
             _getChannelStatesDisposable = Observable
                 .Interval(TimeSpan.FromMilliseconds(200))
+                .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
                     foreach (var channel in _channelValues)
@@ -100,20 +90,21 @@ namespace Autonoceptor.Service.Hardware
                 });
         }
 
-       public async Task SetChannelValue(int value, ushort channel)
+       public async Task<uint> SetChannelValue(int value, ushort channel)
         {
             if (_outputStream == null)
                 throw new InvalidOperationException("Output stream is null?");
 
-            await _semaphoreSlim.WaitAsync();
+            using (await _mutex.LockAsync())
+            {
+                var lsb = Convert.ToByte(value & 0x7f);
+                var msb = Convert.ToByte((value >> 7) & 0x7f);
 
-            var lsb = Convert.ToByte(value & 0x7f);
-            var msb = Convert.ToByte((value >> 7) & 0x7f);
+                _outputStream.WriteBytes(new[] { (byte)0x84, (byte)channel, lsb, msb });
+                var r = await _outputStream.StoreAsync();
 
-            _outputStream.WriteBytes(new[] { (byte)0x84, (byte)channel, lsb, msb });
-            var r = await _outputStream.StoreAsync();
-
-            _semaphoreSlim.Release(1);
+                return r;
+            }
         }
 
         public async Task<int> GetChannelValue(ushort channel)
@@ -121,18 +112,17 @@ namespace Autonoceptor.Service.Hardware
             if (_outputStream == null || _inputStream == null)
                 throw new InvalidOperationException("Output or Input stream is null?");
 
-            await _semaphoreSlim.WaitAsync();
+            using (await _mutex.LockAsync())
+            {
+                _outputStream.WriteBytes(new[] { (byte)0xAA, (byte)0x0C, (byte)0x10, (byte)channel });//Forward / reverse
+                var r = await _outputStream.StoreAsync();
 
-            _outputStream.WriteBytes(new[] { (byte)0xAA, (byte)0x0C, (byte)0x10, (byte)channel });//Forward / reverse
-            var r = await _outputStream.StoreAsync();
+                await _inputStream.LoadAsync(2);
+                var inputBytes = new byte[2];
+                _inputStream.ReadBytes(inputBytes);
 
-            await _inputStream.LoadAsync(2);
-            var inputBytes = new byte[2];
-            _inputStream.ReadBytes(inputBytes);
-
-            _semaphoreSlim.Release(1);
-
-            return await Task.FromResult(BitConverter.ToUInt16(inputBytes, 0) * 4);
+                return await Task.FromResult(BitConverter.ToUInt16(inputBytes, 0) * 4);
+            }
         }
 
         //Get Position

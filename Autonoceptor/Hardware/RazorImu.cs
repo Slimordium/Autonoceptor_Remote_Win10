@@ -20,9 +20,16 @@ namespace Autonoceptor.Service.Hardware
 
         private Task _readTask;
 
-        public async Task InitializeAsync(CancellationToken cancellationToken)
+        private readonly CancellationToken _cancellationToken;
+
+        public RazorImu(CancellationToken cancellationToken)
         {
-            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("N01E09J", 57600, TimeSpan.FromMilliseconds(30), TimeSpan.FromMilliseconds(30));
+            _cancellationToken = cancellationToken;
+        }
+
+        public async Task InitializeAsync()
+        {
+            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E099", 57600, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
 
             if (_serialDevice == null)
                 return;
@@ -31,7 +38,7 @@ namespace Autonoceptor.Service.Hardware
 
             _readTask = new Task(async() =>
             {
-                while (!cancellationToken.IsCancellationRequested)
+                while (!_cancellationToken.IsCancellationRequested)
                 {
                     var byteCount = await _inputStream.LoadAsync(64);
 

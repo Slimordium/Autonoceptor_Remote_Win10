@@ -14,9 +14,9 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-        protected const int RightPwmMax = 1861;
-        protected const int CenterPwm = 1321;
-        protected const int LeftPwmMax = 837;
+        protected const int RightPwmMax = 1800;
+        protected const int CenterPwm = 1408;
+        protected const int LeftPwmMax = 1015;
 
         protected const int ReversePwmMax = 1072;
         protected const int StoppedPwm = 1471;
@@ -142,17 +142,13 @@ namespace Autonoceptor.Host
 
         }
 
-        private async Task Stop()
+        public async Task Stop()
         {
-            await PwmController.SetChannelValue(StoppedPwm - 40 * 4, MovementChannel); //Momentary reverse ... helps stop quickly
-
-            await Task.Delay(20);
-
             await PwmController.SetChannelValue(StoppedPwm * 4, MovementChannel);
 
             _logger.Log(LogLevel.Trace, "Stopped");
 
-            await DisableServos();
+            //await DisableServos();
         }
 
         public async Task DisableServos()

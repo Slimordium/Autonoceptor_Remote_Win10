@@ -71,6 +71,16 @@ namespace Autonoceptor.Host.ViewModels
             await _conductor.InitializeAsync();
         }
 
+        //TODO: Odometer data appears to be wrong? 
+        public void GetOdometerData()
+        {
+            //This is just going to grab the current Odometer data for now
+
+
+            AddToLog($"Odometer: {_conductor.Odometer.OdometerData.InTraveled}in");
+            AddToLog($"Odometer: {_conductor.Odometer.OdometerData.CmTraveled}cm");
+        }
+
         private void CurrentOnResuming(object sender, object o)
         {
             _sessionDisposable?.Dispose();

@@ -18,7 +18,14 @@ namespace Autonoceptor.Service.Hardware
         private Task _lidarTask;
         private readonly Subject<LidarData> _subject = new Subject<LidarData>();
 
-        public async Task InitializeAsync(CancellationToken cancellationToken)
+        private readonly CancellationToken _cancellationToken;
+
+        public Tf02Lidar(CancellationToken cancellationToken)
+        {
+            _cancellationToken = cancellationToken;
+        }
+
+        public async Task InitializeAsync()
         {
             _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("A105BLG5", 115200, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
 
@@ -30,7 +37,7 @@ namespace Autonoceptor.Service.Hardware
 
             _lidarTask = new Task(async () =>
             {
-                while (!cancellationToken.IsCancellationRequested)
+                while (!_cancellationToken.IsCancellationRequested)
                 {
                     var byteCount = await _inputStream.LoadAsync(8);
                     var bytes = new byte[byteCount];

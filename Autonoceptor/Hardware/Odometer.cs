@@ -1,0 +1,139 @@
+﻿using System;
+using System.Linq;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Windows.Devices.SerialCommunication;
+using Windows.Storage.Streams;
+using Autonoceptor.Shared.Imu;
+using NLog;
+
+namespace Autonoceptor.Service.Hardware
+{
+    public class Odometer
+    {
+        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
+
+        private SerialDevice _serialDevice;
+
+        private DataReader _inputStream;
+
+        private readonly Subject<OdometerData> _subject = new Subject<OdometerData>();
+
+        private Task _readTask;
+
+        private readonly CancellationToken _cancellationToken;
+
+        private OdometerData _odometerData;
+        public OdometerData OdometerData
+        {
+            get => Volatile.Read(ref _odometerData);
+            set => Volatile.Write(ref _odometerData, value);
+        }
+
+        public Odometer(CancellationToken cancellationToken)
+        {
+            _cancellationToken = cancellationToken;
+        }
+
+        public async Task InitializeAsync()
+        {
+            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN04Q28D", 115200, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
+
+            if (_serialDevice == null)
+                return;
+
+            _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
+
+            _readTask = new Task(async() =>
+            {
+                var lastOdometer = new OdometerData();
+
+                //TODO: send from ESP32 Thing as JSON, this is annoying. As long as it is fast enough...
+                while (!_cancellationToken.IsCancellationRequested)
+                {
+                    var byteCount = await _inputStream.LoadAsync(100);
+
+                    var readString = _inputStream.ReadString(byteCount);
+
+                    foreach (var ss in readString.Split('\n'))
+                    {
+                        var split = ss.Split(',').ToList();
+
+                        if (split.Count < 3)
+                        {
+                            continue;
+                        }
+
+                        if (!readString.Contains("P@10Hz=") && !readString.Contains("\r"))
+                        {
+                            continue;
+                        }
+
+                        try
+                        {
+                            var odometerDataNew = new OdometerData();
+
+                            if (!float.TryParse(split[2].Replace("IN=", "").Replace("\r", "").Replace("\n", ""), out var inches))
+                            {
+                                odometerDataNew.InTraveled = lastOdometer.InTraveled;
+                            }
+                            else
+                            {
+                                odometerDataNew.InTraveled = inches;
+                                lastOdometer.InTraveled = inches;
+                            }
+
+                            if (!float.TryParse(split[1].Replace("CM=", ""), out var cm))
+                            {
+                                odometerDataNew.CmTraveled = lastOdometer.CmTraveled;
+                            }
+                            else
+                            {
+                                odometerDataNew.CmTraveled = cm;
+                                lastOdometer.CmTraveled = cm;
+                            }
+
+                            if (!int.TryParse(split[0].Replace("P@10Hz=", ""), out var pulse))
+                            {
+                                odometerDataNew.PulsesIn100Ms = lastOdometer.PulsesIn100Ms;
+                            }
+                            else
+                            {
+                                odometerDataNew.PulsesIn100Ms = pulse;
+                                lastOdometer.PulsesIn100Ms = pulse;
+                            }
+
+                            _subject.OnNext(odometerDataNew);
+
+                            OdometerData = odometerDataNew;
+                        }
+                        catch (Exception e)
+                        {
+                            _logger.Log(LogLevel.Error, $"{e.Message}");
+                            _logger.Log(LogLevel.Error, readString);
+                        }
+                    }
+                }
+            });
+            _readTask.Start();
+        }
+
+        public IObservable<OdometerData> GetObservable()
+        {
+            return _subject.AsObservable();
+        }
+    }
+
+    public class OdometerData
+    {
+        public int PulsesIn100Ms { get; set; }
+
+        public float CmTraveled { get; set; }
+
+        public float InTraveled { get; set; }
+
+    }
+}

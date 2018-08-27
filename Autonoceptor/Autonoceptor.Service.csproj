@@ -108,6 +108,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Hardware\MaestroPwmController.cs" />
+    <Compile Include="Hardware\Odometer.cs" />
     <Compile Include="Hardware\Tf02Lidar.cs" />
     <Compile Include="Hardware\Gps.cs" />
     <Compile Include="Hardware\I2CDevice.cs" />
@@ -127,6 +128,9 @@
     </PackageReference>
     <PackageReference Include="Newtonsoft.Json">
       <Version>11.0.1</Version>
+    </PackageReference>
+    <PackageReference Include="Nito.AsyncEx">
+      <Version>4.0.1</Version>
     </PackageReference>
     <PackageReference Include="NLog">
       <Version>4.5.0-rc07</Version>
@@ -162,6 +166,9 @@
       <Project>{81ded141-b2cd-4d21-aa5c-788c7534e2fa}</Project>
       <Name>Hardware.Xbox</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.config" />
   </ItemGroup>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>

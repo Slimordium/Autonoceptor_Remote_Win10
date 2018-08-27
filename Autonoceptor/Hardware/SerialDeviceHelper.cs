@@ -6,11 +6,14 @@ using System.Threading.Tasks;
 using Windows.ApplicationModel.Contacts;
 using Windows.Devices.Enumeration;
 using Windows.Devices.SerialCommunication;
+using NLog;
 
 namespace Autonoceptor.Service.Hardware
 {
     internal static class SerialDeviceHelper
     {
+        private static readonly ILogger _logger = LogManager.GetCurrentClassLogger();
+
         internal static async Task<SerialDevice> GetSerialDeviceAsync(string identifier, int baudRate, TimeSpan readTimeout, TimeSpan writeTimeout)
         {
             var deviceInformationCollection = await DeviceInformation.FindAllAsync(SerialDevice.GetDeviceSelector());
@@ -18,6 +21,7 @@ namespace Autonoceptor.Service.Hardware
 
             if (selectedPort == null)
             {
+                _logger.Log(LogLevel.Error, $"selectedPort '{identifier}' not found");
                 return null;
             }
 
@@ -25,6 +29,7 @@ namespace Autonoceptor.Service.Hardware
 
             if (serialDevice == null)
             {
+                _logger.Log(LogLevel.Error, $"serialDevice '{identifier}' not found");
                 return null;
             }
 
@@ -36,12 +41,12 @@ namespace Autonoceptor.Service.Hardware
             serialDevice.DataBits = 8;
             serialDevice.Handshake = SerialHandshake.None;
 
-            Debug.WriteLine($"Found - {identifier}");
+            _logger.Log(LogLevel.Info, $"Found and opened serialDevice '{identifier}'");
 
             return serialDevice;
         }
 
-        internal static async Task<List<string>> GetAvailablePorts()
+        public static async Task<List<string>> GetAvailablePorts()
         {
             return (from d in await DeviceInformation.FindAllAsync(SerialDevice.GetDeviceSelector()) select $"{d.Id} => {d.Name}").ToList();
         }
