@@ -12,7 +12,7 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetLogger("Autonoceptor");
 
-        protected Odometer PulseCounter { get; private set; }
+        public Odometer Odometer { get; private set; }
         protected RazorImu RazorImu { get; private set; }
         protected Tf02Lidar  Lidar { get; private set; }
         protected SparkFunSerial16X2Lcd Lcd { get; } = new SparkFunSerial16X2Lcd();
@@ -33,7 +33,7 @@ namespace Autonoceptor.Host
         {
             _logger.Log(LogLevel.Info, "Initializing");
 
-            PulseCounter = new Odometer(CancellationToken);
+            Odometer = new Odometer(CancellationToken);
             RazorImu = new RazorImu(CancellationToken);
             Gps = new Gps(CancellationToken);
             Lidar = new Tf02Lidar(CancellationToken);
@@ -47,7 +47,7 @@ namespace Autonoceptor.Host
 
             await RazorImu.InitializeAsync();
 
-            await PulseCounter.InitializeAsync();
+            await Odometer.InitializeAsync();
 
             await InitializeXboxController();
 

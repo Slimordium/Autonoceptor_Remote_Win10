@@ -142,17 +142,13 @@ namespace Autonoceptor.Host
 
         }
 
-        private async Task Stop()
+        public async Task Stop()
         {
-            await PwmController.SetChannelValue(StoppedPwm - 40 * 4, MovementChannel); //Momentary reverse ... helps stop quickly
-
-            await Task.Delay(30);
-
             await PwmController.SetChannelValue(StoppedPwm * 4, MovementChannel);
 
             _logger.Log(LogLevel.Trace, "Stopped");
 
-            await DisableServos();
+            //await DisableServos();
         }
 
         public async Task DisableServos()

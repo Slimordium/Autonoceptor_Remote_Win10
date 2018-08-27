@@ -26,6 +26,13 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly CancellationToken _cancellationToken;
 
+        private OdometerData _odometerData;
+        public OdometerData OdometerData
+        {
+            get => Volatile.Read(ref _odometerData);
+            set => Volatile.Write(ref _odometerData, value);
+        }
+
         public Odometer(CancellationToken cancellationToken)
         {
             _cancellationToken = cancellationToken;
@@ -100,6 +107,8 @@ namespace Autonoceptor.Service.Hardware
                             }
 
                             _subject.OnNext(odometerDataNew);
+
+                            OdometerData = odometerDataNew;
                         }
                         catch (Exception e)
                         {
@@ -107,14 +116,12 @@ namespace Autonoceptor.Service.Hardware
                             _logger.Log(LogLevel.Error, readString);
                         }
                     }
-
-                   
                 }
             });
             _readTask.Start();
         }
 
-        public IObservable<OdometerData> GetReadObservable()
+        public IObservable<OdometerData> GetObservable()
         {
             return _subject.AsObservable();
         }
