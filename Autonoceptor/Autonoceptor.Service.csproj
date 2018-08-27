@@ -108,6 +108,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Hardware\MaestroPwmController.cs" />
+    <Compile Include="Hardware\Odometer.cs" />
     <Compile Include="Hardware\Tf02Lidar.cs" />
     <Compile Include="Hardware\Gps.cs" />
     <Compile Include="Hardware\I2CDevice.cs" />

@@ -26,7 +26,14 @@ namespace Autonoceptor.Service.Hardware
 
         public GpsFixData CurrentLocation { get; set; } = new GpsFixData();
 
-        public async Task InitializeAsync(CancellationToken cancellationToken)
+        private readonly CancellationToken _cancellationToken;
+
+        public Gps(CancellationToken cancellationToken)
+        {
+            _cancellationToken = cancellationToken;
+        }
+
+        public async Task InitializeAsync()
         {
             _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 115200, TimeSpan.FromMilliseconds(25), TimeSpan.FromMilliseconds(25));
 
@@ -38,7 +45,7 @@ namespace Autonoceptor.Service.Hardware
 
             _gpsReadTask = new Task(async () =>
             {
-                while (!cancellationToken.IsCancellationRequested)
+                while (!_cancellationToken.IsCancellationRequested)
                 {
                     var byteCount = await _inputStream.LoadAsync(1128);
                     var sentences = _inputStream.ReadString(byteCount).Split('\n');

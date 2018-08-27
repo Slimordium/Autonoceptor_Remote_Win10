@@ -17,9 +17,15 @@ namespace Autonoceptor.Service.Hardware
         private DataWriter _outputStream;
         private Task _lidarTask;
         private readonly Subject<LidarData> _subject = new Subject<LidarData>();
-        private readonly SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1,1);
 
-        public async Task InitializeAsync(CancellationToken cancellationToken)
+        private readonly CancellationToken _cancellationToken;
+
+        public Tf02Lidar(CancellationToken cancellationToken)
+        {
+            _cancellationToken = cancellationToken;
+        }
+
+        public async Task InitializeAsync()
         {
             _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("A105BLG5", 115200, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
 
@@ -31,10 +37,8 @@ namespace Autonoceptor.Service.Hardware
 
             _lidarTask = new Task(async () =>
             {
-                while (!cancellationToken.IsCancellationRequested)
+                while (!_cancellationToken.IsCancellationRequested)
                 {
-                    await _semaphoreSlim.WaitAsync();
-
                     var byteCount = await _inputStream.LoadAsync(8);
                     var bytes = new byte[byteCount];
                     _inputStream.ReadBytes(bytes);
@@ -60,8 +64,6 @@ namespace Autonoceptor.Service.Hardware
                         continue;
 
                     _subject.OnNext(lidarData);
-
-                    _semaphoreSlim.Release(1);
                 }
             });
             _lidarTask.Start();

@@ -12,13 +12,17 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetLogger("Autonoceptor");
 
-        protected Tf02Lidar Lidar { get; } = new Tf02Lidar();
+        protected Odometer PulseCounter { get; private set; }
+        protected RazorImu RazorImu { get; private set; }
+        protected Tf02Lidar  Lidar { get; private set; }
         protected SparkFunSerial16X2Lcd Lcd { get; } = new SparkFunSerial16X2Lcd();
         protected MaestroPwmController PwmController { get; private set; }
-        protected Gps Gps { get; } = new Gps();
+        protected Gps Gps { get; private set; }
         protected XboxDevice XboxDevice { get; set; }
-        protected CancellationToken CancellationToken { get; }
+  
         protected MqttClient MqttClient { get; set; }
+
+        protected CancellationToken CancellationToken { get; }
 
         protected Chassis(CancellationTokenSource cancellationTokenSource)
         {
@@ -29,6 +33,11 @@ namespace Autonoceptor.Host
         {
             _logger.Log(LogLevel.Info, "Initializing");
 
+            PulseCounter = new Odometer(CancellationToken);
+            RazorImu = new RazorImu(CancellationToken);
+            Gps = new Gps(CancellationToken);
+            Lidar = new Tf02Lidar(CancellationToken);
+
             await Lcd.InitializeAsync();
             await Lcd.WriteAsync("Initializing...");
 
@@ -36,10 +45,14 @@ namespace Autonoceptor.Host
 
             await PwmController.InitializeAsync(CancellationToken);
 
+            await RazorImu.InitializeAsync();
+
+            await PulseCounter.InitializeAsync();
+
             await InitializeXboxController();
 
-            await Gps.InitializeAsync(CancellationToken);
-            await Lidar.InitializeAsync(CancellationToken);
+            await Gps.InitializeAsync();
+            await Lidar.InitializeAsync();
 
             await Lcd.WriteAsync("Initialized");
             _logger.Log(LogLevel.Info, "Initialized");
@@ -52,7 +65,7 @@ namespace Autonoceptor.Host
 
             var initXbox = await XboxDevice.InitializeAsync(CancellationToken);
 
-            _logger.Log(LogLevel.Info, $"XBox init => {initXbox}");
+            _logger.Log(LogLevel.Info, $"XBox found => {initXbox}");
 
             return await Task.FromResult(initXbox);
         }
@@ -72,7 +85,7 @@ namespace Autonoceptor.Host
 
             await Lcd.WriteAsync($"MQTT {status}");
 
-            _logger.Log(LogLevel.Info, $"MQTT Init => {status}");
+            _logger.Log(LogLevel.Info, $"MQTT => {status}");
 
             return status;
         }

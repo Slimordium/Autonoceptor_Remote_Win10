@@ -174,6 +174,29 @@ namespace Autonoceptor.Host
 
             //moveReq.MovementMagnitude = travelMagnitude;
 
+            /*TODO: Idea! Use distance to way-point to setup a "pause" command at the estimated time of arrival. 
+            Using that distance, also set estimated "decay" of steering magnitude. 
+            Need to figure out how many FPS for a given travel magnitude
+            For the list of way-points, pre-calculate turn direction and turn magnitude
+
+
+
+            Example - 
+            
+            1. There is 60in to way-point, I travel about 2ft per second, so I should stop in 2.5 seconds so I don't 
+            overshoot the way-point.
+
+            2. At that point, the next GPS coordinates arrive, and I will either be where I estimate I should be, or re-calculate stop
+            time and turn direction
+
+            Goto 1.
+
+            
+
+
+            */
+
+
             var diff = currentLocation.Heading - headingToWaypoint;
 
             _logger.Log(LogLevel.Trace, $"Current Heading: {currentLocation.Heading}, Heading to WP: {headingToWaypoint}");
