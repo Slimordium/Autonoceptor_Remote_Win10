@@ -145,13 +145,18 @@ namespace Autonoceptor.Host.ViewModels
             AddToLog($"At Lat: {_conductor.CurrentLocation.Lat}, Lon: {_conductor.CurrentLocation.Lon}");
         }
 
+        public void GetYpr()
+        {
+            AddToLog($"YPR: {_conductor.RazorImu.CurrentImuData.Yaw}, {_conductor.RazorImu.CurrentImuData.Pitch}, {_conductor.RazorImu.CurrentImuData.Roll}");
+        }
+
         public void ListWaypoints()
         {
             var wps = _conductor.Waypoints;
 
-            foreach (var gpsFixData in wps)
+            foreach (var waypoint in wps)
             {
-                AddToLog($"Lat: {gpsFixData.Lat} Lon: {gpsFixData.Lon} - {gpsFixData.Quality}");
+                AddToLog($"Lat: {waypoint.GpsFixData.Lat} Lon: {waypoint.GpsFixData.Lon} - {waypoint.GpsFixData.Quality}");
             }
         }
 

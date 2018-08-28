@@ -7,11 +7,14 @@ using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
 using Autonoceptor.Shared.Imu;
+using NLog;
 
 namespace Autonoceptor.Service.Hardware
 {
     public class RazorImu
     {
+        private ILogger _logger = LogManager.GetCurrentClassLogger();
+
         private SerialDevice _serialDevice;
 
         private DataReader _inputStream;
@@ -87,10 +90,12 @@ namespace Autonoceptor.Service.Hardware
                             };
 
                             _subject.OnNext(imuData);
+
+                            CurrentImuData = imuData;
                         }
-                        catch (Exception)
+                        catch (Exception e)
                         {
-                            //break
+                            _logger.Log(LogLevel.Error, e.Message);
                         }
                     }
                 }

@@ -13,11 +13,11 @@ namespace Autonoceptor.Host
         private readonly ILogger _logger = LogManager.GetLogger("Autonoceptor");
 
         public Odometer Odometer { get; private set; }
-        protected RazorImu RazorImu { get; private set; }
+        public RazorImu RazorImu { get; private set; }
         protected Tf02Lidar  Lidar { get; private set; }
         protected SparkFunSerial16X2Lcd Lcd { get; } = new SparkFunSerial16X2Lcd();
         protected MaestroPwmController PwmController { get; private set; }
-        protected Gps Gps { get; private set; }
+        public Gps Gps { get; private set; }
         protected XboxDevice XboxDevice { get; set; }
   
         protected MqttClient MqttClient { get; set; }

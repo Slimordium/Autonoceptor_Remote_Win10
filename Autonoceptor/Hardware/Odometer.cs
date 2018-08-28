@@ -2,12 +2,10 @@
 using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
-using Autonoceptor.Shared.Imu;
 using NLog;
 
 namespace Autonoceptor.Service.Hardware
@@ -67,7 +65,7 @@ namespace Autonoceptor.Service.Hardware
                             continue;
                         }
 
-                        if (!readString.Contains("P@10Hz=") && !readString.Contains("\r"))
+                        if (!readString.Contains("P=") && !readString.Contains("\r"))
                         {
                             continue;
                         }
@@ -96,14 +94,14 @@ namespace Autonoceptor.Service.Hardware
                                 lastOdometer.CmTraveled = cm;
                             }
 
-                            if (!int.TryParse(split[0].Replace("P@10Hz=", ""), out var pulse))
+                            if (!int.TryParse(split[0].Replace("P=", ""), out var pulse))
                             {
-                                odometerDataNew.PulsesIn100Ms = lastOdometer.PulsesIn100Ms;
+                                odometerDataNew.PulseCount = lastOdometer.PulseCount;
                             }
                             else
                             {
-                                odometerDataNew.PulsesIn100Ms = pulse;
-                                lastOdometer.PulsesIn100Ms = pulse;
+                                odometerDataNew.PulseCount = pulse;
+                                lastOdometer.PulseCount = pulse;
                             }
 
                             _subject.OnNext(odometerDataNew);
@@ -129,7 +127,7 @@ namespace Autonoceptor.Service.Hardware
 
     public class OdometerData
     {
-        public int PulsesIn100Ms { get; set; }
+        public int PulseCount { get; set; }
 
         public float CmTraveled { get; set; }
 

@@ -10,18 +10,16 @@ volatile float CmTraveled = 0;
 
 volatile int Ms = 0;
 
-volatile int Pulse10HzCount = 0;
-
 void setup() 
 { 
   pinMode(interruptPin, INPUT_PULLUP);
   
   // put your setup code here, to run once:
-  attachInterrupt(digitalPinToInterrupt(interruptPin), [](){ SendCount++; Pulse10HzCount++; }, FALLING);
+  attachInterrupt(digitalPinToInterrupt(interruptPin), [](){ SendCount++; PulseCount++; }, FALLING);
 
   Serial.begin(115200);
 
-  Pulse10HzCount = 0;
+  PulseCount = 0;
 
   SendCount = 0;
 
@@ -34,13 +32,13 @@ void loop()
 {
     if (Ms == 0)
     {
-      Ms = millis() + 100;
+      Ms = millis() + 200;
     }
 
-    if (millis() >= Ms) //10Hz, used for speed control
+    if (millis() >= Ms) 
     {
-      Serial.print("P@10Hz=");
-      Serial.print(Pulse10HzCount);
+      Serial.print("P=");
+      Serial.print(PulseCount);
       Serial.print(",CM=");
       Serial.print(CmTraveled);
       Serial.print(",IN=");
@@ -48,7 +46,7 @@ void loop()
       Serial.println();
 
       Ms = 0;
-      Pulse10HzCount = 0;
+      PulseCount = 0;
     }
 
 //2.54cm per in
@@ -60,7 +58,7 @@ void loop()
   {
     SendCount = 0;
     
-    CmTraveled = CmTraveled + 5.8333; //cm
+    CmTraveled = CmTraveled + 5.3333; //cm
   }
 }
 

@@ -86,12 +86,12 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.B))
             {
-                var wp = Gps.CurrentLocation;
+                var gpsFix = Gps.CurrentLocation;
 
-                Waypoints.Add(wp);
+                Waypoints.Add(new Waypoint {GpsFixData = gpsFix });
                 await Lcd.WriteAsync($"WP {Waypoints.Count} added");
 
-                _logger.Log(LogLevel.Info, $"WP @ Lat: {wp.Lat}, Lon: { wp.Lon}");
+                _logger.Log(LogLevel.Info, $"WP @ Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}");
 
                 await Waypoints.Save();
                 return;

@@ -140,6 +140,8 @@ namespace Autonoceptor.Service.Hardware
                     _logger.Log(LogLevel.Error, e.Message);
                 }
             }
+
+            return displayGroup;
         }
 
         public async Task UpdateDisplayGroup(DisplayGroup displayGroup, bool display = false)
