@@ -2,15 +2,16 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Autonoceptor.Shared.Gps;
-using Autonoceptor.Shared.Utilities;
 using Newtonsoft.Json;
+using NLog;
 
 namespace Autonoceptor.Host
 {
-    public class WaypointList : List<GpsFixData>
+    public class WaypointList : List<Waypoint>
     {
-        private readonly string _filename = $"waypointdata.json";
+        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
+
+        private readonly string _filename = $"waypoints.json";
 
         //.000001 should only record waypoint every 1.1132m or 3.65223097ft
         //The third decimal place is worth up to 110 m: it can identify a large agricultural field or institutional campus.
@@ -38,11 +39,11 @@ namespace Autonoceptor.Host
             _minWaypointDistance = minWaypointDistance;
         }
 
-        public new void Add(GpsFixData gpsFixData)
+        public new void Add(Waypoint waypoint)
         {
-            if (!this.Any(fixData => Math.Abs(fixData.Lat - gpsFixData.Lat) < _minWaypointDistance || Math.Abs(fixData.Lon - gpsFixData.Lon) < _minWaypointDistance))
+            if (!this.Any(fixData => Math.Abs(fixData.GpsFixData.Lat - waypoint.GpsFixData.Lat) < _minWaypointDistance || Math.Abs(fixData.GpsFixData.Lon - waypoint.GpsFixData.Lon) < _minWaypointDistance))
             {
-                base.Add(gpsFixData);
+                base.Add(waypoint);
             }
         }
 
@@ -53,9 +54,9 @@ namespace Autonoceptor.Host
                 await FileExtensions.SaveStringToFile(_filename, JsonConvert.SerializeObject(this));
                 return true;
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                Console.WriteLine("I had a problem saving the waypoints. ");
+                _logger.Log(LogLevel.Error, $"Could not save waypoints => {e.Message}");
                 return false;
             }
         }
@@ -67,11 +68,11 @@ namespace Autonoceptor.Host
                 var newlist = JsonConvert.DeserializeObject<WaypointList>(await _filename.ReadStringFromFile());
                 return newlist;
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                Console.WriteLine("Could not load the waypoint list. ");
+                _logger.Log(LogLevel.Error, $"Could not load waypoints => {e.Message}");
+
                 return new WaypointList();
-                // Also tasty
             }
         }
 

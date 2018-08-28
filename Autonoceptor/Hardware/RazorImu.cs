@@ -22,6 +22,14 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly CancellationToken _cancellationToken;
 
+        private ImuData _currentImuData = new ImuData();
+
+        public ImuData CurrentImuData
+        {
+            get => Volatile.Read(ref _currentImuData);
+            set => Volatile.Write(ref _currentImuData, value);
+        }
+
         public RazorImu(CancellationToken cancellationToken)
         {
             _cancellationToken = cancellationToken;

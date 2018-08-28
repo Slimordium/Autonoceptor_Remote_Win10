@@ -55,7 +55,6 @@ namespace Autonoceptor.Host
             await Lidar.InitializeAsync();
 
             await Lcd.WriteAsync("Initialized");
-            _logger.Log(LogLevel.Info, "Initialized");
         }
 
         protected async Task<bool> InitializeXboxController()
@@ -84,8 +83,6 @@ namespace Autonoceptor.Host
             var status = await MqttClient.InitializeAsync();
 
             await Lcd.WriteAsync($"MQTT {status}");
-
-            _logger.Log(LogLevel.Info, $"MQTT => {status}");
 
             return status;
         }

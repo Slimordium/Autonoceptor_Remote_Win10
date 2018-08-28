@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Autonoceptor.Shared;
 using Autonoceptor.Shared.Utilities;
+using Nito.AsyncEx;
 
 namespace Autonoceptor.Host
 {
@@ -19,6 +21,8 @@ namespace Autonoceptor.Host
         private const int _rightPwm = 1056;
         private const int _centerPwm = 1486;
         private const int _leftPwm = 1880;
+
+        private readonly AsyncLock _asyncLock = new AsyncLock();
 
         protected LidarNavOverride(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
             : base(cancellationTokenSource, brokerHostnameOrIp)
@@ -52,12 +56,57 @@ namespace Autonoceptor.Host
                 .ObserveOnDispatcher()
                 .Subscribe(async lidarData =>
                 {
-                    //var location = await PwmController.GetChannelValue(_lidarServoChannel);
-                    await UpdateLidarNavOverride(lidarData, 0);// location value goes here
+                    await UpdateLidarNavOverride(lidarData);
                 });
         }
 
-        private async Task UpdateLidarNavOverride(LidarData lidarData, int location) //Implement 2D map. Modify "write to hardware method" to with values to avoid ?
+        //TODO: Will this work?
+        public async Task<List<LidarData>> Sweep(Sweep sweep)
+        {
+            using (await _asyncLock.LockAsync())
+            {
+                var data = new List<LidarData>();
+
+                var disposable = Lidar.GetObservable()
+                    .ObserveOnDispatcher()
+                    .Sample(TimeSpan.FromMilliseconds(50))
+                    .Subscribe(async d =>
+                    {
+                        var location = await PwmController.GetChannelValue(_lidarServoChannel);
+
+                        d.Angle = location;
+
+                        data.Add(d);
+                    });
+
+                switch (sweep)
+                {
+                    case Host.Sweep.Center:
+                        //Already moves to center after sweep is complete
+                        break;
+                    case Host.Sweep.Left:
+                        await PwmController.SetChannelValue(_leftPwm * 4, _lidarServoChannel);
+                        break;
+                    case Host.Sweep.Right:
+                        await PwmController.SetChannelValue(_rightPwm * 4, _lidarServoChannel);
+                        break;
+                    case Host.Sweep.Full:
+                        await PwmController.SetChannelValue(_leftPwm * 4, _lidarServoChannel);
+                        await PwmController.SetChannelValue(_rightPwm * 4, _lidarServoChannel);
+                        break;
+                }
+
+                disposable.Dispose();
+                disposable = null;
+
+                await PwmController.SetChannelValue(_centerPwm * 4, _lidarServoChannel);
+
+                return await Task.FromResult(data);
+            }
+        }
+
+        //TODO: Sweep here?
+        private async Task UpdateLidarNavOverride(LidarData lidarData) //Implement 2D map. Modify "write to hardware method" to with values to avoid ?
         {
             if (lidarData.Distance < 40)
             {
@@ -65,12 +114,20 @@ namespace Autonoceptor.Host
             }
         }
 
-        //TODO: Override these PWM values with modified ones based on obsticle. May need to pass move request in here instead, so we know what direction is being attempted
+        //TODO: Pass move request into this method. Make turn amount uniform
         protected async Task WriteToHardware(ushort steeringPwm, ushort movePwm)
         {
             await PwmController.SetChannelValue(steeringPwm, SteeringChannel);
 
             await PwmController.SetChannelValue(movePwm, MovementChannel);
         }
+    }
+
+    public enum Sweep
+    {
+        Left,
+        Right,
+        Full,
+        Center
     }
 }

@@ -83,7 +83,6 @@ namespace Autonoceptor.Host
 
                 await Lcd.WriteAsync("E-Brake canceled");
 
-                _logger.Log(LogLevel.Trace, "E-Brake canceled");
                 return;
             }
 
@@ -146,9 +145,7 @@ namespace Autonoceptor.Host
         {
             await PwmController.SetChannelValue(StoppedPwm * 4, MovementChannel);
 
-            _logger.Log(LogLevel.Trace, "Stopped");
-
-            //await DisableServos();
+            await Lcd.WriteAsync("Stopped");
         }
 
         public async Task DisableServos()

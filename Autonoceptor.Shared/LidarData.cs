@@ -5,6 +5,7 @@
         public ushort Distance { get; set; }
         public ushort Strength { get; set; }
         public ushort Reliability { get; set; }
+        public double Angle { get; set; }
     }
 
 }
