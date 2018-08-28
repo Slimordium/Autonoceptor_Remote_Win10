@@ -151,7 +151,7 @@ namespace Autonoceptor.Host
 
             await Lcd.WriteAsync("GPS Nav stopped");
 
-            _logger.Log(LogLevel.Info, "GPS Nav stopped");
+            
 
             _steerMagnitudeDecayDisposable?.Dispose();
             _gpsNavDisposable?.Dispose();
@@ -186,7 +186,7 @@ namespace Autonoceptor.Host
 
             var currentWp = Waypoints[_currentWaypointIndex];
 
-            var moveReq = GetMoveRequest(currentWp, gpsFixData);
+            var moveReq = GetMoveRequest(currentWp.GpsFixData, gpsFixData);
 
             moveReq.MovementMagnitude = GpsNavMoveMagnitude;
 
@@ -248,6 +248,8 @@ namespace Autonoceptor.Host
 
 
             */
+
+            //TODO: Lets do everything in degrees
 
             //TODO: Need to do a while loop checking the Razor IMU yaw, until it matches the calculated heading of WP
             //TODO: On startup the Razor IMU yaw will NOT equal what the GPS thinks the heading is 

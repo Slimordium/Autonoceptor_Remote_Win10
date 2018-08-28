@@ -24,7 +24,13 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly Subject<GpsFixData> _subject = new Subject<GpsFixData>();
 
-        public GpsFixData CurrentLocation { get; set; } = new GpsFixData();
+        private GpsFixData _currentLocation = new GpsFixData();
+
+        public GpsFixData CurrentLocation
+        {
+            get => Volatile.Read(ref _currentLocation);
+            set => Volatile.Write(ref _currentLocation, value);
+        }
 
         private readonly CancellationToken _cancellationToken;
 

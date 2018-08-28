@@ -20,6 +20,14 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly CancellationToken _cancellationToken;
 
+        private LidarData _lidarData = new LidarData();
+
+        public LidarData CurrentLidarData
+        {
+            get => Volatile.Read(ref _lidarData);
+            set => Volatile.Write(ref _lidarData, value);
+        }
+
         public Tf02Lidar(CancellationToken cancellationToken)
         {
             _cancellationToken = cancellationToken;

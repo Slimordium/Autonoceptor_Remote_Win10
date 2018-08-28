@@ -1,20 +1,18 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Reactive.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
+using Nito.AsyncEx;
+using NLog;
 
 namespace Autonoceptor.Service.Hardware
 {
     public class DisplayGroup
     {
         public int GroupId { get; set; }
+        public string GroupName { get; set; }
         public Dictionary<int, string> DisplayItems = new Dictionary<int, string>();
     }
 
@@ -27,13 +25,13 @@ namespace Autonoceptor.Service.Hardware
         private readonly byte[] _startOfSecondLine = {0xfe, 0xc0};
         private DataWriter _outputStream;
 
+        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
+
         private SerialDevice _lcdSerialDevice;
 
-        private readonly ConcurrentDictionary<int, DisplayGroup> _displayGroups = new ConcurrentDictionary<int, DisplayGroup>();
+        private readonly Dictionary<int, DisplayGroup> _displayGroups = new Dictionary<int, DisplayGroup>();
 
-        private int _selectedGroupIndex;
-
-        private readonly SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1, 1);
+        private readonly AsyncLock _asyncMutex = new AsyncLock();
 
         public async Task InitializeAsync()
         {
@@ -45,62 +43,148 @@ namespace Autonoceptor.Service.Hardware
             _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
         }
 
-        public void AddDisplayGroup(DisplayGroup displayGroup)
+        private int _currentGroup;
+
+        public async Task NextGroup()
         {
-            _displayGroups.TryAdd(_displayGroups.Count + 1, displayGroup);
+            using (await _asyncMutex.LockAsync())
+            {
+                try
+                {
+                    _currentGroup++;
+
+                    if (_currentGroup > _displayGroups.Count)
+                        _currentGroup = 0;
+
+                    if (_currentGroup < 0)
+                        _currentGroup = _displayGroups.Count - 1;
+
+                    var displayGroup = _displayGroups[_currentGroup];
+
+                    if (displayGroup.DisplayItems.ContainsKey(1))
+                    {
+                        await WriteAsync(displayGroup.DisplayItems[1], 1);
+                    }
+
+                    if (displayGroup.DisplayItems.ContainsKey(2))
+                    {
+                        await WriteAsync(displayGroup.DisplayItems[2], 2);
+                    }
+                }
+                catch (Exception e)
+                {
+                    _logger.Log(LogLevel.Error, e.Message);
+                }
+            }
         }
 
-        //public void UpdateDisplayGroup(DisplayGroup displayGroup)
-        //{
-        //    _displayGroups.AddOrUpdate(displayGroup.GroupId, displayGroup)
-        //}
+        public async Task PreviousGroup()
+        {
+            using (await _asyncMutex.LockAsync())
+            {
+                try
+                {
+                    _currentGroup--;
 
-        //public async Task IncrementGroup()
-        //{
-        //    _selectedGroupIndex++;
+                    if (_currentGroup > _displayGroups.Count)
+                        _currentGroup = 0;
 
-        //    if (_selectedGroupIndex > _displayGroups.Count)
-        //    {
-        //        _selectedGroupIndex = 0;
-        //    }
+                    if (_currentGroup < 0)
+                        _currentGroup = _displayGroups.Count - 1;
 
-        //    var dg = _displayGroups.Where(d => d.GroupId == _selectedGroupIndex).ToList();
+                    var displayGroup = _displayGroups[_currentGroup];
 
-        //    var lineOne = dg.FirstOrDefault(d => d.LineNumber == 1);
-        //    var lineTwo = dg.FirstOrDefault(d => d.LineNumber == 2);
+                    if (displayGroup.DisplayItems.ContainsKey(1))
+                    {
+                        await WriteAsync(displayGroup.DisplayItems[1], 1);
+                    }
 
-        //    if (lineOne != null)
-        //        await WriteAsync(lineOne.Text, 1);
+                    if (displayGroup.DisplayItems.ContainsKey(2))
+                    {
+                        await WriteAsync(displayGroup.DisplayItems[2], 2);
+                    }
 
-        //    if (lineTwo != null)
-        //        await WriteAsync(lineTwo.Text, 2);
-        //}
+                }
+                catch (Exception e)
+                {
+                    _logger.Log(LogLevel.Error, e.Message);
+                }
+            }
+        }
 
-        //public async Task DecrementGroup()
-        //{
-        //    _selectedGroupIndex--;
+        public async Task<DisplayGroup> AddDisplayGroup(DisplayGroup displayGroup, bool display = false)
+        {
+            using (await _asyncMutex.LockAsync())
+            {
+                try
+                {
+                    displayGroup.GroupId = _displayGroups.Count + 1;
 
-        //    if (_selectedGroupIndex < 0)
-        //    {
-        //        _selectedGroupIndex = _displayGroups.Count;
-        //    }
+                    _displayGroups.Add(displayGroup.GroupId, displayGroup);
 
-        //    var dg = _displayGroups.Where(d => d.GroupId == _selectedGroupIndex).ToList();
+                    if (!display)
+                        return displayGroup;
 
-        //    var lineOne = dg.FirstOrDefault(d => d.LineNumber == 1);
-        //    var lineTwo = dg.FirstOrDefault(d => d.LineNumber == 2);
+                    if (displayGroup.DisplayItems.ContainsKey(1))
+                    {
+                        await WriteAsync(displayGroup.DisplayItems[1], 1);
+                    }
 
-        //    if (lineOne != null)
-        //        await WriteAsync(lineOne.Text, 1);
+                    if (displayGroup.DisplayItems.ContainsKey(2))
+                    {
+                        await WriteAsync(displayGroup.DisplayItems[2], 2);
+                    }
+                }
+                catch (Exception e)
+                {
+                    _logger.Log(LogLevel.Error, e.Message);
+                }
+            }
+        }
 
-        //    if (lineTwo != null)
-        //        await WriteAsync(lineTwo.Text, 2);
-        //}
+        public async Task UpdateDisplayGroup(DisplayGroup displayGroup, bool display = false)
+        {
+            using (await _asyncMutex.LockAsync())
+            {
+                try
+                {
+                    if (!_displayGroups.ContainsKey(displayGroup.GroupId))
+                    {
+                        displayGroup.GroupId = _displayGroups.Count + 1;
+
+                        _displayGroups.Add(displayGroup.GroupId, displayGroup);
+                    }
+                    else
+                    {
+                        _displayGroups[displayGroup.GroupId] = displayGroup;
+                    }
+
+                    if (!display)
+                        return;
+
+                    if (displayGroup.DisplayItems.ContainsKey(1))
+                    {
+                        await WriteAsync(displayGroup.DisplayItems[1], 1);
+                    }
+
+                    if (displayGroup.DisplayItems.ContainsKey(2))
+                    {
+                        await WriteAsync(displayGroup.DisplayItems[2], 2);
+                    }
+                }
+                catch (Exception e)
+                {
+                    _logger.Log(LogLevel.Error, e.Message);
+                }
+            }
+        }
 
         private async Task WriteAsync(string text, byte[] line, bool clear)
         {
             if (string.IsNullOrEmpty(text) || _outputStream == null)
                 return;
+
+            _logger.Log(LogLevel.Info, text);
 
             if (text.Length > 16)
                 text = text.Substring(0, 16);
@@ -123,9 +207,9 @@ namespace Autonoceptor.Service.Hardware
                 }
             }
 
-            if (_outputStream == null)// || _lcdSerialDevice == null)
+            if (_outputStream == null)
             {
-                Debug.WriteLine(text);
+                _logger.Log(LogLevel.Error, "OutputStream is null");
                 return;
             }
 
@@ -137,7 +221,7 @@ namespace Autonoceptor.Service.Hardware
             }
             catch (Exception e)
             {
-                Debug.WriteLine(e.Message);
+                _logger.Log(LogLevel.Error, e.Message);
             }
         }
 
@@ -167,7 +251,10 @@ namespace Autonoceptor.Service.Hardware
             if (string.IsNullOrEmpty(text))
                 return;
 
-            await WriteAsync(text, _startOfFirstLine, true);
+            using (await _asyncMutex.LockAsync())
+            {
+                await WriteAsync(text, _startOfFirstLine, true);
+            }
         }
 
         /// <summary>
@@ -178,13 +265,14 @@ namespace Autonoceptor.Service.Hardware
         /// <returns></returns>
         public async Task WriteAsync(string text, int line)
         {
-            if (line == 1)
-                await WriteToFirstLineAsync(text);
+            using (await _asyncMutex.LockAsync())
+            {
+                if (line == 1)
+                    await WriteToFirstLineAsync(text);
 
-            if (line == 2)
-                await WriteToSecondLineAsync(text);
+                if (line == 2)
+                    await WriteToSecondLineAsync(text);
+            }
         }
-
-
     }
 }
