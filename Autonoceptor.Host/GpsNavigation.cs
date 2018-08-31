@@ -259,17 +259,18 @@ namespace Autonoceptor.Host
             _logger.Log(LogLevel.Trace, $"Current Heading: {currentLocation.Heading}, Heading to WP: {headingToWaypoint}");
             _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {moveReq.Distance}in");
 
+            //Is it a right turn or left turn? Need logic
+            //because we are based on heading, so we dont want to turn right, if we are at a heading of 10, and the target is at heading 350
+            //
             if (diff < 0)
             {
                 if (Math.Abs(diff) > 180)
                 {
                     moveReq.SteeringDirection = SteeringDirection.Left;
-                    moveReq.SteeringMagnitude = (int) Math.Abs(diff + 360).Map(0, 360, 0, 360); //These are wrong
                 }
                 else
                 {
                     moveReq.SteeringDirection = SteeringDirection.Right;
-                    moveReq.SteeringMagnitude = (int) Math.Abs(diff).Map(0, 360, 0, 360);//These are wrong
                 }
             }
             else
@@ -277,27 +278,65 @@ namespace Autonoceptor.Host
                 if (Math.Abs(diff) > 180)
                 {
                     moveReq.SteeringDirection = SteeringDirection.Right;
-                    moveReq.SteeringMagnitude = (int) Math.Abs(diff - 360).Map(0, 360, 0, 360);//These are wrong
                 }
                 else
                 {
                     moveReq.SteeringDirection = SteeringDirection.Left;
-                    moveReq.SteeringMagnitude = (int) Math.Abs(diff).Map(0, 360, 0, 360);//These are wrong
                 }
             }
 
+            moveReq.SteeringMagnitude = Math.Abs(diff);
+
+            //TODO: This is obviously not complete
             //TODO: Turn slowly until IMU Yaw is almost at waypoint... Also check ratio of yaw vs gps heading... hopefully the same
             while (true)
             {
-                if (moveReq.SteeringDirection == SteeringDirection.Left)
-                {
+                await Turn(moveReq.SteeringDirection, moveReq.SteeringMagnitude);
 
-                }
+                await Move(MovementDirection.Forward, 12);
             }
 
             return moveReq;
         }
 
+
+        private async Task Turn(SteeringDirection direction, double magnitude)
+        {
+            var steerValue = CenterPwm * 4;
+
+            if (magnitude > 45)
+                magnitude = 45;
+
+            switch (direction)
+            {
+                case SteeringDirection.Left:
+                    steerValue = Convert.ToUInt16(magnitude.Map(0, 45, CenterPwm, LeftPwmMax)) * 4;
+                    break;
+                case SteeringDirection.Right:
+                    steerValue = Convert.ToUInt16(magnitude.Map(0, 45, CenterPwm, RightPwmMax)) * 4;
+                    break;
+            }
+
+            await PwmController.SetChannelValue(steerValue, SteeringChannel);
+        }
+
+        //TODO: Set speed as percentage, control PWM value off of odometer pulse count, this will set ground speed instead of guessing
+        private async Task Move(MovementDirection direction, double magnitude)
+        {
+            var moveValue = StoppedPwm * 4;
+
+            switch (direction)
+            {
+                case MovementDirection.Forward:
+                    moveValue = Convert.ToUInt16(magnitude.Map(0, 45, StoppedPwm, ForwardPwmMax)) * 4;
+                    break;
+                case MovementDirection.Reverse:
+                    moveValue = Convert.ToUInt16(magnitude.Map(0, 45, StoppedPwm, ReversePwmMax)) * 4;
+                    break;
+            }
+
+            await PwmController.SetChannelValue(moveValue, MovementChannel);
+        }
 
         private async Task WriteToHardware(MoveRequest request)
         {
