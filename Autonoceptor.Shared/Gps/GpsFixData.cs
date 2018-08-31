@@ -30,5 +30,10 @@ namespace Autonoceptor.Shared.Gps
         public double OdometerScalingFactor { get; set; }
         public double RotationRate { get; set; }
         public double Distance { get; set; }
+
+        public override string ToString()
+        {
+            return $"Lat: {Lat}, Lon: {Lon}, Heading: {Heading}";
+        }
     }
 }
