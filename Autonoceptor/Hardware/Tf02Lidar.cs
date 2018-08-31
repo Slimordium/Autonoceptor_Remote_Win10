@@ -20,13 +20,13 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly CancellationToken _cancellationToken;
 
-        private LidarData _lidarData = new LidarData();
+        //private LidarData _lidarData = new LidarData();
 
-        public LidarData CurrentLidarData
-        {
-            get => Volatile.Read(ref _lidarData);
-            set => Volatile.Write(ref _lidarData, value);
-        }
+        //public LidarData CurrentLidarData
+        //{
+        //    get => Volatile.Read(ref _lidarData);
+        //    set => Volatile.Write(ref _lidarData, value);
+        //}
 
         public Tf02Lidar(CancellationToken cancellationToken)
         {
@@ -70,6 +70,7 @@ namespace Autonoceptor.Service.Hardware
 
                     if (lidarData.Reliability <= 5 || lidarData.Reliability > 8) //If the value is a 7 or 8, it is reliable. Ignore the rest
                         continue;
+
 
                     _subject.OnNext(lidarData);
                 }

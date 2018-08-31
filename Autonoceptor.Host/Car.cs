@@ -138,14 +138,15 @@ namespace Autonoceptor.Host
                             //Yum
                         }
                     }));
-
         }
 
         public async Task Stop()
         {
             await PwmController.SetChannelValue(StoppedPwm * 4, MovementChannel);
+            await PwmController.SetChannelValue(0, SteeringChannel);
 
             await Lcd.WriteAsync("Stopped");
+            _logger.Log(LogLevel.Info, "Stopped");
         }
 
         public async Task DisableServos()
@@ -154,6 +155,8 @@ namespace Autonoceptor.Host
             await PwmController.SetChannelValue(0, SteeringChannel);
 
             await Task.Delay(100);
+
+            _logger.Log(LogLevel.Info, "PWM Off");
         }
     }
 }

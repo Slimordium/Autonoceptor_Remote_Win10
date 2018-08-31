@@ -7,6 +7,7 @@ using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
 using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Utilities;
+using Nito.AsyncEx;
 using NLog;
 
 namespace Autonoceptor.Service.Hardware
@@ -26,10 +27,14 @@ namespace Autonoceptor.Service.Hardware
 
         private GpsFixData _currentLocation = new GpsFixData();
 
-        public GpsFixData CurrentLocation
+        private readonly AsyncLock _asyncLock = new AsyncLock();
+
+        public async Task<GpsFixData> Get()
         {
-            get => Volatile.Read(ref _currentLocation);
-            set => Volatile.Write(ref _currentLocation, value);
+            using (await _asyncLock.LockAsync())
+            {
+                return _currentLocation;
+            }
         }
 
         private readonly CancellationToken _cancellationToken;
@@ -84,10 +89,13 @@ namespace Autonoceptor.Service.Hardware
                         continue; //Most likely bad data, toss and continue
                     }
 
-                    CurrentLocation = gpsFixData;
-
                     //The data is accumulative, so only need to publish once
                     _subject.OnNext(gpsFixData);
+
+                    using (await _asyncLock.LockAsync())
+                    {
+                        _currentLocation = gpsFixData;
+                    }
                 }
             });
 

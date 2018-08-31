@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
+using Nito.AsyncEx;
 using NLog;
 
 namespace Autonoceptor.Service.Hardware
@@ -24,11 +25,16 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly CancellationToken _cancellationToken;
 
-        private OdometerData _odometerData;
-        public OdometerData OdometerData
+        private readonly AsyncLock _asyncLock = new AsyncLock();
+
+        private OdometerData _odometerData = new OdometerData();
+
+        public async Task<OdometerData> GetOdometerData()
         {
-            get => Volatile.Read(ref _odometerData);
-            set => Volatile.Write(ref _odometerData, value);
+            using (await _asyncLock.LockAsync())
+            {
+                return _odometerData;
+            }
         }
 
         public Odometer(CancellationToken cancellationToken)
@@ -106,7 +112,11 @@ namespace Autonoceptor.Service.Hardware
 
                             _subject.OnNext(odometerDataNew);
 
-                            OdometerData = odometerDataNew;
+                            using (await _asyncLock.LockAsync())
+                            {
+                                _odometerData = odometerDataNew;
+                            }
+                                
                         }
                         catch (Exception e)
                         {

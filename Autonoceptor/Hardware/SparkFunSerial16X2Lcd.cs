@@ -186,8 +186,6 @@ namespace Autonoceptor.Service.Hardware
             if (string.IsNullOrEmpty(text) || _outputStream == null)
                 return;
 
-            _logger.Log(LogLevel.Info, text);
-
             if (text.Length > 16)
                 text = text.Substring(0, 16);
 

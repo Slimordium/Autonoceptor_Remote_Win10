@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Autonoceptor.Service.Hardware;
 using Autonoceptor.Shared.Gps;
+using Autonoceptor.Shared.Imu;
 using Autonoceptor.Shared.Utilities;
 using NLog;
 
@@ -13,7 +14,7 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-        private int _currentWaypointIndex = 0;
+        public int CurrentWaypointIndex { get; set; }
 
         private bool _followingWaypoints;
         protected bool FollowingWaypoints
@@ -21,7 +22,6 @@ namespace Autonoceptor.Host
             get => Volatile.Read(ref _followingWaypoints);
             set => Volatile.Write(ref _followingWaypoints, value);
         }
-        public GpsFixData CurrentLocation => Gps.CurrentLocation;
 
         public WaypointList Waypoints { get; set; } = new WaypointList();
 
@@ -71,20 +71,47 @@ namespace Autonoceptor.Host
                 {
                     await WaypointFollowEnable(channelData.DigitalValue);
                 });
+
+            _speedControllerDisposable = Observable
+                .Interval(TimeSpan.FromMilliseconds(100))
+                .ObserveOnDispatcher()
+                .Subscribe(
+                    async _ =>
+                    {
+                        if (_requestedPpInterval < 2 || Stopped)
+                        {
+                            await EmergencyBrake();
+                            return;
+                        }
+
+                        await EmergencyBrake(true);
+
+                        var odometer = await Odometer.GetOdometerData();
+
+                        if (odometer.PulseCount < _requestedPpInterval)
+                        {
+                            _lastMoveMagnitude = _lastMoveMagnitude + 2;
+                        }
+                        
+                        if (odometer.PulseCount > _requestedPpInterval)
+                        {
+                            _lastMoveMagnitude = _lastMoveMagnitude - 2;
+                        }
+
+                        if (_lastMoveMagnitude > 20)
+                            _lastMoveMagnitude = 20;
+
+                        if (_lastMoveMagnitude < 0)
+                            _lastMoveMagnitude = 0;
+
+                        await Move(MovementDirection.Forward, _lastMoveMagnitude);
+                    });
         }
 
-        private async Task DecaySteeringMagnitude()
-        {
-            var moveRequest = CurrentGpsMoveRequest;
+        private int _lastMoveMagnitude;
 
-            if (moveRequest == null || Math.Abs(moveRequest.SteeringMagnitude) < 30)
-                return;
+        private int _requestedPpInterval;
 
-            moveRequest.SteeringDirection = moveRequest.SteeringDirection;
-            moveRequest.SteeringMagnitude = moveRequest.SteeringMagnitude * .6;
-
-            await WriteToHardware(moveRequest);
-        }
 
         public async Task WaypointFollowEnable(bool enabled)
         {
@@ -102,14 +129,6 @@ namespace Autonoceptor.Host
                 _gpsNavDisposable?.Dispose();
                 _odometerDisposable?.Dispose();
 
-                _steerMagnitudeDecayDisposable = Observable
-                    .Interval(TimeSpan.FromMilliseconds(300))
-                    .ObserveOnDispatcher()
-                    .Subscribe(async _ =>
-                    {
-                        await DecaySteeringMagnitude();
-                    });
-
                 _gpsNavDisposable = Gps.GetObservable()
                     .ObserveOnDispatcher()
                     .Subscribe(async fix =>
@@ -117,9 +136,8 @@ namespace Autonoceptor.Host
                         await UpdateMoveRequest(fix);
                     });
 
-                //TODO: May have to increase the rate of the odometer to 5hz
-                _odometerDisposable = Odometer
-                    .GetObservable()
+
+                _odometerDisposable = Odometer.GetObservable()
                     .ObserveOnDispatcher()
                     .Subscribe(async odometerData =>
                     {
@@ -128,16 +146,21 @@ namespace Autonoceptor.Host
 
                         var traveledInches = odometerData.InTraveled - _startOdometerData.InTraveled;
 
+                        var headingDifference = (await RazorImu.Get()).Yaw - _targetHeading;
+
+                        await Turn(GetSteerDirection(headingDifference), GetSteeringMagnitude(headingDifference));
+
+
                         //We made it, yay.
                         if (traveledInches >= _distanceToNextWaypoint - 10)
                         {
-                            _currentWaypointIndex++;
+                            CurrentWaypointIndex++;
 
                             _distanceToNextWaypoint = 0;
 
                             _startOdometerData = null;
 
-                            await Stop(); //Hopefully the GPS Nav will catch up in a second or two.
+                            _requestedPpInterval = 0;
 
                             await CheckWaypointFollowFinished();
                         }
@@ -150,8 +173,6 @@ namespace Autonoceptor.Host
             await EmergencyBrake(true);
 
             await Lcd.WriteAsync("GPS Nav stopped");
-
-            
 
             _steerMagnitudeDecayDisposable?.Dispose();
             _gpsNavDisposable?.Dispose();
@@ -168,7 +189,7 @@ namespace Autonoceptor.Host
 
         private async Task<bool> CheckWaypointFollowFinished()
         {
-            if (_currentWaypointIndex <= Waypoints.Count && FollowingWaypoints)
+            if (CurrentWaypointIndex <= Waypoints.Count && FollowingWaypoints)
                 return false;
 
             _logger.Log(LogLevel.Info, $"Nav finished {Waypoints.Count} WPs");
@@ -184,27 +205,85 @@ namespace Autonoceptor.Host
                 return;
             }
 
-            var currentWp = Waypoints[_currentWaypointIndex];
+            var currentWp = Waypoints[CurrentWaypointIndex];
 
-            var moveReq = GetMoveRequest(currentWp.GpsFixData, gpsFixData);
+            var moveReq = await GetMoveRequest(currentWp.GpsFixData, gpsFixData);
 
             moveReq.MovementMagnitude = GpsNavMoveMagnitude;
 
             await WriteToHardware(moveReq);
 
             await Lcd.WriteAsync($"{moveReq.SteeringDirection} {moveReq.SteeringMagnitude}", 1);
-            await Lcd.WriteAsync($"Dist {moveReq.Distance} {_currentWaypointIndex}", 2);
+            await Lcd.WriteAsync($"Dist {moveReq.Distance} {CurrentWaypointIndex}", 2);
 
             //This is wrong....
             //if (moveReq.Distance <= 36) //This should probably be slightly larger than the turning radius?
             //{
-            //    _currentWaypointIndex++;
+            //    CurrentWaypointIndex++;
             //}
         }
 
-        private MoveRequest GetMoveRequest(GpsFixData waypoint, GpsFixData currentLocation)
+        public async Task SyncImuToGpsHeading()
         {
-            var moveReq = new MoveRequest();
+            var gpsHeading = (await Gps.Get()).Heading;
+            var imuHeading = (await RazorImu.Get()).UncorrectedYaw;
+
+            var diff = imuHeading - gpsHeading;
+
+            ImuData.YawCorrection = Math.Abs(diff);
+
+            imuHeading = (await RazorImu.Get()).Yaw;
+
+            _logger.Log(LogLevel.Info, $"IMU Yaw correction: {diff}, Corrected Yaw: {imuHeading}");
+
+            
+        }
+
+        private IDisposable _speedControllerDisposable;
+
+        private SteeringDirection GetSteerDirection(double diff)
+        {
+            var dir = SteeringDirection.Center;
+
+            if (diff < 0)
+            {
+                if (Math.Abs(diff) > 180)
+                {
+                    dir = SteeringDirection.Left;
+                }
+                else
+                {
+                    dir = SteeringDirection.Right;
+                }
+            }
+            else
+            {
+                if (Math.Abs(diff) > 180)
+                {
+                    dir = SteeringDirection.Right;
+                }
+                else
+                {
+                    dir = SteeringDirection.Left;
+                }
+            }
+
+            return dir;
+        }
+
+        private double GetSteeringMagnitude(double diff)
+        {
+            var absDiff = Math.Abs(diff);
+
+            if (absDiff > 45) //Can turn about 45 degrees 
+                absDiff = 45;
+
+            return absDiff;
+        }
+
+        public async Task<MoveRequest> GetMoveRequest(GpsFixData waypoint, GpsFixData currentLocation)
+        {
+            var moveReq = new MoveRequest(MoveRequestType.Gps);
 
             var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(currentLocation.Lat, currentLocation.Lon, waypoint.Lat, waypoint.Lon);
             moveReq.Distance = distanceAndHeading[0];
@@ -213,26 +292,14 @@ namespace Autonoceptor.Host
 
             if (_startOdometerData == null)
             {
-                _startOdometerData = Odometer.OdometerData;
+                _startOdometerData = await Odometer.GetOdometerData();
                 _distanceToNextWaypoint = moveReq.Distance;
             }
-
-            //if (Math.Abs(distanceForSpeedMap) < .01)
-            //distanceForSpeedMap = distanceToWaypoint;
-
-            // var travelMagnitude = (int)distanceToWaypoint.Map(0, distanceToWaypoint, 1500, 1750);
-
-            //Adjust sensitivity of turn based on distance. These numbers will need to be adjusted.
-            //var turnMagnitudeModifier = distanceToWaypoint.Map(0, distanceToWaypoint, 1000, -1000); 
-
-            //moveReq.MovementMagnitude = travelMagnitude;
 
             /*TODO: Idea! Use distance to way-point to setup a "pause" command at the estimated time of arrival. 
             Using that distance, also set estimated "decay" of steering magnitude. 
             Need to figure out how many FPS for a given travel magnitude
             For the list of way-points, pre-calculate turn direction and turn magnitude
-
-
 
             Example - 
             
@@ -243,52 +310,68 @@ namespace Autonoceptor.Host
             time and turn direction
 
             Goto 1.
-
-            
-
-
             */
 
-            //TODO: Lets do everything in degrees
-
-            //TODO: Need to do a while loop checking the Razor IMU yaw, until it matches the calculated heading of WP
-            //TODO: On startup the Razor IMU yaw will NOT equal what the GPS thinks the heading is 
-            //TODO: Perhaps set a property on the IMU with a correction value? So, the Razor differs by -12 degrees or something..
-
+            if (Math.Abs(moveReq.Distance) < 1)
+                return moveReq;
 
             var diff = currentLocation.Heading - headingToWaypoint;
 
             _logger.Log(LogLevel.Trace, $"Current Heading: {currentLocation.Heading}, Heading to WP: {headingToWaypoint}");
             _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {moveReq.Distance}in");
 
-            if (diff < 0)
-            {
-                if (Math.Abs(diff) > 180)
-                {
-                    moveReq.SteeringDirection = SteeringDirection.Left;
-                    moveReq.SteeringMagnitude = (int) Math.Abs(diff + 360).Map(0, 360, 0, 360); //These are wrong
-                }
-                else
-                {
-                    moveReq.SteeringDirection = SteeringDirection.Right;
-                    moveReq.SteeringMagnitude = (int) Math.Abs(diff).Map(0, 360, 0, 360);//These are wrong
-                }
-            }
-            else
-            {
-                if (Math.Abs(diff) > 180)
-                {
-                    moveReq.SteeringDirection = SteeringDirection.Right;
-                    moveReq.SteeringMagnitude = (int) Math.Abs(diff - 360).Map(0, 360, 0, 360);//These are wrong
-                }
-                else
-                {
-                    moveReq.SteeringDirection = SteeringDirection.Left;
-                    moveReq.SteeringMagnitude = (int) Math.Abs(diff).Map(0, 360, 0, 360);//These are wrong
-                }
-            }
+            _targetHeading = headingToWaypoint;
+
+            moveReq.SteeringDirection = GetSteerDirection(diff);
+
+            moveReq.SteeringMagnitude = GetSteeringMagnitude(diff);
+
+            _requestedPpInterval = 100;
+
+            await Turn(moveReq.SteeringDirection, moveReq.SteeringMagnitude);
 
             return moveReq;
+        }
+
+        private double _targetHeading;
+
+
+        private async Task Turn(SteeringDirection direction, double magnitude)
+        {
+            var steerValue = CenterPwm * 4;
+
+            if (magnitude > 100)
+                magnitude = 100;
+
+            switch (direction)
+            {
+                case SteeringDirection.Left:
+                    steerValue = Convert.ToUInt16(magnitude.Map(0, 45, CenterPwm, LeftPwmMax)) * 4;
+                    break;
+                case SteeringDirection.Right:
+                    steerValue = Convert.ToUInt16(magnitude.Map(0, 45, CenterPwm, RightPwmMax)) * 4;
+                    break;
+            }
+
+            await PwmController.SetChannelValue(steerValue, SteeringChannel);
+        }
+
+        //TODO: Set speed as percentage, control PWM value off of odometer pulse count, this will set ground speed instead of guessing
+        private async Task Move(MovementDirection direction, double magnitude)
+        {
+            var moveValue = StoppedPwm * 4;
+
+            switch (direction)
+            {
+                case MovementDirection.Forward:
+                    moveValue = Convert.ToUInt16(magnitude.Map(0, 45, StoppedPwm, ForwardPwmMax)) * 4;
+                    break;
+                case MovementDirection.Reverse:
+                    moveValue = Convert.ToUInt16(magnitude.Map(0, 45, StoppedPwm, ReversePwmMax)) * 4;
+                    break;
+            }
+
+            await PwmController.SetChannelValue(moveValue, MovementChannel);
         }
 
         private async Task WriteToHardware(MoveRequest request)

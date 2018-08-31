@@ -2,8 +2,11 @@
 {
     public class MoveRequest
     {
-        public MoveRequest()
+        private MoveRequestType _moveRequestType;
+
+        public MoveRequest(MoveRequestType requestType)
         {
+            _moveRequestType = requestType;
         }
 
         public MoveRequest(MoveRequest moveRequest)
@@ -30,6 +33,33 @@
         public MovementDirection MovementDirection { get; set; } = MovementDirection.Forward;
 
         public double Distance { get; set; }
+
+        private void ScaleGpsSteering(double steeringMagnitude)
+        {
+
+        }
+
+        private void ScaleGpsMovement(double movementMagnitude)
+        {
+
+        }
+
+        private void ScaleXboxSteering(double steeringMagnitude)
+        {
+
+        }
+
+        private void ScaleXboxMovement(double movementMagnitude)
+        {
+
+        }
+    }
+
+    public enum MoveRequestType
+    {
+        Gps,
+        Lidar,
+        Xbox,
     }
 
     public enum SteeringDirection

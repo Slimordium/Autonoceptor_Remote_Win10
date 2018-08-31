@@ -1,11 +1,14 @@
 ﻿using System;
+using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.ExtendedExecution;
 using Windows.UI.Xaml;
+using Autonoceptor.Shared.Utilities;
 using Caliburn.Micro;
+using Nito.AsyncEx;
 using NLog;
 using NLog.Targets.Rx;
 
@@ -20,6 +23,10 @@ namespace Autonoceptor.Host.ViewModels
         private ExtendedExecutionSession _session;
 
         public BindableCollection<string> Log { get; set; } = new BindableCollection<string>();
+
+        public BindableCollection<Waypoint> Waypoints { get; set; } = new BindableCollection<Waypoint>();
+
+        public int SelectedWaypoint { get; set; }
 
         private IDisposable _sessionDisposable;
 
@@ -42,15 +49,22 @@ namespace Autonoceptor.Host.ViewModels
                     Log.Add("Initialized");
                 });
 
-            RxTarget.LogObservable.ObserveOnDispatcher().Subscribe(AddToLog);
+            RxTarget.LogObservable.ObserveOnDispatcher().Subscribe(async e => { await AddToLog(e);});
         }
 
-        private void AddToLog(string entry)
-        {
-            Log.Insert(0, entry);
+        private readonly AsyncLock _asyncLock = new AsyncLock();
 
-            if (Log.Count > 600)
-                Log.RemoveAt(598);
+
+        private async Task AddToLog(string entry)
+        {
+            using (await _asyncLock.LockAsync())
+            {
+                Log.Insert(0, entry);
+
+                if (Log.Count > 600)
+                    Log.RemoveAt(598);
+            }
+
         }
 
         private bool _started;
@@ -66,19 +80,16 @@ namespace Autonoceptor.Host.ViewModels
 
             _started = true;
 
-            AddToLog("Starting conductor");
+            await AddToLog("Starting conductor");
 
             await _conductor.InitializeAsync();
         }
 
-        //TODO: Odometer data appears to be wrong? 
-        public void GetOdometerData()
+        public async Task GetOdometerData()
         {
-            //This is just going to grab the current Odometer data for now
+            var odoData = await _conductor.Odometer.GetOdometerData();
 
-
-            AddToLog($"Odometer: {_conductor.Odometer.OdometerData.InTraveled}in");
-            AddToLog($"Odometer: {_conductor.Odometer.OdometerData.CmTraveled}cm");
+            await AddToLog($"P:{odoData.PulseCount} => {odoData.InTraveled}in, {odoData.CmTraveled}cm");
         }
 
         private void CurrentOnResuming(object sender, object o)
@@ -126,38 +137,71 @@ namespace Autonoceptor.Host.ViewModels
 
         public int WpBoundryIn { get; set; } = 32;
 
-        public void SetGpsNavSpeed()
+        public async Task SetGpsNavSpeed()
         {
             _conductor.GpsNavMoveMagnitude = GpsNavSpeed;
 
-            AddToLog($"Set GPS nav speed %{GpsNavSpeed}");
+            await AddToLog($"Set GPS nav speed %{GpsNavSpeed}");
         }
-            
-        public void SetWpBoundry()
+
+        public async Task SetWpBoundry()
         {
             _conductor.WpTriggerDistance = WpBoundryIn;
 
-            AddToLog($"WP Trigger distance {WpBoundryIn}in");
+            await AddToLog($"WP Trigger distance {WpBoundryIn}in");
         }
 
-        public void GetCurrentPosition()
+        public async Task CalibrateImu()
         {
-            AddToLog($"At Lat: {_conductor.CurrentLocation.Lat}, Lon: {_conductor.CurrentLocation.Lon}");
+            await _conductor.SyncImuToGpsHeading();
         }
 
-        public void GetYpr()
+        public async Task GetCurrentPosition()
         {
-            AddToLog($"YPR: {_conductor.RazorImu.CurrentImuData.Yaw}, {_conductor.RazorImu.CurrentImuData.Pitch}, {_conductor.RazorImu.CurrentImuData.Roll}");
+            var currentLocation = await _conductor.Gps.Get();
+
+            await AddToLog($"At Lat: {currentLocation.Lat}, Lon: {currentLocation.Lon}, Heading: {currentLocation.Heading}");
         }
 
-        public void ListWaypoints()
+        public async Task GetYpr()
+        {
+            var currentImu = await _conductor.RazorImu.Get();
+
+            await AddToLog($"Uncorrected Yaw: {currentImu.UncorrectedYaw}, Corrected Yaw: {currentImu.Yaw} Pitch: {currentImu.Pitch} Roll: {currentImu.Roll}");
+        }
+
+        public async Task GetHeadingDistanceToSelected()
+        {
+            var currentLocation = await _conductor.Gps.Get();
+
+            var wp = _conductor.Waypoints[SelectedWaypoint];
+
+            var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(currentLocation.Lat, currentLocation.Lon, wp.GpsFixData.Lat, wp.GpsFixData.Lon);
+
+            await AddToLog($"Distance: {distanceAndHeading[0] / 12} ft, Heading: {distanceAndHeading[1]} degrees");
+
+            var moveReq = await _conductor.GetMoveRequest(wp.GpsFixData, currentLocation);
+
+            await AddToLog($"{moveReq.SteeringDirection} @ {moveReq.SteeringMagnitude}");
+        }
+
+        public async Task ListWaypoints()
         {
             var wps = _conductor.Waypoints;
 
+            if (!wps.Any())
+                await AddToLog("No waypoints in list");
+
             foreach (var waypoint in wps)
             {
-                AddToLog($"Lat: {waypoint.GpsFixData.Lat} Lon: {waypoint.GpsFixData.Lon} - {waypoint.GpsFixData.Quality}");
+                await AddToLog($"Lat: {waypoint.GpsFixData.Lat} Lon: {waypoint.GpsFixData.Lon} - {waypoint.GpsFixData.Quality}");
             }
+
+            Waypoints = new BindableCollection<Waypoint>();
+
+            Waypoints.AddRange(_conductor.Waypoints);
+
+            NotifyOfPropertyChange("Waypoints");
         }
 
         private async void CurrentOnSuspending(object sender, SuspendingEventArgs suspendingEventArgs)
