@@ -25,14 +25,9 @@ namespace Autonoceptor.Host
 
         public WaypointList Waypoints { get; set; } = new WaypointList();
 
-        private int _steerMagnitudeScale = 180;
-
-        private IDisposable _currentLocationUpdater;
         private IDisposable _gpsNavDisposable;
         private IDisposable _gpsNavSwitchDisposable;
         private IDisposable _odometerDisposable;
-
-        public int WpTriggerDistance { get; set; }
 
         private double _gpsNavMoveMagnitude = 21;
         public double GpsNavMoveMagnitude
@@ -72,40 +67,7 @@ namespace Autonoceptor.Host
                     await WaypointFollowEnable(channelData.DigitalValue);
                 });
 
-            _speedControllerDisposable = Observable
-                .Interval(TimeSpan.FromMilliseconds(100))
-                .ObserveOnDispatcher()
-                .Subscribe(
-                    async _ =>
-                    {
-                        if (_requestedPpInterval < 2 || Stopped)
-                        {
-                            await EmergencyBrake();
-                            return;
-                        }
-
-                        await EmergencyBrake(true);
-
-                        var odometer = await Odometer.GetOdometerData();
-
-                        if (odometer.PulseCount < _requestedPpInterval)
-                        {
-                            _lastMoveMagnitude = _lastMoveMagnitude + 2;
-                        }
-                        
-                        if (odometer.PulseCount > _requestedPpInterval)
-                        {
-                            _lastMoveMagnitude = _lastMoveMagnitude - 2;
-                        }
-
-                        if (_lastMoveMagnitude > 20)
-                            _lastMoveMagnitude = 20;
-
-                        if (_lastMoveMagnitude < 0)
-                            _lastMoveMagnitude = 0;
-
-                        await Move(MovementDirection.Forward, _lastMoveMagnitude);
-                    });
+           
         }
 
         private int _lastMoveMagnitude;
@@ -152,7 +114,7 @@ namespace Autonoceptor.Host
 
 
                         //We made it, yay.
-                        if (traveledInches >= _distanceToNextWaypoint - 10)
+                        if (traveledInches >= _distanceToNextWaypoint - 25)
                         {
                             CurrentWaypointIndex++;
 
@@ -167,6 +129,41 @@ namespace Autonoceptor.Host
 
                     });
 
+                _speedControllerDisposable = Observable
+                    .Interval(TimeSpan.FromMilliseconds(100))
+                    .ObserveOnDispatcher()
+                    .Subscribe(
+                        async _ =>
+                        {
+                            if (_requestedPpInterval < 2 || Stopped)
+                            {
+                                await EmergencyBrake();
+                                return;
+                            }
+
+                            await EmergencyBrake(true);
+
+                            var odometer = await Odometer.GetOdometerData();
+
+                            if (odometer.PulseCount < _requestedPpInterval)
+                            {
+                                _lastMoveMagnitude = _lastMoveMagnitude + 2;
+                            }
+
+                            if (odometer.PulseCount > _requestedPpInterval)
+                            {
+                                _lastMoveMagnitude = _lastMoveMagnitude - 2;
+                            }
+
+                            if (_lastMoveMagnitude > 20)
+                                _lastMoveMagnitude = 20;
+
+                            if (_lastMoveMagnitude < 0)
+                                _lastMoveMagnitude = 0;
+
+                            await Move(MovementDirection.Forward, _lastMoveMagnitude);
+                        });
+
                 return;
             }
 
@@ -177,10 +174,12 @@ namespace Autonoceptor.Host
             _steerMagnitudeDecayDisposable?.Dispose();
             _gpsNavDisposable?.Dispose();
             _odometerDisposable?.Dispose();
+            _speedControllerDisposable?.Dispose();
 
             _steerMagnitudeDecayDisposable = null;
             _gpsNavDisposable = null;
             _odometerDisposable = null;
+            _speedControllerDisposable = null;
         }
 
         private double _distanceToNextWaypoint;
@@ -296,23 +295,7 @@ namespace Autonoceptor.Host
                 _distanceToNextWaypoint = moveReq.Distance;
             }
 
-            /*TODO: Idea! Use distance to way-point to setup a "pause" command at the estimated time of arrival. 
-            Using that distance, also set estimated "decay" of steering magnitude. 
-            Need to figure out how many FPS for a given travel magnitude
-            For the list of way-points, pre-calculate turn direction and turn magnitude
-
-            Example - 
-            
-            1. There is 60in to way-point, I travel about 2ft per second, so I should stop in 2.5 seconds so I don't 
-            overshoot the way-point.
-
-            2. At that point, the next GPS coordinates arrive, and I will either be where I estimate I should be, or re-calculate stop
-            time and turn direction
-
-            Goto 1.
-            */
-
-            if (Math.Abs(moveReq.Distance) < 1)
+            if (Math.Abs(moveReq.Distance) < 6)
                 return moveReq;
 
             var diff = currentLocation.Heading - headingToWaypoint;
@@ -326,7 +309,7 @@ namespace Autonoceptor.Host
 
             moveReq.SteeringMagnitude = GetSteeringMagnitude(diff);
 
-            _requestedPpInterval = 100;
+            _requestedPpInterval = 400;//This is a pretty even pace, the GPS can keep up with it ok
 
             await Turn(moveReq.SteeringDirection, moveReq.SteeringMagnitude);
 
@@ -393,14 +376,6 @@ namespace Autonoceptor.Host
                     steerValue = Convert.ToUInt16(request.SteeringMagnitude.Map(0, 45, CenterPwm, RightPwmMax)) * 4;
                     break;
             }
-
-            //if (request.SteeringMagnitude < LeftPwmMax)
-            //    request.SteeringMagnitude = LeftPwmMax;
-
-            //if (request.SteeringMagnitude > RightPwmMax)
-            //    request.SteeringMagnitude = RightPwmMax;
-
-            //request.SteeringMagnitude = request.SteeringMagnitude * 4;
 
             await PwmController.SetChannelValue(steerValue, SteeringChannel);
 

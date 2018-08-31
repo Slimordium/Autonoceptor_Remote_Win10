@@ -108,10 +108,10 @@ namespace Autonoceptor.Host
         //TODO: Sweep here?
         private async Task UpdateLidarNavOverride(LidarData lidarData) //Implement 2D map. Modify "write to hardware method" to with values to avoid ?
         {
-            if (lidarData.Distance < 40)
-            {
-                await EmergencyBrake();
-            }
+            //if (lidarData.Distance < 40)
+            //{
+            //    await EmergencyBrake();
+            //}
         }
 
         //TODO: Pass move request into this method. Make turn amount uniform

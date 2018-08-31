@@ -44,8 +44,32 @@ namespace Autonoceptor.Service.Hardware
             _cancellationToken = cancellationToken;
         }
 
+        public void Dispose()
+        {
+            _disposed = true;
+
+            _serialDevice.Dispose();
+            _serialDevice = null;
+
+            _inputStream?.Dispose();
+            _inputStream = null;
+
+            _outputStream?.Dispose();
+            _outputStream = null;
+
+            _gpsReadTask?.Dispose();
+            _gpsReadTask = null;
+        }
+
+        private bool _disposed = true;
+
         public async Task InitializeAsync()
         {
+            if (!_disposed)
+                return;
+
+            _disposed = false;
+
             _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 115200, TimeSpan.FromMilliseconds(25), TimeSpan.FromMilliseconds(25));
 
             if (_serialDevice == null)
@@ -56,45 +80,57 @@ namespace Autonoceptor.Service.Hardware
 
             _gpsReadTask = new Task(async () =>
             {
-                while (!_cancellationToken.IsCancellationRequested)
+                while (!_disposed)
                 {
-                    var byteCount = await _inputStream.LoadAsync(1128);
-                    var sentences = _inputStream.ReadString(byteCount).Split('\n');
-
-                    if (sentences.Length == 0)
-                        continue;
-
-                    var gpsFixData = new GpsFixData();
-
-                    foreach (var sentence in sentences)
+                    try
                     {
-                        if (!sentence.StartsWith("$") || !sentence.EndsWith('\r'))
+                        if (_inputStream == null)
+                        {
+                            break;
+                        }
+
+                        var byteCount = await _inputStream.LoadAsync(1128);
+                        var sentences = _inputStream.ReadString(byteCount).Split('\n');
+
+                        if (sentences.Length == 0)
                             continue;
 
-                        try
-                        {
-                            var tempData = GpsExtensions.ParseNmea(sentence);
+                        var gpsFixData = new GpsFixData();
 
-                            if (tempData != null)
-                                gpsFixData = tempData;
-                        }
-                        catch (Exception e)
+                        foreach (var sentence in sentences)
                         {
-                            _logger.Log(LogLevel.Error, e);
+                            if (!sentence.StartsWith("$") || !sentence.EndsWith('\r'))
+                                continue;
+
+                            try
+                            {
+                                var tempData = GpsExtensions.ParseNmea(sentence);
+
+                                if (tempData != null)
+                                    gpsFixData = tempData;
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Log(LogLevel.Error, e);
+                            }
+                        }
+
+                        if (gpsFixData.DateTime == DateTime.MinValue)
+                        {
+                            continue; //Most likely bad data, toss and continue
+                        }
+
+                        //The data is accumulative, so only need to publish once
+                        _subject.OnNext(gpsFixData);
+
+                        using (await _asyncLock.LockAsync())
+                        {
+                            _currentLocation = gpsFixData;
                         }
                     }
-
-                    if (gpsFixData.DateTime == DateTime.MinValue)
+                    catch (Exception e)
                     {
-                        continue; //Most likely bad data, toss and continue
-                    }
-
-                    //The data is accumulative, so only need to publish once
-                    _subject.OnNext(gpsFixData);
-
-                    using (await _asyncLock.LockAsync())
-                    {
-                        _currentLocation = gpsFixData;
+                        Console.WriteLine(e);
                     }
                 }
             });

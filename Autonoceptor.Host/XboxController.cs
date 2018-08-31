@@ -91,7 +91,6 @@ namespace Autonoceptor.Host
             if (xboxData.FunctionButtons.Contains(FunctionButton.A))
             {
                 await EmergencyBrake(true);
-                return;
             }
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.B))

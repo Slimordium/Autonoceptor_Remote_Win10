@@ -139,16 +139,28 @@ namespace Autonoceptor.Host.ViewModels
 
         public async Task SetGpsNavSpeed()
         {
-            _conductor.GpsNavMoveMagnitude = GpsNavSpeed;
+            //_conductor.GpsNavMoveMagnitude = GpsNavSpeed;
 
-            await AddToLog($"Set GPS nav speed %{GpsNavSpeed}");
+            //await AddToLog($"Set GPS nav speed %{GpsNavSpeed}");
+
+            await _conductor.Gps.InitializeAsync().ConfigureAwait(false);
         }
 
         public async Task SetWpBoundry()
         {
-            _conductor.WpTriggerDistance = WpBoundryIn;
+            //_conductor.WpTriggerDistance = WpBoundryIn;
 
-            await AddToLog($"WP Trigger distance {WpBoundryIn}in");
+            //await AddToLog($"WP Trigger distance {WpBoundryIn}in");
+
+            try
+            {
+                _conductor.Gps.Dispose();
+            }
+            catch (Exception e)
+            {
+                await AddToLog(e.Message);
+            }
+
         }
 
         public async Task CalibrateImu()

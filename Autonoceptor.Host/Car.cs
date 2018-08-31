@@ -81,7 +81,9 @@ namespace Autonoceptor.Host
             {
                 Stopped = false;
 
-                await Lcd.WriteAsync("E-Brake canceled");
+                await Lcd.WriteAsync("Started");
+
+                _logger.Log(LogLevel.Info, "Started");
 
                 return;
             }

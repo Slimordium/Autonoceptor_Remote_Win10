@@ -35,7 +35,7 @@
 
         <TextBlock Text="GPS Nav Speed" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
         <Slider Name="GpsNavSpeed" Grid.Row="1" Grid.Column="1" Minimum="1" Maximum="60" Value="25"></Slider>
-        <Button Name="SetGpsNavSpeed" Grid.Column="2" Grid.Row="1" Content="Set" HorizontalAlignment="Center"></Button>
+        <Button Name="SetGpsNavSpeed" Grid.Column="2" Grid.Row="1" Content="Init GPS" HorizontalAlignment="Center"></Button>
 
         <Button Name="GetCurrentPosition" Grid.Column="3" Grid.Row="1" Content="Get Current Position" HorizontalAlignment="Center" Width="200"></Button>
         <Button Name="CalibrateImu" Grid.Column="4" Grid.Row="1" Content="Calibrate IMU/GPS Heading" HorizontalAlignment="Center" Width="200"></Button>
@@ -55,7 +55,7 @@
 
         <TextBlock Text="WP Target boundry in." Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
         <Slider Name="WpBoundryIn" Grid.Row="2" Grid.Column="1" Minimum="1" Maximum="60" Value="32"></Slider>
-        <Button Name="SetWpBoundry" Grid.Column="2" Grid.Row="2" Content="Set" HorizontalAlignment="Center"></Button>
+        <Button Name="SetWpBoundry" Grid.Column="2" Grid.Row="2" Content="Dispose GPS" HorizontalAlignment="Center"></Button>
 
         <Button Name="ListWaypoints" Grid.Column="3" Grid.Row="3" Content="List Waypoints" HorizontalAlignment="Center" Width="200"></Button>
         <Button Name="GetHeadingDistanceToSelected" Grid.Column="4" Grid.Row="3" Content="Get Head/Dist to next WP" HorizontalAlignment="Center" Width="200"></Button>
