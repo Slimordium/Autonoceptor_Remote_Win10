@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.Globalization.NumberFormatting;
 using Autonoceptor.Shared;
 using Autonoceptor.Shared.Utilities;
 using Nito.AsyncEx;
