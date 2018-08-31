@@ -7,13 +7,15 @@ using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
 using Autonoceptor.Shared.Imu;
+using Autonoceptor.Shared.Utilities;
+using Nito.AsyncEx;
 using NLog;
 
 namespace Autonoceptor.Service.Hardware
 {
     public class RazorImu
     {
-        private ILogger _logger = LogManager.GetCurrentClassLogger();
+        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         private SerialDevice _serialDevice;
 
@@ -27,10 +29,14 @@ namespace Autonoceptor.Service.Hardware
 
         private ImuData _currentImuData = new ImuData();
 
-        public ImuData CurrentImuData
+        private readonly AsyncLock _asyncLock = new AsyncLock();
+
+        public async Task<ImuData> Get()
         {
-            get => Volatile.Read(ref _currentImuData);
-            set => Volatile.Write(ref _currentImuData, value);
+            using (await _asyncLock.LockAsync())
+            {
+                return _currentImuData;
+            }
         }
 
         public RazorImu(CancellationToken cancellationToken)
@@ -51,13 +57,18 @@ namespace Autonoceptor.Service.Hardware
             {
                 while (!_cancellationToken.IsCancellationRequested)
                 {
-                    var byteCount = await _inputStream.LoadAsync(64);
+                    var byteCount = await _inputStream.LoadAsync(32);
 
                     var buffer = new byte[byteCount];
 
                     _inputStream.ReadBytes(buffer);
 
                     var readings = Encoding.ASCII.GetString(buffer);
+
+                    if (!readings.StartsWith("#") && !readings.EndsWith('\n'))
+                    {
+                        continue;
+                    }
 
                     var yprReadings = readings.Replace("\r", "").Replace("\n", "").Replace("Y", "").Replace("P", "").Replace("R", "").Replace("=", "").Split('#');
 
@@ -68,30 +79,41 @@ namespace Autonoceptor.Service.Hardware
 
                         try
                         {
+                            var imuData = new ImuData();
+
                             var splitYpr = reading.Split(',');
 
                             if (splitYpr.Length != 3)
                                 continue;
 
-                            if (!double.TryParse(splitYpr[0], out var yaw))
-                                continue;
-
-                            if (!double.TryParse(splitYpr[1], out var pitch))
-                                continue;
-
-                            if (!double.TryParse(splitYpr[2], out var roll))
-                                continue;
-
-                            var imuData = new ImuData
+                            if (!double.TryParse(splitYpr[0], out var tempYaw))
                             {
-                                Yaw = yaw,
-                                Pitch = pitch,
-                                Roll = roll
-                            };
+                                continue;
+                            }
+
+                            if (tempYaw < 0)
+                            {
+                                var t = Math.Round(Math.Abs(tempYaw).Map(0, 180, 360, 181), 1);
+
+                                imuData.Yaw = t;
+                            }
+                            else
+                            {
+                                imuData.Yaw = tempYaw;
+                            }
+
+                            double.TryParse(splitYpr[1], out var pitch);
+                            imuData.Pitch = pitch;
+
+                            double.TryParse(splitYpr[2], out var roll);
+                            imuData.Roll = roll;
 
                             _subject.OnNext(imuData);
 
-                            CurrentImuData = imuData;
+                            using (await _asyncLock.LockAsync())
+                            {
+                                _currentImuData = imuData;
+                            }
                         }
                         catch (Exception e)
                         {

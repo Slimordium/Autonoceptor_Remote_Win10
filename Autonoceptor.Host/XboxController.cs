@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.Enumeration;
 using Windows.Devices.HumanInterfaceDevice;
+using Autonoceptor.Shared.Imu;
 using Autonoceptor.Shared.Utilities;
 using Hardware.Xbox;
 using Hardware.Xbox.Enums;
@@ -74,7 +75,16 @@ namespace Autonoceptor.Host
                     });
 
             await ConfigureXboxObservable();
+
+            //Observable.Timer(TimeSpan.FromSeconds(3))
+            //    .ObserveOnDispatcher().
+            //    Subscribe(_ =>
+            //    {
+            //        CheckImuGpsCalibration();
+            //    });
         }
+
+        
 
         private async Task OnNextXboxData(XboxData xboxData)
         {
@@ -86,7 +96,7 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.B))
             {
-                var gpsFix = Gps.CurrentLocation;
+                var gpsFix = await Gps.Get();
 
                 Waypoints.Add(new Waypoint {GpsFixData = gpsFix });
                 await Lcd.WriteAsync($"WP {Waypoints.Count} added");
@@ -110,8 +120,13 @@ namespace Autonoceptor.Host
             if (xboxData.FunctionButtons.Contains(FunctionButton.X))
             {
                 _logger.Log(LogLevel.Info, "Stopping...");
-                await WaypointFollowEnable(false);
+
                 await EmergencyBrake();
+
+                await WaypointFollowEnable(false);
+
+                await DisableServos();
+                
                 return;
             }
 
@@ -126,6 +141,9 @@ namespace Autonoceptor.Host
 
             //TODO: Fix D-Pad functionality in xbox, use it to increase/decrease speed while navigating waypoints
             if (FollowingWaypoints)
+                return;
+
+            if (Stopped)
                 return;
 
             ushort direction = CenterPwm * 4;

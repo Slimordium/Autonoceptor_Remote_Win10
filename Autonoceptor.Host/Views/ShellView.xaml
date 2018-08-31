@@ -38,6 +38,7 @@
         <Button Name="SetGpsNavSpeed" Grid.Column="2" Grid.Row="1" Content="Set" HorizontalAlignment="Center"></Button>
 
         <Button Name="GetCurrentPosition" Grid.Column="3" Grid.Row="1" Content="Get Current Position" HorizontalAlignment="Center" Width="200"></Button>
+        <Button Name="CalibrateImu" Grid.Column="4" Grid.Row="1" Content="Calibrate IMU/GPS Heading" HorizontalAlignment="Center" Width="200"></Button>
 
         <TextBlock Text="WP Target boundry in." Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
         <Slider Name="WpBoundryIn" Grid.Row="2" Grid.Column="1" Minimum="1" Maximum="60" Value="32"></Slider>
@@ -48,10 +49,8 @@
         <TextBlock Text="WP Turn Scale" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
         <Slider Name="WpTurnScale" Grid.Row="3" Grid.Column="1" Minimum=".1" Maximum=".9" Value=".7"></Slider>
         <Button Name="SetWpTurnScale" Grid.Column="2" Grid.Row="3" Content="Set" HorizontalAlignment="Center"></Button>
-        
 
-
-        <ScrollViewer Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="{Binding Path=Width, ElementName=LogColumn}" Margin="3.4,0,0,-0.4">
+        <ScrollViewer Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="5" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="{Binding Path=Width, ElementName=LogColumn}" Margin="3.4,0,0,-0.4">
             <ListBox x:Name="LogBox" FontSize="13" FontFamily="Arial Narrow" ItemsSource="{Binding Log}" BorderThickness="0" SelectionMode="Multiple" Margin="5,0,0,0" >
             </ListBox>
         </ScrollViewer>

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Autonoceptor.Service.Hardware;
 using Autonoceptor.Shared.Gps;
+using Autonoceptor.Shared.Imu;
 using Autonoceptor.Shared.Utilities;
 using NLog;
 
@@ -21,7 +22,6 @@ namespace Autonoceptor.Host
             get => Volatile.Read(ref _followingWaypoints);
             set => Volatile.Write(ref _followingWaypoints, value);
         }
-        public GpsFixData CurrentLocation => Gps.CurrentLocation;
 
         public WaypointList Waypoints { get; set; } = new WaypointList();
 
@@ -102,14 +102,6 @@ namespace Autonoceptor.Host
                 _gpsNavDisposable?.Dispose();
                 _odometerDisposable?.Dispose();
 
-                _steerMagnitudeDecayDisposable = Observable
-                    .Interval(TimeSpan.FromMilliseconds(300))
-                    .ObserveOnDispatcher()
-                    .Subscribe(async _ =>
-                    {
-                        await DecaySteeringMagnitude();
-                    });
-
                 _gpsNavDisposable = Gps.GetObservable()
                     .ObserveOnDispatcher()
                     .Subscribe(async fix =>
@@ -117,9 +109,7 @@ namespace Autonoceptor.Host
                         await UpdateMoveRequest(fix);
                     });
 
-                //TODO: May have to increase the rate of the odometer to 5hz
-                _odometerDisposable = Odometer
-                    .GetObservable()
+                _odometerDisposable = Odometer.GetObservable()
                     .ObserveOnDispatcher()
                     .Subscribe(async odometerData =>
                     {
@@ -150,8 +140,6 @@ namespace Autonoceptor.Host
             await EmergencyBrake(true);
 
             await Lcd.WriteAsync("GPS Nav stopped");
-
-            
 
             _steerMagnitudeDecayDisposable?.Dispose();
             _gpsNavDisposable?.Dispose();
@@ -186,7 +174,7 @@ namespace Autonoceptor.Host
 
             var currentWp = Waypoints[_currentWaypointIndex];
 
-            var moveReq = GetMoveRequest(currentWp.GpsFixData, gpsFixData);
+            var moveReq = await GetMoveRequest(currentWp.GpsFixData, gpsFixData);
 
             moveReq.MovementMagnitude = GpsNavMoveMagnitude;
 
@@ -202,9 +190,28 @@ namespace Autonoceptor.Host
             //}
         }
 
-        private MoveRequest GetMoveRequest(GpsFixData waypoint, GpsFixData currentLocation)
+        public async Task CheckImuGpsCalibration()
         {
-            var moveReq = new MoveRequest();
+            var gpsHeading = (await Gps.Get()).Heading;
+            var imuHeading = (await RazorImu.Get()).Yaw;
+
+            _logger.Log(LogLevel.Info, $"Yaw: {imuHeading}, Heading: {gpsHeading}, Diff: {gpsHeading - imuHeading}");
+
+            if (gpsHeading - imuHeading < 2)
+            {
+                return;
+            }
+
+            var diff = imuHeading - gpsHeading;
+
+            _logger.Log(LogLevel.Info, $"IMU Yaw correction set - Yaw: {imuHeading}, Heading: {gpsHeading}, Diff: {diff}");
+
+            ImuData.YawCorrection = diff;
+        }
+
+        private async Task<MoveRequest> GetMoveRequest(GpsFixData waypoint, GpsFixData currentLocation)
+        {
+            var moveReq = new MoveRequest(MoveRequestType.Gps);
 
             var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(currentLocation.Lat, currentLocation.Lon, waypoint.Lat, waypoint.Lon);
             moveReq.Distance = distanceAndHeading[0];
@@ -213,7 +220,7 @@ namespace Autonoceptor.Host
 
             if (_startOdometerData == null)
             {
-                _startOdometerData = Odometer.OdometerData;
+                _startOdometerData = await Odometer.GetOdometerData();
                 _distanceToNextWaypoint = moveReq.Distance;
             }
 
@@ -232,8 +239,6 @@ namespace Autonoceptor.Host
             Need to figure out how many FPS for a given travel magnitude
             For the list of way-points, pre-calculate turn direction and turn magnitude
 
-
-
             Example - 
             
             1. There is 60in to way-point, I travel about 2ft per second, so I should stop in 2.5 seconds so I don't 
@@ -243,17 +248,10 @@ namespace Autonoceptor.Host
             time and turn direction
 
             Goto 1.
-
-            
-
-
             */
-
-            //TODO: Lets do everything in degrees
 
             //TODO: Need to do a while loop checking the Razor IMU yaw, until it matches the calculated heading of WP
             //TODO: On startup the Razor IMU yaw will NOT equal what the GPS thinks the heading is 
-            //TODO: Perhaps set a property on the IMU with a correction value? So, the Razor differs by -12 degrees or something..
 
 
             var diff = currentLocation.Heading - headingToWaypoint;
@@ -288,8 +286,18 @@ namespace Autonoceptor.Host
                 }
             }
 
+            //TODO: Turn slowly until IMU Yaw is almost at waypoint... Also check ratio of yaw vs gps heading... hopefully the same
+            while (true)
+            {
+                if (moveReq.SteeringDirection == SteeringDirection.Left)
+                {
+
+                }
+            }
+
             return moveReq;
         }
+
 
         private async Task WriteToHardware(MoveRequest request)
         {

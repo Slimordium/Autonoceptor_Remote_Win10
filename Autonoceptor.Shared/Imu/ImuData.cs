@@ -4,22 +4,16 @@ namespace Autonoceptor.Shared.Imu
 {
     public class ImuData 
     {
-        public ImuData()
-        {
+        public static double YawCorrection { get; set; }
 
+        private double _yaw;
+
+        public double Yaw
+        {
+            get => Math.Abs(_yaw - YawCorrection);
+            set => _yaw = value;
         }
 
-        public ImuData(string values)
-        {
-            if (values == null || values.Length < 6)
-                return;
-
-            Yaw = Convert.ToDouble(values[3]);
-            Pitch = Convert.ToDouble(values[4]);
-            Roll = Convert.ToDouble(values[5]);
-        }
-
-        public double Yaw { get; set; } = 0;
         public double Pitch { get; set; } = 0;
         public double Roll { get; set; } = 0;
     }
