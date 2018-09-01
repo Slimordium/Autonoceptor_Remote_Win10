@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
 using Autonoceptor.Shared;
+using NLog;
 
 namespace Autonoceptor.Service.Hardware
 {
@@ -20,13 +21,7 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly CancellationToken _cancellationToken;
 
-        //private LidarData _lidarData = new LidarData();
-
-        //public LidarData CurrentLidarData
-        //{
-        //    get => Volatile.Read(ref _lidarData);
-        //    set => Volatile.Write(ref _lidarData, value);
-        //}
+        private ILogger _logger = LogManager.GetCurrentClassLogger();
 
         public Tf02Lidar(CancellationToken cancellationToken)
         {
@@ -39,6 +34,8 @@ namespace Autonoceptor.Service.Hardware
 
             if (_serialDevice == null)
                 return;
+
+            _logger.Log(LogLevel.Info, "Lidar opened");
 
             _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
             _outputStream = new DataWriter(_serialDevice.OutputStream);

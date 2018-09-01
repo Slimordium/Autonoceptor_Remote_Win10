@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 using Autonoceptor.Shared.Gps.Enums;
 
 namespace Autonoceptor.Shared.Gps
@@ -33,7 +32,7 @@ namespace Autonoceptor.Shared.Gps
 
         public override string ToString()
         {
-            return $"Lat: {Lat}, Lon: {Lon}, Heading: {Heading}";
+            return $"Lat: {Lat}, Lon: {Lon}, Heading: {Heading}, Quality: {Quality}, HDOP: {Hdop}, Sats: {SatellitesInView}";
         }
     }
 }

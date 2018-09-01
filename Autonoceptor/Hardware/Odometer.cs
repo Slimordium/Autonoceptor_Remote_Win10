@@ -49,6 +49,8 @@ namespace Autonoceptor.Service.Hardware
             if (_serialDevice == null)
                 return;
 
+            _logger.Log(LogLevel.Info, "Odometer opened");
+
             _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
 
             _readTask = new Task(async() =>

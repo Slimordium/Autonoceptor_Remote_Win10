@@ -9,11 +9,11 @@
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Width="Auto" Height="Auto">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition MinWidth="110" Width=".5*" />
-            <ColumnDefinition MinWidth="150" Width="1.5*" />
-            <ColumnDefinition Width=".8*" />
-            <ColumnDefinition Width="1.5*" />
-            <ColumnDefinition Width="1.5*" />
+            <ColumnDefinition />
+            <ColumnDefinition />
+            <ColumnDefinition />
+            <ColumnDefinition />
+            <ColumnDefinition Width="460" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="40" />
@@ -32,9 +32,6 @@
         <Button Name="InitializeMqtt" Grid.Column="2" Grid.Row="0" Content="Init MQTT" HorizontalAlignment="Center"></Button>
 
         <Button Name="GetOdometerData" Grid.Column="3" Grid.Row="2" Content="Get Odometer data" HorizontalAlignment="Center" Width="200"></Button>
-
-        <TextBlock Text="GPS Nav Speed" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
-        <Slider Name="GpsNavSpeed" Grid.Row="1" Grid.Column="1" Minimum="1" Maximum="60" Value="25"></Slider>
         <Button Name="SetGpsNavSpeed" Grid.Column="2" Grid.Row="1" Content="Init GPS" HorizontalAlignment="Center"></Button>
 
         <Button Name="GetCurrentPosition" Grid.Column="3" Grid.Row="1" Content="Get Current Position" HorizontalAlignment="Center" Width="200"></Button>
@@ -43,7 +40,7 @@
         <ComboBox Name="WaypointsCombo" Grid.Column="4" Grid.Row="2" 
                   ItemsSource="{Binding Waypoints}" 
                   SelectedIndex="{Binding SelectedWaypoint}"
-                  HorizontalAlignment="Center" Width="250" >
+                  HorizontalAlignment="Center" Width="450" >
             <ComboBox.ItemTemplate>
                 <DataTemplate>
                     <StackPanel Orientation="Horizontal">
@@ -52,17 +49,10 @@
                 </DataTemplate>
             </ComboBox.ItemTemplate>
         </ComboBox>
-
-        <TextBlock Text="WP Target boundry in." Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
-        <Slider Name="WpBoundryIn" Grid.Row="2" Grid.Column="1" Minimum="1" Maximum="60" Value="32"></Slider>
         <Button Name="SetWpBoundry" Grid.Column="2" Grid.Row="2" Content="Dispose GPS" HorizontalAlignment="Center"></Button>
 
         <Button Name="ListWaypoints" Grid.Column="3" Grid.Row="3" Content="List Waypoints" HorizontalAlignment="Center" Width="200"></Button>
         <Button Name="GetHeadingDistanceToSelected" Grid.Column="4" Grid.Row="3" Content="Get Head/Dist to next WP" HorizontalAlignment="Center" Width="200"></Button>
-
-        <TextBlock Text="WP Turn Scale" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
-        <Slider Name="WpTurnScale" Grid.Row="3" Grid.Column="1" Minimum=".1" Maximum=".9" Value=".7"></Slider>
-        <Button Name="SetWpTurnScale" Grid.Column="2" Grid.Row="3" Content="Set" HorizontalAlignment="Center"></Button>
 
         <ScrollViewer Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="5" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="{Binding Path=Width, ElementName=LogColumn}" Margin="3.4,0,0,-0.4">
             <ListBox x:Name="LogBox" FontSize="13" FontFamily="Arial Narrow" ItemsSource="{Binding Log}" BorderThickness="0" SelectionMode="Multiple" Margin="5,0,0,0" >

@@ -12,46 +12,47 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetLogger("Autonoceptor");
 
-        public Odometer Odometer { get; private set; }
-        public RazorImu RazorImu { get; private set; }
-        protected Tf02Lidar  Lidar { get; private set; }
-        protected SparkFunSerial16X2Lcd Lcd { get; } = new SparkFunSerial16X2Lcd();
-        protected MaestroPwmController PwmController { get; private set; }
-        public Gps Gps { get; private set; }
-        protected XboxDevice XboxDevice { get; set; }
-  
-        protected MqttClient MqttClient { get; set; }
-
-        protected CancellationToken CancellationToken { get; }
-
         protected Chassis(CancellationTokenSource cancellationTokenSource)
         {
             CancellationToken = cancellationTokenSource.Token;
         }
+
+        public Odometer Odometer { get; private set; }
+        public Imu Imu { get; private set; }
+        protected Tf02Lidar Lidar { get; private set; }
+        protected SparkFunSerial16X2Lcd Lcd { get; } = new SparkFunSerial16X2Lcd();
+        protected MaestroPwmController PwmController { get; private set; }
+        public Gps Gps { get; private set; }
+        protected XboxDevice XboxDevice { get; set; }
+
+        protected MqttClient MqttClient { get; set; }
+
+        protected CancellationToken CancellationToken { get; }
 
         protected async Task InitializeAsync()
         {
             _logger.Log(LogLevel.Info, "Initializing");
 
             Odometer = new Odometer(CancellationToken);
-            RazorImu = new RazorImu(CancellationToken);
+            Imu = new Imu(CancellationToken);
             Gps = new Gps(CancellationToken);
             Lidar = new Tf02Lidar(CancellationToken);
 
             await Lcd.InitializeAsync();
             await Lcd.WriteAsync("Initializing...");
 
-            PwmController = new MaestroPwmController(new ushort[]{ 12, 13, 14 }); //Channel 12, 13 and 14 are inputs
+            PwmController = new MaestroPwmController(new ushort[] {12, 13, 14}); //Channel 12, 13 and 14 are inputs
 
             await PwmController.InitializeAsync(CancellationToken);
 
-            await RazorImu.InitializeAsync();
+            await Imu.InitializeAsync();
 
             await Odometer.InitializeAsync();
 
             await InitializeXboxController();
 
             await Gps.InitializeAsync();
+
             await Lidar.InitializeAsync();
 
             await Lcd.WriteAsync("Initialized");

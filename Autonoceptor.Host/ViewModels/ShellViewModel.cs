@@ -9,26 +9,22 @@ using Windows.UI.Xaml;
 using Autonoceptor.Shared.Utilities;
 using Caliburn.Micro;
 using Nito.AsyncEx;
-using NLog;
 using NLog.Targets.Rx;
 
 namespace Autonoceptor.Host.ViewModels
 {
     public class ShellViewModel : Conductor<object>
     {
-        private readonly Conductor _conductor;
-        
+        private readonly AsyncLock _asyncLock = new AsyncLock();
+
         private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+        private readonly Conductor _conductor;
 
         private ExtendedExecutionSession _session;
 
-        public BindableCollection<string> Log { get; set; } = new BindableCollection<string>();
-
-        public BindableCollection<Waypoint> Waypoints { get; set; } = new BindableCollection<Waypoint>();
-
-        public int SelectedWaypoint { get; set; }
-
         private IDisposable _sessionDisposable;
+
+        private bool _started;
 
         public ShellViewModel()
         {
@@ -37,23 +33,28 @@ namespace Autonoceptor.Host.ViewModels
             Application.Current.Suspending += CurrentOnSuspending;
             Application.Current.Resuming += CurrentOnResuming;
 
-            _sessionDisposable = Observable.Interval(TimeSpan.FromMinutes(4)).Subscribe(async _ => { await RequestExtendedSession(); });
+            _sessionDisposable = Observable.Interval(TimeSpan.FromMinutes(4))
+                .Subscribe(async _ => { await RequestExtendedSession(); });
 
             //Automatically start...
             Observable.Timer(TimeSpan.FromSeconds(5))
                 .ObserveOnDispatcher()
-                .Subscribe(async _ =>
-                {
-                    await StartConductor().ConfigureAwait(false);
-                    
-                    Log.Add("Initialized");
-                });
+                .Subscribe(async _ => { await StartConductor().ConfigureAwait(false); });
 
-            RxTarget.LogObservable.ObserveOnDispatcher().Subscribe(async e => { await AddToLog(e);});
+            RxTarget.LogObservable.ObserveOnDispatcher().Subscribe(async e => { await AddToLog(e); });
         }
 
-        private readonly AsyncLock _asyncLock = new AsyncLock();
+        public BindableCollection<string> Log { get; set; } = new BindableCollection<string>();
 
+        public BindableCollection<Waypoint> Waypoints { get; set; } = new BindableCollection<Waypoint>();
+
+        public int SelectedWaypoint { get; set; }
+
+        public string BrokerIp { get; set; } = "172.16.0.246";
+
+        public int GpsNavSpeed { get; set; } = 25;
+
+        public int WpBoundryIn { get; set; } = 32;
 
         private async Task AddToLog(string entry)
         {
@@ -64,14 +65,7 @@ namespace Autonoceptor.Host.ViewModels
                 if (Log.Count > 600)
                     Log.RemoveAt(598);
             }
-
         }
-
-        private bool _started;
-
-        public string BrokerIp { get; set; } = "172.16.0.246";
-
-        //public int VideoProfile { get; set; } = 13; //60 = 320x240,30fps MJPG, 84 = 160x120, 30 fps, MJPG, "96, 800x600, 30 fps, MJPG" "108, 1280x720, 30 fps, MJPG"
 
         public async Task StartConductor()
         {
@@ -96,14 +90,12 @@ namespace Autonoceptor.Host.ViewModels
         {
             _sessionDisposable?.Dispose();
 
-            _sessionDisposable = Observable.Interval(TimeSpan.FromMinutes(4)).Subscribe(async _ => { await RequestExtendedSession(); });
+            _sessionDisposable = Observable.Interval(TimeSpan.FromMinutes(4))
+                .Subscribe(async _ => { await RequestExtendedSession(); });
 
             Observable.Timer(TimeSpan.FromSeconds(5))
                 .ObserveOnDispatcher()
-                .Subscribe(async _ =>
-                {
-                    await StartConductor().ConfigureAwait(false);
-                });
+                .Subscribe(async _ => { await StartConductor().ConfigureAwait(false); });
         }
 
         private void NewSessionOnRevoked(object sender, ExtendedExecutionRevokedEventArgs args)
@@ -114,7 +106,7 @@ namespace Autonoceptor.Host.ViewModels
 
         private async Task RequestExtendedSession()
         {
-            _session = new ExtendedExecutionSession { Reason = ExtendedExecutionReason.LocationTracking };
+            _session = new ExtendedExecutionSession {Reason = ExtendedExecutionReason.LocationTracking};
 
             _session.Revoked -= NewSessionOnRevoked;
             _session.Revoked += NewSessionOnRevoked;
@@ -132,10 +124,6 @@ namespace Autonoceptor.Host.ViewModels
                     break;
             }
         }
-
-        public int GpsNavSpeed { get; set; } = 25;
-
-        public int WpBoundryIn { get; set; } = 32;
 
         public async Task SetGpsNavSpeed()
         {
@@ -160,7 +148,6 @@ namespace Autonoceptor.Host.ViewModels
             {
                 await AddToLog(e.Message);
             }
-
         }
 
         public async Task CalibrateImu()
@@ -172,14 +159,16 @@ namespace Autonoceptor.Host.ViewModels
         {
             var currentLocation = await _conductor.Gps.Get();
 
-            await AddToLog($"At Lat: {currentLocation.Lat}, Lon: {currentLocation.Lon}, Heading: {currentLocation.Heading}");
+            await AddToLog(
+                $"At Lat: {currentLocation.Lat}, Lon: {currentLocation.Lon}, Heading: {currentLocation.Heading}");
         }
 
         public async Task GetYpr()
         {
-            var currentImu = await _conductor.RazorImu.Get();
+            var currentImu = await _conductor.Imu.Get();
 
-            await AddToLog($"Uncorrected Yaw: {currentImu.UncorrectedYaw}, Corrected Yaw: {currentImu.Yaw} Pitch: {currentImu.Pitch} Roll: {currentImu.Roll}");
+            await AddToLog(
+                $"Uncorrected Yaw: {currentImu.UncorrectedYaw}, Corrected Yaw: {currentImu.Yaw} Pitch: {currentImu.Pitch} Roll: {currentImu.Roll}");
         }
 
         public async Task GetHeadingDistanceToSelected()
@@ -188,7 +177,8 @@ namespace Autonoceptor.Host.ViewModels
 
             var wp = _conductor.Waypoints[SelectedWaypoint];
 
-            var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(currentLocation.Lat, currentLocation.Lon, wp.GpsFixData.Lat, wp.GpsFixData.Lon);
+            var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(currentLocation.Lat,
+                currentLocation.Lon, wp.GpsFixData.Lat, wp.GpsFixData.Lon);
 
             await AddToLog($"Distance: {distanceAndHeading[0] / 12} ft, Heading: {distanceAndHeading[1]} degrees");
 
@@ -205,9 +195,8 @@ namespace Autonoceptor.Host.ViewModels
                 await AddToLog("No waypoints in list");
 
             foreach (var waypoint in wps)
-            {
-                await AddToLog($"Lat: {waypoint.GpsFixData.Lat} Lon: {waypoint.GpsFixData.Lon} - {waypoint.GpsFixData.Quality}");
-            }
+                await AddToLog(
+                    $"Lat: {waypoint.GpsFixData.Lat} Lon: {waypoint.GpsFixData.Lon} - {waypoint.GpsFixData.Quality}");
 
             Waypoints = new BindableCollection<Waypoint>();
 

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
 using Nito.AsyncEx;
+using NLog;
 
 namespace Autonoceptor.Service.Hardware
 {
@@ -56,6 +57,8 @@ namespace Autonoceptor.Service.Hardware
         private const ushort RestartScriptAtSubroutineWithParameterCommand = 0xA8;
         private const ushort GetScriptStatusCommand = 0xAE;
 
+        private ILogger _logger = LogManager.GetCurrentClassLogger();
+
         public MaestroPwmController(IEnumerable<ushort> inputChannels)
         {
             foreach (var c in inputChannels)
@@ -66,10 +69,12 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task InitializeAsync(CancellationToken cancellationToken)
         {
-            if (_maestroPwmDevice != null)
+            _maestroPwmDevice = await SerialDeviceHelper.GetSerialDeviceAsync("142361d3&0&0000", 9600, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
+
+            if (_maestroPwmDevice == null)
                 return;
 
-            _maestroPwmDevice = await SerialDeviceHelper.GetSerialDeviceAsync("142361d3&0&0000", 9600, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
+            _logger.Log(LogLevel.Info, "Pwm opened");
 
             cancellationToken.Register(() =>
             {

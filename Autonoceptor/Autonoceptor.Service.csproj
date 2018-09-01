@@ -113,7 +113,7 @@
     <Compile Include="Hardware\Gps.cs" />
     <Compile Include="Hardware\I2CDevice.cs" />
     <Compile Include="Hardware\MaxbotixSonar.cs" />
-    <Compile Include="Hardware\RazorImu.cs" />
+    <Compile Include="Hardware\Imu.cs" />
     <Compile Include="Hardware\SerialDeviceHelper.cs" />
     <Compile Include="Hardware\SparkFunSerial16X2Lcd.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

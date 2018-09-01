@@ -24,7 +24,7 @@ namespace Autonoceptor.Host
             : base(cancellationTokenSource, brokerHostnameOrIp)
         {
         }
-
+         
         private async Task ConfigureXboxObservable()
         {
             _xboxDisposable?.Dispose();
@@ -75,16 +75,7 @@ namespace Autonoceptor.Host
                     });
 
             await ConfigureXboxObservable();
-
-            //Observable.Timer(TimeSpan.FromSeconds(3))
-            //    .ObserveOnDispatcher().
-            //    Subscribe(_ =>
-            //    {
-            //        CheckImuGpsCalibration();
-            //    });
         }
-
-        
 
         private async Task OnNextXboxData(XboxData xboxData)
         {
@@ -100,7 +91,7 @@ namespace Autonoceptor.Host
                 Waypoints.Add(new Waypoint {GpsFixData = gpsFix });
                 await Lcd.WriteAsync($"WP {Waypoints.Count} added");
 
-                _logger.Log(LogLevel.Info, $"WP @ Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}");
+                _logger.Log(LogLevel.Info, $"WP Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}, {gpsFix.Quality}");
 
                 await Waypoints.Save();
                 return;
@@ -118,13 +109,9 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.X))
             {
-                _logger.Log(LogLevel.Info, "Stopping...");
-
                 await EmergencyBrake();
 
                 await WaypointFollowEnable(false);
-
-                await DisableServos();
                 
                 return;
             }
@@ -145,33 +132,33 @@ namespace Autonoceptor.Host
             if (Stopped)
                 return;
 
-            ushort direction = CenterPwm * 4;
+            ushort steeringPwm = CenterPwm * 4;
 
             switch (xboxData.RightStick.Direction)
             {
                 case Direction.UpLeft:
                 case Direction.DownLeft:
                 case Direction.Left:
-                    direction = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, LeftPwmMax) * 4);
+                    steeringPwm = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, LeftPwmMax) * 4);
                     break;
                 case Direction.UpRight:
                 case Direction.DownRight:
                 case Direction.Right:
-                    direction = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, RightPwmMax) * 4);
+                    steeringPwm = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, RightPwmMax) * 4);
                     break;
             }
 
             var reverseMagnitude = Convert.ToUInt16(xboxData.LeftTrigger.Map(0, 33000, StoppedPwm, ReversePwmMax) * 4);
             var forwardMagnitude = Convert.ToUInt16(xboxData.RightTrigger.Map(0, 33000, StoppedPwm, ForwardPwmMax) * 4);
 
-            var outputVal = forwardMagnitude;
+            var movePwm = forwardMagnitude;
 
             if (reverseMagnitude < 5500)
             {
-                outputVal = reverseMagnitude;
+                movePwm = reverseMagnitude;
             }
 
-            await WriteToHardware(direction, outputVal); //ChannelId 1 is Steering
+            await WriteToHardware(steeringPwm, movePwm); //ChannelId 1 is Steering
         }
     }
 }

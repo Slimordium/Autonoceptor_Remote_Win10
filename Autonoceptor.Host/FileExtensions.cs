@@ -11,7 +11,7 @@ namespace Autonoceptor.Host
 {
     internal static class FileExtensions
     {
-        private static ILogger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         internal static async Task<string> ReadStringFromFile(this string filename)
         {

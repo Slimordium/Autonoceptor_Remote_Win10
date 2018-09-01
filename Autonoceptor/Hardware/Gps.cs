@@ -14,20 +14,28 @@ namespace Autonoceptor.Service.Hardware
 {
     public class Gps
     {
+        private readonly AsyncLock _asyncLock = new AsyncLock();
+
+        private readonly CancellationToken _cancellationToken;
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
-
-        private SerialDevice _serialDevice;
-
-        private DataReader _inputStream;
-        private DataWriter _outputStream;
-
-        private Task _gpsReadTask;
 
         private readonly Subject<GpsFixData> _subject = new Subject<GpsFixData>();
 
         private GpsFixData _currentLocation = new GpsFixData();
 
-        private readonly AsyncLock _asyncLock = new AsyncLock();
+        private bool _disposed = true;
+
+        private Task _gpsReadTask;
+
+        private DataReader _inputStream;
+        private DataWriter _outputStream;
+
+        private SerialDevice _serialDevice;
+
+        public Gps(CancellationToken cancellationToken)
+        {
+            _cancellationToken = cancellationToken;
+        }
 
         public async Task<GpsFixData> Get()
         {
@@ -35,13 +43,6 @@ namespace Autonoceptor.Service.Hardware
             {
                 return _currentLocation;
             }
-        }
-
-        private readonly CancellationToken _cancellationToken;
-
-        public Gps(CancellationToken cancellationToken)
-        {
-            _cancellationToken = cancellationToken;
         }
 
         public void Dispose()
@@ -59,9 +60,9 @@ namespace Autonoceptor.Service.Hardware
 
             _gpsReadTask?.Dispose();
             _gpsReadTask = null;
-        }
 
-        private bool _disposed = true;
+            _logger.Log(LogLevel.Info, "Gps disposed");
+        }
 
         public async Task InitializeAsync()
         {
@@ -70,24 +71,23 @@ namespace Autonoceptor.Service.Hardware
 
             _disposed = false;
 
-            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 115200, TimeSpan.FromMilliseconds(25), TimeSpan.FromMilliseconds(25));
+            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN01E09J", 115200,
+                TimeSpan.FromMilliseconds(25), TimeSpan.FromMilliseconds(25));
 
             if (_serialDevice == null)
                 return;
 
-            _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
+            _logger.Log(LogLevel.Info, "Gps opened");
+
+            _inputStream = new DataReader(_serialDevice.InputStream) {InputStreamOptions = InputStreamOptions.Partial};
             _outputStream = new DataWriter(_serialDevice.OutputStream);
 
             _gpsReadTask = new Task(async () =>
             {
                 while (!_disposed)
-                {
                     try
                     {
-                        if (_inputStream == null)
-                        {
-                            break;
-                        }
+                        if (_inputStream == null) break;
 
                         var byteCount = await _inputStream.LoadAsync(1128);
                         var sentences = _inputStream.ReadString(byteCount).Split('\n');
@@ -116,9 +116,7 @@ namespace Autonoceptor.Service.Hardware
                         }
 
                         if (gpsFixData.DateTime == DateTime.MinValue)
-                        {
                             continue; //Most likely bad data, toss and continue
-                        }
 
                         //The data is accumulative, so only need to publish once
                         _subject.OnNext(gpsFixData);
@@ -130,9 +128,8 @@ namespace Autonoceptor.Service.Hardware
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(e);
+                        _logger.Log(LogLevel.Error, e.Message);
                     }
-                }
             });
 
             _gpsReadTask.Start();

@@ -40,6 +40,8 @@ namespace Autonoceptor.Service.Hardware
             if (_lcdSerialDevice == null)
                 return;
 
+            _logger.Log(LogLevel.Info, "Lcd Opened");
+
             _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
         }
 
