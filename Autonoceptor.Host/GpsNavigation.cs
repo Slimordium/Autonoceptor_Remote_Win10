@@ -14,15 +14,12 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-        private MoveRequest _currentGpsMoveRequest;
-
         private double _distanceToNextWaypoint;
 
         private bool _followingWaypoints;
 
         private IDisposable _gpsNavDisposable;
 
-        private double _gpsNavMoveMagnitude = 21;
         private IDisposable _gpsNavSwitchDisposable;
 
         private int _lastMoveMagnitude;
@@ -53,18 +50,6 @@ namespace Autonoceptor.Host
         }
 
         public WaypointList Waypoints { get; set; } = new WaypointList();
-
-        public double GpsNavMoveMagnitude
-        {
-            get => Volatile.Read(ref _gpsNavMoveMagnitude);
-            set => Volatile.Write(ref _gpsNavMoveMagnitude, value);
-        }
-
-        protected MoveRequest CurrentGpsMoveRequest
-        {
-            get => Volatile.Read(ref _currentGpsMoveRequest);
-            private set => Volatile.Write(ref _currentGpsMoveRequest, value);
-        }
 
         protected new async Task InitializeAsync()
         {
@@ -190,31 +175,26 @@ namespace Autonoceptor.Host
 
             var moveReq = await GetMoveRequest(currentWp.GpsFixData, gpsFixData);
 
-            moveReq.MovementMagnitude = GpsNavMoveMagnitude;
-
             await WriteToHardware(moveReq);
 
             await Lcd.WriteAsync($"{moveReq.SteeringDirection} {moveReq.SteeringMagnitude}", 1);
             await Lcd.WriteAsync($"Dist {moveReq.Distance} {CurrentWaypointIndex}", 2);
         }
 
-        public async Task SyncImuToGpsHeading()
+        public async Task SetImuYawToNorth()
         {
-            var gpsHeading = (await Gps.Get()).Heading;
-            var imuHeading = (await Imu.Get()).UncorrectedYaw;
+            var uncorrectedYaw = (await Imu.Get()).UncorrectedYaw;
 
-            var diff = imuHeading - gpsHeading;
+            ImuData.YawCorrection = uncorrectedYaw;
 
-            ImuData.YawCorrection = Math.Abs(diff);
+            var yaw = (await Imu.Get()).UncorrectedYaw;
 
-            imuHeading = (await Imu.Get()).Yaw;
-
-            _logger.Log(LogLevel.Info, $"IMU Yaw correction: {diff}, Corrected Yaw: {imuHeading}");
+            _logger.Log(LogLevel.Info, $"IMU Yaw correction: {uncorrectedYaw}, Corrected Yaw: {yaw}");
         }
 
         private SteeringDirection GetSteerDirection(double diff)
         {
-            var steerDirection = SteeringDirection.Center;
+            SteeringDirection steerDirection;
 
             if (diff < 0)
             {
@@ -238,9 +218,12 @@ namespace Autonoceptor.Host
             return absDiff;
         }
 
+        //GPS Heading seems almost useless. Using Yaw instead.
         public async Task<MoveRequest> GetMoveRequest(GpsFixData waypoint, GpsFixData currentLocation)
         {
             var moveReq = new MoveRequest(MoveRequestType.Gps);
+
+            var currentYaw = (await Imu.Get()).Yaw;
 
             var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(currentLocation.Lat, currentLocation.Lon, waypoint.Lat, waypoint.Lon);
             moveReq.Distance = distanceAndHeading[0];
@@ -253,12 +236,12 @@ namespace Autonoceptor.Host
                 _distanceToNextWaypoint = moveReq.Distance;
             }
 
-            if (Math.Abs(moveReq.Distance) < 6)
+            if (Math.Abs(moveReq.Distance) < 3)
                 return moveReq;
 
-            var headingDifference = currentLocation.Heading - headingToWaypoint;
+            var headingDifference = currentYaw - headingToWaypoint;
 
-            _logger.Log(LogLevel.Trace, $"Current Heading: {currentLocation.Heading}, Heading to WP: {headingToWaypoint}");
+            _logger.Log(LogLevel.Trace, $"Current Heading: {currentYaw}, Heading to WP: {headingToWaypoint}");
             _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {moveReq.Distance}in");
 
             _targetHeading = headingToWaypoint;
@@ -294,7 +277,6 @@ namespace Autonoceptor.Host
             await PwmController.SetChannelValue(steerValue, SteeringChannel);
         }
 
-        //TODO: Set speed as percentage, control PWM value off of odometer pulse count, this will set ground speed instead of guessing
         private async Task Move(MovementDirection direction, double magnitude)
         {
             var moveValue = StoppedPwm * 4;
@@ -314,8 +296,6 @@ namespace Autonoceptor.Host
 
         private async Task WriteToHardware(MoveRequest request)
         {
-            CurrentGpsMoveRequest = request;
-
             var moveValue = StoppedPwm * 4;
             var steerValue = CenterPwm * 4;
 

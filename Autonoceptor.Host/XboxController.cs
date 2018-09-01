@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.Enumeration;
 using Windows.Devices.HumanInterfaceDevice;
-using Autonoceptor.Shared.Imu;
 using Autonoceptor.Shared.Utilities;
 using Hardware.Xbox;
 using Hardware.Xbox.Enums;
@@ -87,8 +86,14 @@ namespace Autonoceptor.Host
             if (xboxData.FunctionButtons.Contains(FunctionButton.B))
             {
                 var gpsFix = await Gps.Get();
+                var imu = await Imu.Get();
 
-                Waypoints.Add(new Waypoint {GpsFixData = gpsFix });
+                Waypoints.Add(new Waypoint
+                {
+                    GpsFixData = gpsFix,
+                    ImuData = imu
+                });
+
                 await Lcd.WriteAsync($"WP {Waypoints.Count} added");
 
                 _logger.Log(LogLevel.Info, $"WP Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}, {gpsFix.Quality}");
@@ -158,7 +163,7 @@ namespace Autonoceptor.Host
                 movePwm = reverseMagnitude;
             }
 
-            await WriteToHardware(steeringPwm, movePwm); //ChannelId 1 is Steering
+            await WriteToHardware(steeringPwm, movePwm); 
         }
     }
 }

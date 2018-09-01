@@ -152,23 +152,21 @@ namespace Autonoceptor.Host.ViewModels
 
         public async Task CalibrateImu()
         {
-            await _conductor.SyncImuToGpsHeading();
+            await _conductor.SetImuYawToNorth();
         }
 
         public async Task GetCurrentPosition()
         {
             var currentLocation = await _conductor.Gps.Get();
 
-            await AddToLog(
-                $"At Lat: {currentLocation.Lat}, Lon: {currentLocation.Lon}, Heading: {currentLocation.Heading}");
+            await AddToLog($"At Lat: {currentLocation.Lat}, Lon: {currentLocation.Lon}, Heading: {currentLocation.Heading}");
         }
 
         public async Task GetYpr()
         {
             var currentImu = await _conductor.Imu.Get();
 
-            await AddToLog(
-                $"Uncorrected Yaw: {currentImu.UncorrectedYaw}, Corrected Yaw: {currentImu.Yaw} Pitch: {currentImu.Pitch} Roll: {currentImu.Roll}");
+            await AddToLog($"Yaw: {currentImu.Yaw} Pitch: {currentImu.Pitch} Roll: {currentImu.Roll}");
         }
 
         public async Task GetHeadingDistanceToSelected()
