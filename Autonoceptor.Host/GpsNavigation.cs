@@ -80,7 +80,10 @@ namespace Autonoceptor.Host
                 _gpsNavDisposable = Gps
                     .GetObservable()
                     .ObserveOnDispatcher()
-                    .Subscribe(async fix => { await UpdateMoveRequest(fix); });
+                    .Subscribe(async fix =>
+                    {
+                        await UpdateMoveRequest(fix);
+                    });
 
                 _odometerDisposable = Odometer
                     .GetObservable()
@@ -92,20 +95,22 @@ namespace Autonoceptor.Host
 
                         var traveledInches = odometerData.InTraveled - _startOdometerData.InTraveled;
 
-                        var headingDifference = (await Imu.Get()).Yaw - _targetHeading;
-
-                        await Turn(GetSteerDirection(headingDifference), GetSteeringMagnitude(headingDifference));
-
                         //We made it, yay.
-                        if (traveledInches >= _distanceToNextWaypoint - 25)
+                        if (traveledInches >= _distanceToNextWaypoint - 15)
                         {
-                            CurrentWaypointIndex++;
+                            if (Waypoints.Count > CurrentWaypointIndex + 1)
+                            {
+                                CurrentWaypointIndex++;
+                            }
+                            else
+                            {
+                                await WaypointFollowEnable(false);
+                                return;
+                            }
 
                             _distanceToNextWaypoint = 0;
 
                             _startOdometerData = null;
-
-                            _requestedPpInterval = 0;
 
                             await CheckWaypointFollowFinished();
                         }
@@ -117,7 +122,7 @@ namespace Autonoceptor.Host
                     .Subscribe(
                         async _ =>
                         {
-                            if (_requestedPpInterval < 2 || Stopped)
+                            if (_requestedPpInterval < 2 || !_followingWaypoints)
                             {
                                 await EmergencyBrake();
                                 return;
@@ -125,12 +130,14 @@ namespace Autonoceptor.Host
 
                             var odometer = await Odometer.GetOdometerData();
 
-                            if (odometer.PulseCount < _requestedPpInterval) _lastMoveMagnitude = _lastMoveMagnitude + 2;
+                            if (odometer.PulseCount < _requestedPpInterval)
+                                _lastMoveMagnitude = _lastMoveMagnitude + 5;
 
-                            if (odometer.PulseCount > _requestedPpInterval) _lastMoveMagnitude = _lastMoveMagnitude - 2;
+                            if (odometer.PulseCount > _requestedPpInterval)
+                                _lastMoveMagnitude = _lastMoveMagnitude - 5;
 
-                            if (_lastMoveMagnitude > 20)
-                                _lastMoveMagnitude = 20;
+                            if (_lastMoveMagnitude > 30)
+                                _lastMoveMagnitude = 30;
 
                             if (_lastMoveMagnitude < 0)
                                 _lastMoveMagnitude = 0;
@@ -169,16 +176,26 @@ namespace Autonoceptor.Host
 
         private async Task UpdateMoveRequest(GpsFixData gpsFixData)
         {
-            if (await CheckWaypointFollowFinished()) return;
+            if (await CheckWaypointFollowFinished())
+                return;
 
-            var currentWp = Waypoints[CurrentWaypointIndex];
+            try
+            {
+                var currentWp = Waypoints[CurrentWaypointIndex];
 
-            var moveReq = await GetMoveRequest(currentWp.GpsFixData, gpsFixData);
+                var moveReq = await GetMoveRequest(currentWp.GpsFixData, gpsFixData);
 
-            await WriteToHardware(moveReq);
+                await WriteToHardware(moveReq);
 
-            await Lcd.WriteAsync($"{moveReq.SteeringDirection} {moveReq.SteeringMagnitude}", 1);
-            await Lcd.WriteAsync($"Dist {moveReq.Distance} {CurrentWaypointIndex}", 2);
+                await Lcd.WriteAsync($"{moveReq.SteeringDirection} {moveReq.SteeringMagnitude}", 1);
+                await Lcd.WriteAsync($"Dist {moveReq.Distance} {CurrentWaypointIndex}", 2);
+            }
+            catch (Exception e)
+            {
+                _logger.Log(LogLevel.Error, e.Message);
+
+                await WaypointFollowEnable(false);
+            }
         }
 
         public async Task SetImuYawToNorth()
@@ -187,7 +204,7 @@ namespace Autonoceptor.Host
 
             ImuData.YawCorrection = uncorrectedYaw;
 
-            var yaw = (await Imu.Get()).UncorrectedYaw;
+            var yaw = (await Imu.Get()).Yaw;
 
             _logger.Log(LogLevel.Info, $"IMU Yaw correction: {uncorrectedYaw}, Corrected Yaw: {yaw}");
         }
@@ -218,12 +235,13 @@ namespace Autonoceptor.Host
             return absDiff;
         }
 
-        //GPS Heading seems almost useless. Using Yaw instead.
+        //GPS Heading seems almost useless. Using Yaw instead. OK... Set GPS to "Pedestrian nav mode" heading now seems decent...
         public async Task<MoveRequest> GetMoveRequest(GpsFixData waypoint, GpsFixData currentLocation)
         {
             var moveReq = new MoveRequest(MoveRequestType.Gps);
 
-            var currentYaw = (await Imu.Get()).Yaw;
+            //var currentYaw = (await Imu.Get()).Yaw;
+            var currentYaw = currentLocation.Heading;
 
             var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(currentLocation.Lat, currentLocation.Lon, waypoint.Lat, waypoint.Lon);
             moveReq.Distance = distanceAndHeading[0];
@@ -250,7 +268,7 @@ namespace Autonoceptor.Host
 
             moveReq.SteeringMagnitude = GetSteeringMagnitude(headingDifference);
 
-            _requestedPpInterval = 400; //This is a pretty even pace, the GPS can keep up with it ok
+            _requestedPpInterval = 300; //This is a pretty even pace, the GPS can keep up with it ok
 
             await Turn(moveReq.SteeringDirection, moveReq.SteeringMagnitude);
 

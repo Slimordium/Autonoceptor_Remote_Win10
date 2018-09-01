@@ -10,7 +10,7 @@ namespace Autonoceptor.Shared.Imu
 
         public double Yaw
         {
-            get => Math.Abs(_yaw + YawCorrection);
+            get => Math.Abs(_yaw - YawCorrection);
             set
             {
                 _yaw = value;

@@ -24,6 +24,8 @@ namespace Autonoceptor.Host.ViewModels
 
         private IDisposable _sessionDisposable;
 
+        public string Yaw { get; set; }
+
         private bool _started;
 
         public ShellViewModel()
@@ -77,7 +79,21 @@ namespace Autonoceptor.Host.ViewModels
             await AddToLog("Starting conductor");
 
             await _conductor.InitializeAsync();
+
+            await Task.Delay(1000);
+
+            _yawDisposable = _conductor
+                .Imu
+                .GetReadObservable()
+                .ObserveOnDispatcher()
+                .Subscribe(data =>
+                {
+                    Yaw = Convert.ToInt32(data.Yaw).ToString(); 
+                    NotifyOfPropertyChange("Yaw");
+                });
         }
+
+        private IDisposable _yawDisposable;
 
         public async Task GetOdometerData()
         {
