@@ -6,7 +6,9 @@ namespace Autonoceptor.Host
 {
     public class GpsNavParameters
     {
-        private AsyncLock _asyncLock = new AsyncLock();
+        private readonly AsyncLock _asyncPpiLock = new AsyncLock();
+        private readonly AsyncLock _asyncMoveLock = new AsyncLock();
+        private readonly AsyncLock _asyncHeadingLock = new AsyncLock();
 
         private double _targetHeading;
         private double _currentHeading;
@@ -15,7 +17,7 @@ namespace Autonoceptor.Host
 
         public async Task<double> GetTargetPpi()
         {
-            using (await _asyncLock.LockAsync())
+            using (await _asyncPpiLock.LockAsync())
             {
                 return _currentPpi;
             }
@@ -23,7 +25,7 @@ namespace Autonoceptor.Host
 
         public async Task SetTargetPpi(double ppi)
         {
-            using (await _asyncLock.LockAsync())
+            using (await _asyncPpiLock.LockAsync())
             {
                 _currentPpi = ppi;
             }
@@ -31,7 +33,7 @@ namespace Autonoceptor.Host
 
         public async Task<double> GetLastMoveMagnitude()
         {
-            using (await _asyncLock.LockAsync())
+            using (await _asyncMoveLock.LockAsync())
             {
                 return _lastMoveMagnitude;
             }
@@ -39,7 +41,7 @@ namespace Autonoceptor.Host
 
         public async Task SetLastMoveMagnitude(double heading)
         {
-            using (await _asyncLock.LockAsync())
+            using (await _asyncMoveLock.LockAsync())
             {
                 _lastMoveMagnitude = heading;
             }
@@ -47,7 +49,7 @@ namespace Autonoceptor.Host
 
         public async Task<double> GetTargetHeading()
         {
-            using (await _asyncLock.LockAsync())
+            using (await _asyncHeadingLock.LockAsync())
             {
                 return _targetHeading;
             }
@@ -55,7 +57,7 @@ namespace Autonoceptor.Host
 
         public async Task SetTargetHeading(double heading)
         {
-            using (await _asyncLock.LockAsync())
+            using (await _asyncHeadingLock.LockAsync())
             {
                 _targetHeading = heading;
             }
@@ -63,7 +65,7 @@ namespace Autonoceptor.Host
 
         public async Task<double> GetCurrentHeading()
         {
-            using (await _asyncLock.LockAsync())
+            using (await _asyncHeadingLock.LockAsync())
             {
                 return _currentHeading;
             }
@@ -71,7 +73,7 @@ namespace Autonoceptor.Host
 
         public async Task SetCurrentHeading(double heading)
         {
-            using (await _asyncLock.LockAsync())
+            using (await _asyncHeadingLock.LockAsync())
             {
                 _currentHeading = heading;
             }
@@ -83,8 +85,8 @@ namespace Autonoceptor.Host
 
             var absDiff = Math.Abs(diff);
 
-            if (absDiff > 25) //Can turn about 45 degrees 
-                absDiff = 25;
+            if (absDiff > 45) //Can turn about 45 degrees 
+                absDiff = 45;
 
             return absDiff;
         }
