@@ -195,10 +195,6 @@ namespace Autonoceptor.Host.ViewModels
                 currentLocation.Lon, wp.GpsFixData.Lat, wp.GpsFixData.Lon);
 
             await AddToLog($"Distance: {distanceAndHeading[0] / 12} ft, Heading: {distanceAndHeading[1]} degrees");
-
-            var moveReq = await _conductor.GetMoveRequest(wp.GpsFixData, currentLocation);
-
-            await AddToLog($"{moveReq.SteeringDirection} @ {moveReq.SteeringMagnitude}");
         }
 
         public async Task ListWaypoints()

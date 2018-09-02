@@ -58,7 +58,7 @@ namespace Autonoceptor.Host
                         if (devices.Any())
                             return;
 
-                        if (XboxDevice != null && !FollowingWaypoints) //Controller was connected, and not following waypoints, so stop
+                        if (XboxDevice != null && !await GetFollowingWaypoints()) //Controller was connected, and not following waypoints, so stop
                         {
                             await EmergencyBrake();
                         }
@@ -104,7 +104,7 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.Start))
             {
-                if (FollowingWaypoints)
+                if (await GetFollowingWaypoints())
                     return;
 
                 _logger.Log(LogLevel.Info, $"Starting WP follow {Waypoints.Count} WPs");
@@ -131,7 +131,7 @@ namespace Autonoceptor.Host
             }
 
             //TODO: Fix D-Pad functionality in xbox, use it to increase/decrease speed while navigating waypoints
-            if (FollowingWaypoints)
+            if (await GetFollowingWaypoints())
                 return;
 
             if (Stopped)

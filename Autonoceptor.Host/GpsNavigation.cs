@@ -188,15 +188,28 @@ namespace Autonoceptor.Host
             return true;
         }
 
-        public async Task SyncImuYaw(double heading)
+        public async Task SyncImuYaw()
         {
-            var uncorrectedYaw = (await Imu.Get()).UncorrectedYaw - heading;
+            var uncorrectedYaw = (await Imu.Get()).UncorrectedYaw;
+            var diff = uncorrectedYaw - await GpsNavParameters.GetCurrentHeading();
 
-            ImuData.YawCorrection = uncorrectedYaw;
+            ImuData.YawCorrection = diff;
 
             var yaw = (await Imu.Get()).Yaw;
 
-            _logger.Log(LogLevel.Info, $"IMU Yaw correction: {uncorrectedYaw}, Corrected Yaw: {yaw}");
+            _logger.Log(LogLevel.Info, $"IMU Yaw correction: {diff}, Corrected Yaw: {yaw}");
+        }
+
+        public async Task SyncImuYaw(double heading)
+        {
+            var uncorrectedYaw = (await Imu.Get()).UncorrectedYaw;
+            var diff = uncorrectedYaw - heading;
+
+            ImuData.YawCorrection = diff;
+
+            var yaw = (await Imu.Get()).Yaw;
+
+            _logger.Log(LogLevel.Info, $"IMU Yaw correction: {diff}, Corrected Yaw: {yaw}");
         }
 
         //GPS Heading seems almost useless. Using Yaw instead. OK... Set GPS to "Pedestrian nav mode" heading now seems decent...
