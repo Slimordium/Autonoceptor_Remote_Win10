@@ -233,17 +233,27 @@ namespace Autonoceptor.Host
 
             await GpsNavParameters.SetTargetHeading(headingToWaypoint);
 
-            if (distanceAndHeading[0] < 30)
+            if (distanceAndHeading[0] < Waypoints[CurrentWaypointIndex].Radius)
             {
-                if (Waypoints.Count > CurrentWaypointIndex + 1)
+                if (Waypoints[CurrentWaypointIndex].Behaviour == WaypointType.Continue)
                 {
                     CurrentWaypointIndex++;
                     return;
                 }
+                else if (Waypoints[CurrentWaypointIndex].Behaviour == WaypointType.Pause)
+                {
+                    await WaypointFollowEnable(false);
+                    CurrentWaypointIndex++;
+                    await Task.Delay(1000);
+                    await WaypointFollowEnable(true);
+                }
+                else
+                {
+                    await WaypointFollowEnable(false);
 
-                await WaypointFollowEnable(false);
-
-                await CheckWaypointFollowFinished();
+                    await CheckWaypointFollowFinished();
+                }
+                
             }
             else
             {
