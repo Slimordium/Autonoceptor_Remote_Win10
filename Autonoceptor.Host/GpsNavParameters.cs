@@ -9,6 +9,7 @@ namespace Autonoceptor.Host
         private readonly AsyncLock _asyncPpiLock = new AsyncLock();
         private readonly AsyncLock _asyncMoveLock = new AsyncLock();
         private readonly AsyncLock _asyncHeadingLock = new AsyncLock();
+        private readonly AsyncLock _asyncLock = new AsyncLock();
 
         private double _targetHeading;
         private double _currentHeading;
@@ -28,7 +29,7 @@ namespace Autonoceptor.Host
         {
             using (await _asyncLock.LockAsync())
             {
-                _distanceToWaypoint = distanceToTarget;
+                _distanceToWaypoint = distanceToTarget/12;
             }
         }
 
