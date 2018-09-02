@@ -122,27 +122,32 @@ namespace Autonoceptor.Host
                     .Subscribe(
                         async _ =>
                         {
-                            if (_requestedPpInterval < 2 || !_followingWaypoints)
+                            var ppi = Volatile.Read(ref _requestedPpInterval);
+                            var mm = Volatile.Read(ref _lastMoveMagnitude);
+
+                            if (ppi < 2 || !FollowingWaypoints)
                             {
                                 await EmergencyBrake();
                                 return;
                             }
-
+                            
                             var odometer = await Odometer.GetOdometerData();
 
-                            if (odometer.PulseCount < _requestedPpInterval)
-                                _lastMoveMagnitude = _lastMoveMagnitude + 5;
+                            if (odometer.PulseCount < ppi)
+                                mm = mm + 5;
 
-                            if (odometer.PulseCount > _requestedPpInterval)
-                                _lastMoveMagnitude = _lastMoveMagnitude - 1;
+                            if (odometer.PulseCount > ppi)
+                                mm = mm - 1;
 
-                            if (_lastMoveMagnitude > 25)
-                                _lastMoveMagnitude = 25;
+                            if (mm > 25)
+                                mm = 25;
 
-                            if (_lastMoveMagnitude < 0)
-                                _lastMoveMagnitude = 0;
+                            if (mm < 0)
+                                mm = 0;
 
-                            await Move(MovementDirection.Forward, _lastMoveMagnitude);
+                            await Move(MovementDirection.Forward, mm);
+
+                            Volatile.Write(ref _lastMoveMagnitude, mm);
                         });
 
                 return;
@@ -270,8 +275,8 @@ namespace Autonoceptor.Host
             moveReq.SteeringDirection = GetSteerDirection(headingDifference);
 
             moveReq.SteeringMagnitude = GetSteeringMagnitude(headingDifference);
-
-            _requestedPpInterval = 380; //This is a pretty even pace, the GPS can keep up with it ok
+            
+            Volatile.Write(ref _requestedPpInterval, 380);//This is a pretty even pace, the GPS can keep up with it ok
 
             await Turn(moveReq.SteeringDirection, moveReq.SteeringMagnitude);
 
