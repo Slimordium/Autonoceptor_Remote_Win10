@@ -1,10 +1,17 @@
 ﻿using System;
+using System.Threading;
 
 namespace Autonoceptor.Shared.Imu
 {
-    public class ImuData 
+    public class ImuData
     {
-        public static double YawCorrection { get; set; }
+        private static double _yawCorrection;
+
+        public static double YawCorrection
+        {
+            get => Volatile.Read(ref _yawCorrection);
+            set => Volatile.Write(ref _yawCorrection, value);
+        }
 
         private double _yaw;
 

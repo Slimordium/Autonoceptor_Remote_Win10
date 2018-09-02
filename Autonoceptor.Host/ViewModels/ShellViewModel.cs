@@ -168,7 +168,7 @@ namespace Autonoceptor.Host.ViewModels
 
         public async Task CalibrateImu()
         {
-            await _conductor.SetImuYawToNorth();
+            await _conductor.SyncImuYaw();
         }
 
         public async Task GetCurrentPosition()

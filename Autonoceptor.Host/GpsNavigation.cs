@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Reactive.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Autonoceptor.Service.Hardware;
@@ -109,35 +110,6 @@ namespace Autonoceptor.Host
 
                     });
 
-                //_odometerDisposable = Odometer
-                //    .GetObservable()
-                //    .ObserveOnDispatcher()
-                //    .Subscribe(async odometerData =>
-                //    {
-                //        if (Math.Abs(_distanceToNextWaypoint) < 0 || _startOdometerData == null)
-                //            return;
-
-                //        var traveledInches = odometerData.InTraveled - _startOdometerData.InTraveled;
-
-                //        //We made it, yay.
-                //        if (traveledInches >= _distanceToNextWaypoint + 34)
-                //        {
-                //            if (Waypoints.Count > CurrentWaypointIndex + 1)
-                //            {
-                //                CurrentWaypointIndex++;
-                //                return;
-                //            }
-
-                //            await WaypointFollowEnable(false);
-
-                //            _distanceToNextWaypoint = 0;
-
-                //            _startOdometerData = null;
-
-                //            await CheckWaypointFollowFinished();
-                //        }
-                //    });
-
                 _speedControllerDisposable = Observable
                     .Interval(TimeSpan.FromMilliseconds(100))
                     .ObserveOnDispatcher()
@@ -145,7 +117,7 @@ namespace Autonoceptor.Host
                         async _ =>
                         {
                             var ppi = Volatile.Read(ref _requestedPpInterval);
-                            double mm = Volatile.Read(ref _lastMoveMagnitude);
+                            double moveManitude = Volatile.Read(ref _lastMoveMagnitude);
 
                             if (ppi < 2 || !FollowingWaypoints)
                             {
@@ -155,21 +127,27 @@ namespace Autonoceptor.Host
                             
                             var odometer = await Odometer.GetOdometerData();
 
+                            //Give it some wiggle room
+                            if (odometer.PulseCount < ppi + 50 && odometer.PulseCount > ppi - 50)
+                            {
+                                return;
+                            }
+
                             if (odometer.PulseCount < ppi)
-                                mm = mm + 2;
+                                moveManitude = moveManitude + 2;
 
                             if (odometer.PulseCount > ppi)
-                                mm = mm - 1;
+                                moveManitude = moveManitude - 1;
 
-                            if (mm > 28) //Perhaps .. use pitch accounted for?
-                                mm = 28;
+                            if (moveManitude > 28) //Perhaps .. use pitch accounted for?
+                                moveManitude = 28;
 
-                            if (mm < 0)
-                                mm = 0;
+                            if (moveManitude < 0)
+                                moveManitude = 0;
 
-                            await Move(MovementDirection.Forward, mm);
+                            await Move(MovementDirection.Forward, moveManitude);
 
-                            Volatile.Write(ref _lastMoveMagnitude, mm);
+                            Volatile.Write(ref _lastMoveMagnitude, moveManitude);
                         });
 
                 return;
@@ -232,9 +210,9 @@ namespace Autonoceptor.Host
             }
         }
 
-        public async Task SetImuYawToNorth()
+        public async Task SyncImuYaw(double heading)
         {
-            var uncorrectedYaw = (await Imu.Get()).UncorrectedYaw;
+            var uncorrectedYaw = (await Imu.Get()).UncorrectedYaw - heading;
 
             ImuData.YawCorrection = uncorrectedYaw;
 
@@ -269,18 +247,21 @@ namespace Autonoceptor.Host
             return absDiff;
         }
 
+        private IDisposable _steeringCorrectionDisposable;
+
         //GPS Heading seems almost useless. Using Yaw instead. OK... Set GPS to "Pedestrian nav mode" heading now seems decent...
         public async Task<MoveRequest> GetMoveRequest(GpsFixData waypoint, GpsFixData currentLocation)
         {
             var moveReq = new MoveRequest(MoveRequestType.Gps);
 
-            //var currentYaw = (await Imu.Get()).Yaw;
             var currentYaw = currentLocation.Heading;
 
             var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(currentLocation.Lat, currentLocation.Lon, waypoint.Lat, waypoint.Lon);
             moveReq.Distance = distanceAndHeading[0];
 
             var headingToWaypoint = distanceAndHeading[1];
+
+            await SyncImuYaw(currentLocation.Heading);
 
             if (_startOdometerData == null)
             {
@@ -294,6 +275,8 @@ namespace Autonoceptor.Host
                 return moveReq;
             }
 
+            Volatile.Write(ref _targetHeading, headingToWaypoint);
+
             var headingDifference = currentYaw - headingToWaypoint;
 
             _logger.Log(LogLevel.Trace, $"Current Heading: {currentYaw}, Heading to WP: {headingToWaypoint}");
@@ -304,12 +287,31 @@ namespace Autonoceptor.Host
             moveReq.SteeringDirection = GetSteerDirection(headingDifference);
 
             moveReq.SteeringMagnitude = GetSteeringMagnitude(headingDifference);
+
+            _steeringCorrectionDisposable?.Dispose();
+
+            //We only get a heading update from the GPS at 1hz, this should help
+            _steeringCorrectionDisposable = Observable
+                .Timer(TimeSpan.FromMilliseconds(400)) //This may need to change, also may be better to have an interval hanging out doing this more frequently..?
+                .ObserveOnDispatcher()
+                .Subscribe(async _ => { await AdjustHeadingUsingImu(); });
             
             Volatile.Write(ref _requestedPpInterval, 460);//This is a pretty even pace, the GPS can keep up with it ok
 
             await Turn(moveReq.SteeringDirection, moveReq.SteeringMagnitude);
 
             return moveReq;
+        }
+
+        private async Task AdjustHeadingUsingImu()
+        {
+            var imuData = await Imu.Get();
+
+            var diff = imuData.Yaw - Volatile.Read(ref _targetHeading);
+            var targetdirection = GetSteerDirection(diff);
+            var magnitude = GetSteeringMagnitude(diff);
+
+            await Turn(targetdirection, magnitude);
         }
 
         private async Task Turn(SteeringDirection direction, double magnitude)
