@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Nito.AsyncEx;
+using NLog;
 
 namespace Autonoceptor.Host
 {
@@ -16,6 +17,8 @@ namespace Autonoceptor.Host
         private double _currentPpi;
         private double _lastMoveMagnitude;
         private double _distanceToWaypoint;
+
+        private ILogger _logger = LogManager.GetCurrentClassLogger();
 
         public async Task<double> GetDistanceToWaypoint()
         {
@@ -100,20 +103,21 @@ namespace Autonoceptor.Host
         public async Task<double> GetSteeringMagnitude()
         {
             var diff = Math.Abs(await GetCurrentHeading() - await GetTargetHeading());
+            
 
-            Console.WriteLine($"Distance to target: {_distanceToWaypoint}");
-            Console.WriteLine($"Diff: {diff}");
+            _logger.Log(LogLevel.Info,$"Distance to target: {_distanceToWaypoint}");
+            _logger.Log(LogLevel.Info,$"Diff: {diff}");
 
             var maxdif = 22 - 10 * Math.Atan((_distanceToWaypoint - 10) / 3);
 
-            Console.WriteLine($"Maximum difference{maxdif}");
+            _logger.Log(LogLevel.Info,$"Maximum difference{maxdif}");
 
             if (diff > maxdif) //Can turn about 45 degrees 
             {
                 diff = maxdif;
             }
 
-            Console.WriteLine($"Returned Value: {diff}");
+            _logger.Log(LogLevel.Info,$"Returned Value: {diff}");
 
             return diff;
         }
