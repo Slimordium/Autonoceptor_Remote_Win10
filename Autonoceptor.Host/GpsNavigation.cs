@@ -22,7 +22,7 @@ namespace Autonoceptor.Host
 
         private IDisposable _gpsNavSwitchDisposable;
 
-        private int _lastMoveMagnitude;
+        private double _lastMoveMagnitude;
         private IDisposable _odometerDisposable;
 
         private int _requestedPpInterval;
@@ -83,30 +83,22 @@ namespace Autonoceptor.Host
                     .Subscribe(async fix =>
                     {
                         await UpdateMoveRequest(fix);
-                    });
 
-                _odometerDisposable = Odometer
-                    .GetObservable()
-                    .ObserveOnDispatcher()
-                    .Subscribe(async odometerData =>
-                    {
-                        if (Math.Abs(_distanceToNextWaypoint) < 0 || _startOdometerData == null)
-                            return;
+                        var currentLocation = await Gps.Get();
 
-                        var traveledInches = odometerData.InTraveled - _startOdometerData.InTraveled;
+                        var wp = Waypoints[CurrentWaypointIndex].GpsFixData;
 
-                        //We made it, yay.
-                        if (traveledInches >= _distanceToNextWaypoint - 20)
+                        var distHead = GpsExtensions.GetDistanceAndHeadingToDestination(currentLocation.Lat, currentLocation.Lon, wp.Lat, wp.Lon);
+
+                        if (distHead[0] < 30)
                         {
                             if (Waypoints.Count > CurrentWaypointIndex + 1)
                             {
                                 CurrentWaypointIndex++;
-                            }
-                            else
-                            {
-                                await WaypointFollowEnable(false);
                                 return;
                             }
+
+                            await WaypointFollowEnable(false);
 
                             _distanceToNextWaypoint = 0;
 
@@ -114,7 +106,37 @@ namespace Autonoceptor.Host
 
                             await CheckWaypointFollowFinished();
                         }
+
                     });
+
+                //_odometerDisposable = Odometer
+                //    .GetObservable()
+                //    .ObserveOnDispatcher()
+                //    .Subscribe(async odometerData =>
+                //    {
+                //        if (Math.Abs(_distanceToNextWaypoint) < 0 || _startOdometerData == null)
+                //            return;
+
+                //        var traveledInches = odometerData.InTraveled - _startOdometerData.InTraveled;
+
+                //        //We made it, yay.
+                //        if (traveledInches >= _distanceToNextWaypoint + 34)
+                //        {
+                //            if (Waypoints.Count > CurrentWaypointIndex + 1)
+                //            {
+                //                CurrentWaypointIndex++;
+                //                return;
+                //            }
+
+                //            await WaypointFollowEnable(false);
+
+                //            _distanceToNextWaypoint = 0;
+
+                //            _startOdometerData = null;
+
+                //            await CheckWaypointFollowFinished();
+                //        }
+                //    });
 
                 _speedControllerDisposable = Observable
                     .Interval(TimeSpan.FromMilliseconds(100))
@@ -123,7 +145,7 @@ namespace Autonoceptor.Host
                         async _ =>
                         {
                             var ppi = Volatile.Read(ref _requestedPpInterval);
-                            var mm = Volatile.Read(ref _lastMoveMagnitude);
+                            double mm = Volatile.Read(ref _lastMoveMagnitude);
 
                             if (ppi < 2 || !FollowingWaypoints)
                             {
@@ -134,13 +156,13 @@ namespace Autonoceptor.Host
                             var odometer = await Odometer.GetOdometerData();
 
                             if (odometer.PulseCount < ppi)
-                                mm = mm + 5;
+                                mm = mm + 2;
 
                             if (odometer.PulseCount > ppi)
                                 mm = mm - 1;
 
-                            if (mm > 25)
-                                mm = 25;
+                            if (mm > 28) //Perhaps .. use pitch accounted for?
+                                mm = 28;
 
                             if (mm < 0)
                                 mm = 0;
@@ -153,9 +175,16 @@ namespace Autonoceptor.Host
                 return;
             }
 
-            await EmergencyBrake(true);
+            await EmergencyBrake();
 
-            await Lcd.WriteAsync("GPS Nav stopped");
+            _startOdometerData = null;
+
+            await Lcd.WriteAsync("WP Follow finished");
+            _logger.Log(LogLevel.Info, "WP Follow finished");
+
+            CurrentWaypointIndex = 0;
+
+            _distanceToNextWaypoint = 0;
 
             _steerMagnitudeDecayDisposable?.Dispose();
             _gpsNavDisposable?.Dispose();
@@ -234,8 +263,8 @@ namespace Autonoceptor.Host
         {
             var absDiff = Math.Abs(diff);
 
-            if (absDiff > 45) //Can turn about 45 degrees 
-                absDiff = 45;
+            if (absDiff > 25) //Can turn about 45 degrees 
+                absDiff = 25;
 
             return absDiff;
         }
@@ -276,7 +305,7 @@ namespace Autonoceptor.Host
 
             moveReq.SteeringMagnitude = GetSteeringMagnitude(headingDifference);
             
-            Volatile.Write(ref _requestedPpInterval, 380);//This is a pretty even pace, the GPS can keep up with it ok
+            Volatile.Write(ref _requestedPpInterval, 460);//This is a pretty even pace, the GPS can keep up with it ok
 
             await Turn(moveReq.SteeringDirection, moveReq.SteeringMagnitude);
 
@@ -287,16 +316,13 @@ namespace Autonoceptor.Host
         {
             var steerValue = CenterPwm * 4;
 
-            if (magnitude > 100)
-                magnitude = 100;
-
             switch (direction)
             {
                 case SteeringDirection.Left:
-                    steerValue = Convert.ToUInt16(magnitude.Map(0, 45, CenterPwm, LeftPwmMax)) * 4;
+                    steerValue = Convert.ToUInt16(magnitude.Map(0, 65, CenterPwm, LeftPwmMax)) * 4;
                     break;
                 case SteeringDirection.Right:
-                    steerValue = Convert.ToUInt16(magnitude.Map(0, 45, CenterPwm, RightPwmMax)) * 4;
+                    steerValue = Convert.ToUInt16(magnitude.Map(0, 65, CenterPwm, RightPwmMax)) * 4;
                     break;
             }
 
