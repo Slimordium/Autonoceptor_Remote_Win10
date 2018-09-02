@@ -2,7 +2,6 @@
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Autonoceptor.Service.Hardware;
 using Autonoceptor.Shared.Imu;
 using Autonoceptor.Shared.Utilities;
 using Nito.AsyncEx;
@@ -14,18 +13,13 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-        private bool _followingWaypoints;
-
         private IDisposable _gpsNavDisposable;
-
         private IDisposable _gpsNavSwitchDisposable;
         private IDisposable _odometerDisposable;
         private IDisposable _speedControllerDisposable;
         private IDisposable _gpsHeadingUpdateDisposable;
         private IDisposable _imuHeadingUpdateDisposable;
         private IDisposable _steeringUpdater;
-
-        private OdometerData _startOdometerData;
 
         private readonly AsyncLock _asyncLock = new AsyncLock();
 
@@ -41,10 +35,21 @@ namespace Autonoceptor.Host
             cancellationTokenSource.Token.Register(async () => { await WaypointFollowEnable(false); });
         }
 
-        protected bool FollowingWaypoints
+        private bool _followingWaypoints;
+        protected async Task<bool> GetFollowingWaypoints()
         {
-            get => Volatile.Read(ref _followingWaypoints);
-            set => Volatile.Write(ref _followingWaypoints, value);
+            using (await _asyncLock.LockAsync())
+            {
+                return _followingWaypoints;
+            }
+        }
+
+        protected async Task SetFollowingWaypoints(bool isFollowing)
+        {
+            using (await _asyncLock.LockAsync())
+            {
+                _followingWaypoints = isFollowing;
+            }
         }
 
         protected new async Task InitializeAsync()
@@ -61,10 +66,12 @@ namespace Autonoceptor.Host
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
-                    if (!FollowingWaypoints)
+                    if (!await GetFollowingWaypoints())
                         return;
 
-                    await Turn(await GpsNavParameters.GetSteeringDirection(), await GpsNavParameters.GetSteeringMagnitude());
+                    await SetVehicleHeading(
+                        await GpsNavParameters.GetSteeringDirection(), 
+                        await GpsNavParameters.GetSteeringMagnitude());
                 });
 
             _gpsHeadingUpdateDisposable = Gps
@@ -86,10 +93,10 @@ namespace Autonoceptor.Host
 
         public async Task WaypointFollowEnable(bool enabled)
         {
-            if (FollowingWaypoints == enabled)
+            if (await GetFollowingWaypoints() == enabled)
                 return;
 
-            FollowingWaypoints = enabled;
+            await SetFollowingWaypoints(enabled);
 
             if (enabled)
             {
@@ -116,7 +123,7 @@ namespace Autonoceptor.Host
                             var ppi = await GpsNavParameters.GetTargetPpi();
                             var moveMagnitude = await GpsNavParameters.GetLastMoveMagnitude();
 
-                            if (ppi < 2 || !FollowingWaypoints)
+                            if (ppi < 2 || !await GetFollowingWaypoints())
                             {
                                 await GpsNavParameters.SetTargetPpi(0);
 
@@ -144,7 +151,7 @@ namespace Autonoceptor.Host
                             if (moveMagnitude < 0)
                                 moveMagnitude = 0;
 
-                            await Move(MovementDirection.Forward, moveMagnitude);
+                            await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
 
                             await GpsNavParameters.SetLastMoveMagnitude(moveMagnitude);
                         });
@@ -152,13 +159,12 @@ namespace Autonoceptor.Host
                 return;
             }
 
-            _startOdometerData = null;
-
             await Lcd.WriteAsync("WP Follow finished");
             _logger.Log(LogLevel.Info, "WP Follow finished");
 
             CurrentWaypointIndex = 0;
 
+            //Cleanup WP Nav specific resources 
             _gpsNavDisposable?.Dispose();
             _odometerDisposable?.Dispose();
             _speedControllerDisposable?.Dispose();
@@ -166,13 +172,14 @@ namespace Autonoceptor.Host
             _gpsNavDisposable = null;
             _odometerDisposable = null;
             _speedControllerDisposable = null;
+            //-----------------------------------
 
             await EmergencyBrake();
         }
 
         private async Task<bool> CheckWaypointFollowFinished()
         {
-            if (CurrentWaypointIndex <= Waypoints.Count && FollowingWaypoints)
+            if (CurrentWaypointIndex <= Waypoints.Count && await GetFollowingWaypoints())
                 return false;
 
             _logger.Log(LogLevel.Info, $"Nav finished {Waypoints.Count} WPs");
@@ -211,11 +218,6 @@ namespace Autonoceptor.Host
 
             await SyncImuYaw(gpsFixData.Heading);
 
-            if (_startOdometerData == null)
-            {
-                _startOdometerData = await Odometer.GetOdometerData();
-            }
-
             await GpsNavParameters.SetTargetHeading(headingToWaypoint);
 
             if (distanceAndHeading[0] < 30)
@@ -228,8 +230,6 @@ namespace Autonoceptor.Host
 
                 await WaypointFollowEnable(false);
 
-                _startOdometerData = null;
-
                 await CheckWaypointFollowFinished();
             }
             else
@@ -241,7 +241,7 @@ namespace Autonoceptor.Host
             }
         }
 
-        private async Task Turn(SteeringDirection direction, double magnitude)
+        private async Task SetVehicleHeading(SteeringDirection direction, double magnitude)
         {
             var steerValue = CenterPwm * 4;
 
@@ -258,7 +258,7 @@ namespace Autonoceptor.Host
             await PwmController.SetChannelValue(steerValue, SteeringChannel);
         }
 
-        private async Task Move(MovementDirection direction, double magnitude)
+        private async Task SetVehicleTorque(MovementDirection direction, double magnitude)
         {
             var moveValue = StoppedPwm * 4;
 
