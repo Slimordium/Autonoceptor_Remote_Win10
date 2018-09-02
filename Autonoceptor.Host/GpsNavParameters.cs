@@ -101,13 +101,19 @@ namespace Autonoceptor.Host
         {
             var diff = Math.Abs(await GetCurrentHeading() - await GetTargetHeading());
 
+            Console.WriteLine($"Distance to target: {_distanceToWaypoint}");
+            Console.WriteLine($"Diff: {diff}");
+
             var maxdif = 22 - 10 * Math.Atan((_distanceToWaypoint - 10) / 3);
+
+            Console.WriteLine($"Maximum difference{maxdif}");
 
             if (diff > maxdif) //Can turn about 45 degrees 
             {
                 diff = maxdif;
             }
-                
+
+            Console.WriteLine($"Returned Value: {diff}");
 
             return diff;
         }
