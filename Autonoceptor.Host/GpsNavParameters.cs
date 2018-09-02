@@ -12,6 +12,23 @@ namespace Autonoceptor.Host
         private double _currentHeading;
         private double _currentPpi;
         private double _lastMoveMagnitude;
+        private double _distanceToWaypoint;
+
+        public async Task<double> GetDistanceToWaypoint()
+        {
+            using (await _asyncLock.LockAsync())
+            {
+                return _distanceToWaypoint;
+            }
+        }
+
+        public async Task SetDistanceToWaypoint(double distanceToTarget)
+        {
+            using (await _asyncLock.LockAsync())
+            {
+                _distanceToWaypoint = distanceToTarget;
+            }
+        }
 
         public async Task<double> GetTargetPpi()
         {
@@ -79,14 +96,17 @@ namespace Autonoceptor.Host
 
         public async Task<double> GetSteeringMagnitude()
         {
-            var diff = await GetCurrentHeading() - await GetTargetHeading();
+            var diff = Math.Abs(await GetCurrentHeading() - await GetTargetHeading());
 
-            var absDiff = Math.Abs(diff);
+            var maxdif = 22 - 10 * Math.Atan((_distanceToWaypoint - 10) / 3);
 
-            if (absDiff > 25) //Can turn about 45 degrees 
-                absDiff = 25;
+            if (diff > maxdif) //Can turn about 45 degrees 
+            {
+                diff = maxdif;
+            }
+                
 
-            return absDiff;
+            return diff;
         }
 
         public async Task<SteeringDirection> GetSteeringDirection()

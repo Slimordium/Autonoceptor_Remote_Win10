@@ -70,7 +70,7 @@ namespace Autonoceptor.Host
                         return;
 
                     await SetVehicleHeading(
-                        await GpsNavParameters.GetSteeringDirection(), 
+                        await GpsNavParameters.GetSteeringDirection(),
                         await GpsNavParameters.GetSteeringMagnitude());
                 });
 
@@ -232,6 +232,7 @@ namespace Autonoceptor.Host
             await SyncImuYaw(gpsFixData.Heading);
 
             await GpsNavParameters.SetTargetHeading(headingToWaypoint);
+            await GpsNavParameters.SetDistanceToWaypoint(distanceAndHeading[0]);
 
             if (distanceAndHeading[0] < Waypoints[CurrentWaypointIndex].Radius)
             {
