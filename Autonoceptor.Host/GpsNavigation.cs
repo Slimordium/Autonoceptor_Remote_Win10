@@ -59,10 +59,13 @@ namespace Autonoceptor.Host
             _gpsNavSwitchDisposable = PwmController.GetObservable()
                 .Where(channel => channel.ChannelId == GpsNavEnabledChannel)
                 .ObserveOnDispatcher()
-                .Subscribe(async channelData => { await WaypointFollowEnable(channelData.DigitalValue); });
+                .Subscribe(async channelData =>
+                {
+                    await WaypointFollowEnable(channelData.DigitalValue);
+                });
 
             _steeringUpdater = Observable
-                .Interval(TimeSpan.FromMilliseconds(200))
+                .Interval(TimeSpan.FromMilliseconds(100))
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
@@ -82,13 +85,13 @@ namespace Autonoceptor.Host
                     await GpsNavParameters.SetCurrentHeading(gpsFixData.Heading);
                 });
 
-            _imuHeadingUpdateDisposable = Imu
-                .GetReadObservable()
-                .ObserveOnDispatcher()
-                .Subscribe(async imuData =>
-                {
-                    await GpsNavParameters.SetCurrentHeading(imuData.Yaw);
-                });
+            //_imuHeadingUpdateDisposable = Imu
+            //    .GetReadObservable()
+            //    .ObserveOnDispatcher()
+            //    .Subscribe(async imuData =>
+            //    {
+            //        await GpsNavParameters.SetCurrentHeading(imuData.Yaw);
+            //    });
         }
 
         public async Task WaypointFollowEnable(bool enabled)
@@ -134,13 +137,13 @@ namespace Autonoceptor.Host
                             var odometer = await Odometer.GetOdometerData();
 
                             //Give it some wiggle room
-                            if (odometer.PulseCount < ppi + 50 && odometer.PulseCount > ppi - 50)
+                            if (odometer.PulseCount < ppi + 10 && odometer.PulseCount > ppi - 50)
                             {
                                 return;
                             }
 
                             if (odometer.PulseCount < ppi)
-                                moveMagnitude = moveMagnitude + 2;
+                                moveMagnitude = moveMagnitude + 5;
 
                             if (odometer.PulseCount > ppi)
                                 moveMagnitude = moveMagnitude - 1;
@@ -162,6 +165,8 @@ namespace Autonoceptor.Host
             await Lcd.WriteAsync("WP Follow finished");
             _logger.Log(LogLevel.Info, "WP Follow finished");
 
+            await GpsNavParameters.SetLastMoveMagnitude(0);
+
             CurrentWaypointIndex = 0;
 
             //Cleanup WP Nav specific resources 
@@ -181,6 +186,8 @@ namespace Autonoceptor.Host
         {
             if (CurrentWaypointIndex <= Waypoints.Count && await GetFollowingWaypoints())
                 return false;
+
+            await EmergencyBrake();
 
             _logger.Log(LogLevel.Info, $"Nav finished {Waypoints.Count} WPs");
 
@@ -261,7 +268,7 @@ namespace Autonoceptor.Host
                 _logger.Log(LogLevel.Trace, $"Current Heading: {gpsFixData.Heading}, Heading to WP: {headingToWaypoint}");
                 _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {moveReq.Distance}in, {moveReq.Distance / 12}ft");
 
-                await GpsNavParameters.SetTargetPpi(460);//This is a pretty even pace, the GPS can keep up with it ok
+                await GpsNavParameters.SetTargetPpi(390);//This is a pretty even pace, the GPS can keep up with it ok
             }
         }
 
