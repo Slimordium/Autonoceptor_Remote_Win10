@@ -96,7 +96,7 @@ namespace Autonoceptor.Host
                         var traveledInches = odometerData.InTraveled - _startOdometerData.InTraveled;
 
                         //We made it, yay.
-                        if (traveledInches >= _distanceToNextWaypoint - 15)
+                        if (traveledInches >= _distanceToNextWaypoint - 20)
                         {
                             if (Waypoints.Count > CurrentWaypointIndex + 1)
                             {
@@ -134,10 +134,10 @@ namespace Autonoceptor.Host
                                 _lastMoveMagnitude = _lastMoveMagnitude + 5;
 
                             if (odometer.PulseCount > _requestedPpInterval)
-                                _lastMoveMagnitude = _lastMoveMagnitude - 5;
+                                _lastMoveMagnitude = _lastMoveMagnitude - 1;
 
-                            if (_lastMoveMagnitude > 30)
-                                _lastMoveMagnitude = 30;
+                            if (_lastMoveMagnitude > 25)
+                                _lastMoveMagnitude = 25;
 
                             if (_lastMoveMagnitude < 0)
                                 _lastMoveMagnitude = 0;
@@ -255,12 +255,15 @@ namespace Autonoceptor.Host
             }
 
             if (Math.Abs(moveReq.Distance) < 3)
+            {
+                _logger.Log(LogLevel.Info, "Less than 3in to WP, ignoring");
                 return moveReq;
+            }
 
             var headingDifference = currentYaw - headingToWaypoint;
 
             _logger.Log(LogLevel.Trace, $"Current Heading: {currentYaw}, Heading to WP: {headingToWaypoint}");
-            _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {moveReq.Distance}in");
+            _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {moveReq.Distance}in, {moveReq.Distance / 12}ft");
 
             _targetHeading = headingToWaypoint;
 
@@ -268,7 +271,7 @@ namespace Autonoceptor.Host
 
             moveReq.SteeringMagnitude = GetSteeringMagnitude(headingDifference);
 
-            _requestedPpInterval = 300; //This is a pretty even pace, the GPS can keep up with it ok
+            _requestedPpInterval = 380; //This is a pretty even pace, the GPS can keep up with it ok
 
             await Turn(moveReq.SteeringDirection, moveReq.SteeringMagnitude);
 

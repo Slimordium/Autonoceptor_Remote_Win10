@@ -99,7 +99,7 @@ namespace Autonoceptor.Host.ViewModels
         {
             var odoData = await _conductor.Odometer.GetOdometerData();
 
-            await AddToLog($"P:{odoData.PulseCount} => {odoData.InTraveled}in, {odoData.CmTraveled}cm");
+            await AddToLog($"Pulse per 250ms:{odoData.PulseCount} => {odoData.InTraveled / 12}ft, {odoData.InTraveled}in, {odoData.CmTraveled}cm");
         }
 
         private void CurrentOnResuming(object sender, object o)
