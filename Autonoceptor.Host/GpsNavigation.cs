@@ -73,7 +73,7 @@ namespace Autonoceptor.Host
                         return;
 
                     await SetVehicleHeading(
-                        await GpsNavParameters.GetSteeringDirection(), 
+                        await GpsNavParameters.GetSteeringDirection(),
                         await GpsNavParameters.GetSteeringMagnitude());
                 });
 
@@ -239,18 +239,29 @@ namespace Autonoceptor.Host
             await SyncImuYaw(gpsFixData.Heading);
 
             await GpsNavParameters.SetTargetHeading(headingToWaypoint);
+            await GpsNavParameters.SetDistanceToWaypoint(distanceAndHeading[0]);
 
-            if (distanceAndHeading[0] < 42)
+            if (distanceAndHeading[0] < Waypoints[CurrentWaypointIndex].Radius)
             {
-                if (Waypoints.Count > CurrentWaypointIndex + 1)
+                if (Waypoints[CurrentWaypointIndex].Behaviour == WaypointType.Continue)
                 {
                     CurrentWaypointIndex++;
                     return;
                 }
+                else if (Waypoints[CurrentWaypointIndex].Behaviour == WaypointType.Pause)
+                {
+                    await WaypointFollowEnable(false);
+                    CurrentWaypointIndex++;
+                    await Task.Delay(1000);
+                    await WaypointFollowEnable(true);
+                }
+                else
+                {
+                    await WaypointFollowEnable(false);
 
-                await WaypointFollowEnable(false);
-
-                await CheckWaypointFollowFinished();
+                    await CheckWaypointFollowFinished();
+                }
+                
             }
             else
             {
