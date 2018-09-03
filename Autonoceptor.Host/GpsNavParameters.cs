@@ -103,22 +103,32 @@ namespace Autonoceptor.Host
         public async Task<double> GetSteeringMagnitude()
         {
             var diff = Math.Abs(await GetCurrentHeading() - await GetTargetHeading());
-            
 
-            _logger.Log(LogLevel.Info,$"Distance to target: {_distanceToWaypoint}");
-            _logger.Log(LogLevel.Info,$"Diff: {diff}");
-
-            var maxdif = 30 - 3 * Math.Atan((_distanceToWaypoint - 20) / 5);
-
-            _logger.Log(LogLevel.Info,$"Maximum difference{maxdif}");
-
-            if (diff > maxdif) //Can turn about 45 degrees 
+            try
             {
-                diff = maxdif;
+
+                _logger.Log(LogLevel.Info, $"Distance to target: {_distanceToWaypoint}");
+                _logger.Log(LogLevel.Info, $"Diff: {diff}");
+
+                var maxdif = 30 - 3 * Math.Atan((_distanceToWaypoint - 20) / 5);
+
+                _logger.Log(LogLevel.Info, $"Maximum difference{maxdif}");
+
+                if (diff > maxdif) //Can turn about 45 degrees 
+                {
+                    diff = maxdif;
+                }
+
+                _logger.Log(LogLevel.Info, $"Returned Value: {diff}");
             }
+            catch (Exception e)
+            {
 
-            _logger.Log(LogLevel.Info,$"Returned Value: {diff}");
+                _logger.Log(LogLevel.Info, $"Distance to target: {_distanceToWaypoint}");
+                if (diff > 30) { diff = 30; };
 
+            }
+            
             return diff;
         }
 
