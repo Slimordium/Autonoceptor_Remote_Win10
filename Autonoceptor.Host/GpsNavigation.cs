@@ -40,7 +40,7 @@ namespace Autonoceptor.Host
         {
             using (await _asyncLock.LockAsync())
             {
-                return _followingWaypoints;
+                return Volatile.Read(ref _followingWaypoints);
             }
         }
 
@@ -48,7 +48,7 @@ namespace Autonoceptor.Host
         {
             using (await _asyncLock.LockAsync())
             {
-                _followingWaypoints = isFollowing;
+                Volatile.Write(ref _followingWaypoints, isFollowing);
             }
         }
 
@@ -87,7 +87,7 @@ namespace Autonoceptor.Host
 
             _imuHeadingUpdateDisposable = Imu
                 .GetReadObservable()
-                .Sample(TimeSpan.FromMilliseconds(50))
+                .Sample(TimeSpan.FromMilliseconds(100))
                 .ObserveOnDispatcher()
                 .Subscribe(async imuData =>
                 {
@@ -166,8 +166,6 @@ namespace Autonoceptor.Host
             await Lcd.WriteAsync("WP Follow finished");
             _logger.Log(LogLevel.Info, "WP Follow finished");
 
-            await GpsNavParameters.SetLastMoveMagnitude(0);
-
             CurrentWaypointIndex = 0;
 
             //Cleanup WP Nav specific resources 
@@ -185,15 +183,24 @@ namespace Autonoceptor.Host
 
         private async Task<bool> CheckWaypointFollowFinished()
         {
-            if (CurrentWaypointIndex <= Waypoints.Count && await GetFollowingWaypoints())
-                return false;
+            try
+            {
+                if (CurrentWaypointIndex <= Waypoints.Count && await GetFollowingWaypoints())
+                    return false;
 
-            await EmergencyBrake();
+                await EmergencyBrake();
 
-            _logger.Log(LogLevel.Info, $"Nav finished {Waypoints.Count} WPs");
+                _logger.Log(LogLevel.Info, $"Nav finished {Waypoints.Count} WPs");
 
-            await WaypointFollowEnable(false);
-            return true;
+                await WaypointFollowEnable(false);
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                _logger.Log(LogLevel.Info, e.Message);
+                return true;
+            }
         }
 
         public async Task SyncImuYaw()
@@ -223,8 +230,6 @@ namespace Autonoceptor.Host
         //GPS Heading seems almost useless. Using Yaw instead. OK... Set GPS to "Pedestrian nav mode" heading now seems decent...
         public async Task SetMoveTargets()
         {
-            var moveReq = new MoveRequest(MoveRequestType.Gps);
-
             if (await CheckWaypointFollowFinished())
                 return;
 
@@ -232,18 +237,18 @@ namespace Autonoceptor.Host
 
             var gpsFixData = await Gps.Get();
 
-            var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(gpsFixData.Lat, gpsFixData.Lon, currentWp.GpsFixData.Lat, currentWp.GpsFixData.Lon);
-            moveReq.Distance = distanceAndHeading[0];
-
-            var headingToWaypoint = distanceAndHeading[1];
-
-            await SyncImuYaw(gpsFixData.Heading);
-
-            await GpsNavParameters.SetTargetHeading(headingToWaypoint);
-            await GpsNavParameters.SetDistanceToWaypoint(distanceAndHeading[0]);
-
             try
             {
+                var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(gpsFixData.Lat, gpsFixData.Lon, currentWp.GpsFixData.Lat, currentWp.GpsFixData.Lon);
+                var distance = distanceAndHeading[0];
+
+                var headingToWaypoint = distanceAndHeading[1];
+
+                await SyncImuYaw(gpsFixData.Heading);
+
+                await GpsNavParameters.SetTargetHeading(headingToWaypoint);
+                await GpsNavParameters.SetDistanceToWaypoint(distanceAndHeading[0]);
+
                 if (distanceAndHeading[0] < Waypoints[CurrentWaypointIndex].Radius)
                 {
                     if (Waypoints[CurrentWaypointIndex].Behaviour == WaypointType.Continue)
@@ -273,12 +278,11 @@ namespace Autonoceptor.Host
 
                         await CheckWaypointFollowFinished();
                     }
-
                 }
                 else
                 {
                     _logger.Log(LogLevel.Trace, $"Current Heading: {gpsFixData.Heading}, Heading to WP: {headingToWaypoint}");
-                    _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {moveReq.Distance}in, {moveReq.Distance / 12}ft");
+                    _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {distance}in, {distance / 12}ft");
 
                     await GpsNavParameters.SetTargetPpi(390);//This is a pretty even pace, the GPS can keep up with it ok
                 }

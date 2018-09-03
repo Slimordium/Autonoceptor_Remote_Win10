@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Nito.AsyncEx;
 using NLog;
@@ -24,7 +25,7 @@ namespace Autonoceptor.Host
         {
             using (await _asyncLock.LockAsync())
             {
-                return _distanceToWaypoint;
+                return Volatile.Read(ref _distanceToWaypoint);
             }
         }
 
@@ -32,7 +33,7 @@ namespace Autonoceptor.Host
         {
             using (await _asyncLock.LockAsync())
             {
-                _distanceToWaypoint = distanceToTarget/12;
+                Volatile.Write(ref _distanceToWaypoint, distanceToTarget / 12);
             }
         }
 
@@ -40,7 +41,7 @@ namespace Autonoceptor.Host
         {
             using (await _asyncPpiLock.LockAsync())
             {
-                return _currentPpi;
+                return Volatile.Read(ref _currentPpi);
             }
         }
 
@@ -48,7 +49,7 @@ namespace Autonoceptor.Host
         {
             using (await _asyncPpiLock.LockAsync())
             {
-                _currentPpi = ppi;
+                Volatile.Write(ref _currentPpi, ppi);
             }
         }
 
@@ -56,15 +57,15 @@ namespace Autonoceptor.Host
         {
             using (await _asyncMoveLock.LockAsync())
             {
-                return _lastMoveMagnitude;
+                return Volatile.Read(ref _lastMoveMagnitude);
             }
         }
 
-        public async Task SetLastMoveMagnitude(double heading)
+        public async Task SetLastMoveMagnitude(double mag)
         {
             using (await _asyncMoveLock.LockAsync())
             {
-                _lastMoveMagnitude = heading;
+                Volatile.Write(ref _lastMoveMagnitude, mag);
             }
         }
 
@@ -72,7 +73,7 @@ namespace Autonoceptor.Host
         {
             using (await _asyncHeadingLock.LockAsync())
             {
-                return _targetHeading;
+                return Volatile.Read(ref _targetHeading);
             }
         }
 
@@ -80,7 +81,7 @@ namespace Autonoceptor.Host
         {
             using (await _asyncHeadingLock.LockAsync())
             {
-                _targetHeading = heading;
+                Volatile.Write(ref _targetHeading, heading);
             }
         }
 
@@ -88,15 +89,15 @@ namespace Autonoceptor.Host
         {
             using (await _asyncHeadingLock.LockAsync())
             {
-                return _currentHeading;
+                return Volatile.Read(ref _currentHeading);
             }
         }
 
         public async Task SetCurrentHeading(double heading)
         {
             using (await _asyncHeadingLock.LockAsync())
-            {
-                _currentHeading = heading;
+            { 
+                Volatile.Write(ref _currentHeading, heading);
             }
         }
 
@@ -123,10 +124,8 @@ namespace Autonoceptor.Host
             }
             catch (Exception e)
             {
-
-                _logger.Log(LogLevel.Info, $"Distance to target: {_distanceToWaypoint}");
+                _logger.Log(LogLevel.Info, e.Message);
                 if (diff > 30) { diff = 30; };
-
             }
             
             return diff;
