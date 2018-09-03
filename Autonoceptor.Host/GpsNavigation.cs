@@ -314,6 +314,16 @@ namespace Autonoceptor.Host
 
             await PwmController.SetChannelValue(steerValue, SteeringChannel);
         }
+        
+
+        private async Task OffsetAllWaypoints(double latOffset, double lonOffset)
+        {
+            foreach (Waypoint waypoint in Waypoints)
+            {
+                waypoint.GpsFixData.Lat = waypoint.GpsFixData.Lat + latOffset;
+                waypoint.GpsFixData.Lon = waypoint.GpsFixData.Lon + lonOffset;
+            }
+        }
 
         private async Task SetVehicleTorque(MovementDirection direction, double magnitude)
         {
