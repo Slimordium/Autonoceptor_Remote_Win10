@@ -18,7 +18,7 @@ namespace Autonoceptor.Host
         private double _lastMoveMagnitude;
         private double _distanceToWaypoint;
 
-        private ILogger _logger = LogManager.GetCurrentClassLogger();
+        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         public async Task<double> GetDistanceToWaypoint()
         {
