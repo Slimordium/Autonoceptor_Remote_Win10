@@ -251,32 +251,34 @@ namespace Autonoceptor.Host
 
                 if (distanceAndHeading[0] < Waypoints[CurrentWaypointIndex].Radius)
                 {
-                    if (Waypoints[CurrentWaypointIndex].Behaviour == WaypointType.Continue)
-                    {
-                        if (CurrentWaypointIndex + 1 > Waypoints.Count)
-                        {
-                            await WaypointFollowEnable(false);
 
-                            await CheckWaypointFollowFinished();
+                    switch (Waypoints[CurrentWaypointIndex].Behaviour)
+                    {
+                        case WaypointType.Continue:
+                            // Stop if I am at the end of my list
+                            if (CurrentWaypointIndex + 1 == Waypoints.Count)
+                            {
+                                await WaypointFollowEnable(false);
+                                await CheckWaypointFollowFinished();
+                                return;
+                            }
+                            CurrentWaypointIndex++;
                             return;
-                        }
 
-                        CurrentWaypointIndex++;
-                        return;
-                    }
+                        case WaypointType.Stop:
+                            await WaypointFollowEnable(false);
+                            await CheckWaypointFollowFinished();
+                            break;
 
-                    if (Waypoints[CurrentWaypointIndex].Behaviour == WaypointType.Pause)
-                    {
-                        await WaypointFollowEnable(false);
-                        CurrentWaypointIndex++;
-                        await Task.Delay(1000);
-                        await WaypointFollowEnable(true);
-                    }
-                    else
-                    {
-                        await WaypointFollowEnable(false);
+                        case WaypointType.Pause:
+                            await WaypointFollowEnable(false);
+                            CurrentWaypointIndex++;
+                            await Task.Delay(1000);
+                            await WaypointFollowEnable(true);
+                            break;
 
-                        await CheckWaypointFollowFinished();
+                        default:
+                            break;
                     }
                 }
                 else
