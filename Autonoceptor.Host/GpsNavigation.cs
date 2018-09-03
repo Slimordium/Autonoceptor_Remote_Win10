@@ -85,13 +85,13 @@ namespace Autonoceptor.Host
                     await GpsNavParameters.SetCurrentHeading(gpsFixData.Heading);
                 });
 
-            //_imuHeadingUpdateDisposable = Imu
-            //    .GetReadObservable()
-            //    .ObserveOnDispatcher()
-            //    .Subscribe(async imuData =>
-            //    {
-            //        await GpsNavParameters.SetCurrentHeading(imuData.Yaw);
-            //    });
+            _imuHeadingUpdateDisposable = Imu
+                .GetReadObservable()
+                .ObserveOnDispatcher()
+                .Subscribe(async imuData =>
+                {
+                    await GpsNavParameters.SetCurrentHeading(imuData.Yaw);
+                });
         }
 
         public async Task WaypointFollowEnable(bool enabled)
@@ -275,6 +275,9 @@ namespace Autonoceptor.Host
         private async Task SetVehicleHeading(SteeringDirection direction, double magnitude)
         {
             var steerValue = CenterPwm * 4;
+
+            if (magnitude > 34)
+                magnitude = 34;
 
             switch (direction)
             {
