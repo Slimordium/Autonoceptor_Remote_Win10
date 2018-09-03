@@ -18,6 +18,9 @@ namespace Autonoceptor.Host
 
         private bool toggle;
 
+        private LidarBehaviourMode _mode = LidarBehaviourMode.Passive;
+        private AngleDataPoints _dataPoints = new AngleDataPoints();
+
         private const int _rightPwm = 1056;
         private const int _centerPwm = 1486;
         private const int _leftPwm = 1880;
@@ -108,10 +111,28 @@ namespace Autonoceptor.Host
         //TODO: Sweep here?
         private async Task UpdateLidarNavOverride(LidarData lidarData) //Implement 2D map. Modify "write to hardware method" to with values to avoid ?
         {
-            //if (lidarData.Distance < 40)
-            //{
-            //    await EmergencyBrake();
-            //}
+
+            switch (_mode)
+            {
+                case LidarBehaviourMode.Passive:
+                    if (lidarData.Distance < 60)
+                    {
+                        _mode = LidarBehaviourMode.ObsticleDefinitionCorse;
+                        await EmergencyBrake();
+                    }
+                    break;
+                case LidarBehaviourMode.ObsticleDefinitionCorse:
+
+
+
+                    // If I have all of my data 
+
+                    break;
+                case LidarBehaviourMode.ObsticleAvoidance:
+                    break;
+                default:
+                    break;
+            }
         }
 
         //TODO: Pass move request into this method. Make turn amount uniform
@@ -120,6 +141,11 @@ namespace Autonoceptor.Host
             await PwmController.SetChannelValue(steeringPwm, SteeringChannel);
 
             await PwmController.SetChannelValue(movePwm, MovementChannel);
+        }
+
+        private double pwmToDegrees(UInt16 pwmvalue)
+        {
+            return ((pwmvalue - _centerPwm) / (_leftPwm - _centerPwm)) * (100 / 45);
         }
     }
 
@@ -130,4 +156,14 @@ namespace Autonoceptor.Host
         Full,
         Center
     }
+
+    public enum LidarBehaviourMode
+    {
+        Passive,
+        ObsticleDefinitionCorse,
+        ObsticleDefinitionFine,
+        ObsticleAvoidance
+    }
+
+    
 }
