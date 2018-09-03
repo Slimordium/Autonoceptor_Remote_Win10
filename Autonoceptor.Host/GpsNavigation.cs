@@ -87,6 +87,7 @@ namespace Autonoceptor.Host
 
             _imuHeadingUpdateDisposable = Imu
                 .GetReadObservable()
+                .Sample(TimeSpan.FromMilliseconds(50))
                 .ObserveOnDispatcher()
                 .Subscribe(async imuData =>
                 {
@@ -241,34 +242,52 @@ namespace Autonoceptor.Host
             await GpsNavParameters.SetTargetHeading(headingToWaypoint);
             await GpsNavParameters.SetDistanceToWaypoint(distanceAndHeading[0]);
 
-            if (distanceAndHeading[0] < Waypoints[CurrentWaypointIndex].Radius)
+            try
             {
-                if (Waypoints[CurrentWaypointIndex].Behaviour == WaypointType.Continue)
+                if (distanceAndHeading[0] < Waypoints[CurrentWaypointIndex].Radius)
                 {
-                    CurrentWaypointIndex++;
-                    return;
-                }
-                else if (Waypoints[CurrentWaypointIndex].Behaviour == WaypointType.Pause)
-                {
-                    await WaypointFollowEnable(false);
-                    CurrentWaypointIndex++;
-                    await Task.Delay(1000);
-                    await WaypointFollowEnable(true);
+                    if (Waypoints[CurrentWaypointIndex].Behaviour == WaypointType.Continue)
+                    {
+                        if (CurrentWaypointIndex + 1 > Waypoints.Count)
+                        {
+                            await WaypointFollowEnable(false);
+
+                            await CheckWaypointFollowFinished();
+                            return;
+                        }
+
+                        CurrentWaypointIndex++;
+                        return;
+                    }
+
+                    if (Waypoints[CurrentWaypointIndex].Behaviour == WaypointType.Pause)
+                    {
+                        await WaypointFollowEnable(false);
+                        CurrentWaypointIndex++;
+                        await Task.Delay(1000);
+                        await WaypointFollowEnable(true);
+                    }
+                    else
+                    {
+                        await WaypointFollowEnable(false);
+
+                        await CheckWaypointFollowFinished();
+                    }
+
                 }
                 else
                 {
-                    await WaypointFollowEnable(false);
+                    _logger.Log(LogLevel.Trace, $"Current Heading: {gpsFixData.Heading}, Heading to WP: {headingToWaypoint}");
+                    _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {moveReq.Distance}in, {moveReq.Distance / 12}ft");
 
-                    await CheckWaypointFollowFinished();
+                    await GpsNavParameters.SetTargetPpi(390);//This is a pretty even pace, the GPS can keep up with it ok
                 }
-                
             }
-            else
+            catch (Exception e)
             {
-                _logger.Log(LogLevel.Trace, $"Current Heading: {gpsFixData.Heading}, Heading to WP: {headingToWaypoint}");
-                _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {moveReq.Distance}in, {moveReq.Distance / 12}ft");
+                _logger.Log(LogLevel.Info, e.Message);
 
-                await GpsNavParameters.SetTargetPpi(390);//This is a pretty even pace, the GPS can keep up with it ok
+                await EmergencyBrake();
             }
         }
 
