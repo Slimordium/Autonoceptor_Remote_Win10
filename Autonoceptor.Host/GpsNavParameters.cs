@@ -108,7 +108,7 @@ namespace Autonoceptor.Host
             _logger.Log(LogLevel.Info,$"Distance to target: {_distanceToWaypoint}");
             _logger.Log(LogLevel.Info,$"Diff: {diff}");
 
-            var maxdif = 22 - 10 * Math.Atan((_distanceToWaypoint - 10) / 3);
+            var maxdif = 30 - 3 * Math.Atan((_distanceToWaypoint - 20) / 5);
 
             _logger.Log(LogLevel.Info,$"Maximum difference{maxdif}");
 
