@@ -73,8 +73,8 @@ namespace Autonoceptor.Host
                         return;
 
                     await SetVehicleHeading(
-                        await GpsNavParameters.GetSteeringDirection(),
-                        await GpsNavParameters.GetSteeringMagnitude());
+                        GpsNavParameters.GetSteeringDirection(),
+                        GpsNavParameters.GetSteeringMagnitude());
                 });
 
             _gpsHeadingUpdateDisposable = Gps
@@ -82,17 +82,17 @@ namespace Autonoceptor.Host
                 .ObserveOnDispatcher()
                 .Subscribe(async gpsFixData =>
                 {
-                    await GpsNavParameters.SetCurrentHeading(gpsFixData.Heading);
+                    GpsNavParameters.SetCurrentHeading(gpsFixData.Heading);
                 });
 
-            _imuHeadingUpdateDisposable = Imu
-                .GetReadObservable()
-                .Sample(TimeSpan.FromMilliseconds(100))
-                .ObserveOnDispatcher()
-                .Subscribe(async imuData =>
-                {
-                    await GpsNavParameters.SetCurrentHeading(imuData.Yaw);
-                });
+            //_imuHeadingUpdateDisposable = Imu
+            //    .GetReadObservable()
+            //    .Sample(TimeSpan.FromMilliseconds(100))
+            //    .ObserveOnDispatcher()
+            //    .Subscribe(async imuData =>
+            //    {
+            //        await GpsNavParameters.SetCurrentHeading(imuData.Yaw);
+            //    });
         }
 
         public async Task WaypointFollowEnable(bool enabled)
@@ -119,34 +119,45 @@ namespace Autonoceptor.Host
                     });
 
                 _speedControllerDisposable = Observable
-                    .Interval(TimeSpan.FromMilliseconds(100))
+                    .Interval(TimeSpan.FromMilliseconds(50))
                     .ObserveOnDispatcher()
                     .Subscribe(
                         async _ =>
                         {
-                            var ppi = await GpsNavParameters.GetTargetPpi();
-                            var moveMagnitude = await GpsNavParameters.GetLastMoveMagnitude();
+                            var ppi = GpsNavParameters.GetTargetPpi();
+                            var moveMagnitude = GpsNavParameters.GetLastMoveMagnitude();
 
                             if (ppi < 2 || !await GetFollowingWaypoints())
                             {
-                                await GpsNavParameters.SetTargetPpi(0);
+                                GpsNavParameters.SetTargetPpi(0);
 
                                 await EmergencyBrake();
                                 return;
                             }
-                            
+
                             var odometer = await Odometer.GetOdometerData();
 
-                            //Give it some wiggle room
-                            if (odometer.PulseCount < ppi + 10 && odometer.PulseCount > ppi - 50)
+                            var pulseCount = 0;
+
+                            for (var i = 0; i < 3; i++)
+                            {
+                                pulseCount = pulseCount + odometer.PulseCount;
+
+                                odometer = await Odometer.GetOdometerData();
+                            }
+
+                            pulseCount = pulseCount / 4;
+
+                            //Give it some wiggle ro5
+                            if (pulseCount < ppi + 30 && pulseCount > ppi - 50)
                             {
                                 return;
                             }
 
-                            if (odometer.PulseCount < ppi)
-                                moveMagnitude = moveMagnitude + 5;
+                            if (pulseCount < ppi)
+                                moveMagnitude = moveMagnitude + 2;
 
-                            if (odometer.PulseCount > ppi)
+                            if (pulseCount > ppi)
                                 moveMagnitude = moveMagnitude - 1;
 
                             if (moveMagnitude > 28) //Perhaps .. use pitch accounted for?
@@ -157,7 +168,7 @@ namespace Autonoceptor.Host
 
                             await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
 
-                            await GpsNavParameters.SetLastMoveMagnitude(moveMagnitude);
+                            GpsNavParameters.SetLastMoveMagnitude(moveMagnitude);
                         });
 
                 return;
@@ -206,7 +217,7 @@ namespace Autonoceptor.Host
         public async Task SyncImuYaw()
         {
             var uncorrectedYaw = (await Imu.Get()).UncorrectedYaw;
-            var diff = uncorrectedYaw - await GpsNavParameters.GetCurrentHeading();
+            var diff = uncorrectedYaw - GpsNavParameters.GetCurrentHeading();
 
             ImuData.YawCorrection = diff;
 
@@ -246,8 +257,8 @@ namespace Autonoceptor.Host
 
                 await SyncImuYaw(gpsFixData.Heading);
 
-                await GpsNavParameters.SetTargetHeading(headingToWaypoint);
-                await GpsNavParameters.SetDistanceToWaypoint(distanceAndHeading[0]);
+                GpsNavParameters.SetTargetHeading(headingToWaypoint);
+                GpsNavParameters.SetDistanceToWaypoint(distanceAndHeading[0]);
 
                 if (distanceAndHeading[0] < Waypoints[CurrentWaypointIndex].Radius)
                 {
@@ -286,7 +297,7 @@ namespace Autonoceptor.Host
                     _logger.Log(LogLevel.Trace, $"Current Heading: {gpsFixData.Heading}, Heading to WP: {headingToWaypoint}");
                     _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {distance}in, {distance / 12}ft");
 
-                    await GpsNavParameters.SetTargetPpi(390);//This is a pretty even pace, the GPS can keep up with it ok
+                    GpsNavParameters.SetTargetPpi(350);//This is a pretty even pace, the GPS can keep up with it ok
                 }
             }
             catch (Exception e)
@@ -301,22 +312,27 @@ namespace Autonoceptor.Host
         {
             var steerValue = CenterPwm * 4;
 
-            if (magnitude > 34)
-                magnitude = 34;
+            _logger.Log(LogLevel.Info, $"Mag: {magnitude}");
+
+            if (magnitude > 20)
+                magnitude = 20;
+
+            _logger.Log(LogLevel.Info, $"Mag after max: {magnitude}");
 
             switch (direction)
             {
                 case SteeringDirection.Left:
-                    steerValue = Convert.ToUInt16(magnitude.Map(0, 34, CenterPwm, LeftPwmMax)) * 4;
+                    steerValue = Convert.ToUInt16(magnitude.Map(0, 20, CenterPwm, LeftPwmMax)) * 4;
                     break;
                 case SteeringDirection.Right:
-                    steerValue = Convert.ToUInt16(magnitude.Map(0, 34, CenterPwm, RightPwmMax)) * 4;
+                    steerValue = Convert.ToUInt16(magnitude.Map(0, 20, CenterPwm, RightPwmMax)) * 4;
                     break;
             }
 
+            _logger.Log(LogLevel.Info, $"Steer: {steerValue}");
+
             await PwmController.SetChannelValue(steerValue, SteeringChannel);
         }
-        
 
         private async Task OffsetAllWaypoints(double latOffset, double lonOffset)
         {
@@ -334,10 +350,10 @@ namespace Autonoceptor.Host
             switch (direction)
             {
                 case MovementDirection.Forward:
-                    moveValue = Convert.ToUInt16(magnitude.Map(0, 45, StoppedPwm, ForwardPwmMax)) * 4;
+                    moveValue = Convert.ToUInt16(magnitude.Map(0, 80, StoppedPwm, ForwardPwmMax)) * 4;
                     break;
                 case MovementDirection.Reverse:
-                    moveValue = Convert.ToUInt16(magnitude.Map(0, 45, StoppedPwm, ReversePwmMax)) * 4;
+                    moveValue = Convert.ToUInt16(magnitude.Map(0, 80, StoppedPwm, ReversePwmMax)) * 4;
                     break;
             }
 

@@ -21,106 +21,76 @@ namespace Autonoceptor.Host
 
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-        public async Task<double> GetDistanceToWaypoint()
+        public double GetDistanceToWaypoint()
         {
-            using (await _asyncLock.LockAsync())
-            {
-                return Volatile.Read(ref _distanceToWaypoint);
-            }
+            return Volatile.Read(ref _distanceToWaypoint);
         }
 
-        public async Task SetDistanceToWaypoint(double distanceToTarget)
+        public void SetDistanceToWaypoint(double distanceToTarget)
         {
-            using (await _asyncLock.LockAsync())
-            {
-                Volatile.Write(ref _distanceToWaypoint, distanceToTarget / 12);
-            }
+            Volatile.Write(ref _distanceToWaypoint, distanceToTarget / 12);
         }
 
-        public async Task<double> GetTargetPpi()
+        public double GetTargetPpi()
         {
-            using (await _asyncPpiLock.LockAsync())
-            {
                 return Volatile.Read(ref _currentPpi);
-            }
         }
 
-        public async Task SetTargetPpi(double ppi)
+        public void SetTargetPpi(double ppi)
         {
-            using (await _asyncPpiLock.LockAsync())
-            {
                 Volatile.Write(ref _currentPpi, ppi);
-            }
         }
 
-        public async Task<double> GetLastMoveMagnitude()
+        public double GetLastMoveMagnitude()
         {
-            using (await _asyncMoveLock.LockAsync())
-            {
                 return Volatile.Read(ref _lastMoveMagnitude);
-            }
         }
 
-        public async Task SetLastMoveMagnitude(double mag)
+        public void SetLastMoveMagnitude(double mag)
         {
-            using (await _asyncMoveLock.LockAsync())
-            {
                 Volatile.Write(ref _lastMoveMagnitude, mag);
-            }
         }
 
-        public async Task<double> GetTargetHeading()
+        public double GetTargetHeading()
         {
-            using (await _asyncHeadingLock.LockAsync())
-            {
                 return Volatile.Read(ref _targetHeading);
-            }
         }
 
-        public async Task SetTargetHeading(double heading)
+        public void SetTargetHeading(double heading)
         {
-            using (await _asyncHeadingLock.LockAsync())
-            {
                 Volatile.Write(ref _targetHeading, heading);
-            }
         }
 
-        public async Task<double> GetCurrentHeading()
+        public double GetCurrentHeading()
         {
-            using (await _asyncHeadingLock.LockAsync())
-            {
                 return Volatile.Read(ref _currentHeading);
-            }
         }
 
-        public async Task SetCurrentHeading(double heading)
+        public void SetCurrentHeading(double heading)
         {
-            using (await _asyncHeadingLock.LockAsync())
-            { 
                 Volatile.Write(ref _currentHeading, heading);
-            }
         }
 
-        public async Task<double> GetSteeringMagnitude()
+        public double GetSteeringMagnitude()
         {
-            var diff = Math.Abs(await GetCurrentHeading() - await GetTargetHeading());
+            var diff = Math.Abs(GetCurrentHeading() - GetTargetHeading());
 
             try
             {
 
-                _logger.Log(LogLevel.Info, $"Distance to target: {_distanceToWaypoint}");
-                _logger.Log(LogLevel.Info, $"Diff: {diff}");
+                //_logger.Log(LogLevel.Info, $"Distance to target: {_distanceToWaypoint}");
+                //_logger.Log(LogLevel.Info, $"Diff: {diff}");
 
-                var maxdif = 30 - 3 * Math.Atan((_distanceToWaypoint - 20) / 5);
+                var maxdif = 20 - 3 * Math.Atan((_distanceToWaypoint - 20) / 5);
 
-                _logger.Log(LogLevel.Info, $"Maximum difference{maxdif}");
+                //_logger.Log(LogLevel.Info, $"Maximum difference{maxdif}");
 
                 if (diff > maxdif) //Can turn about 45 degrees 
                 {
                     diff = maxdif;
                 }
 
-                _logger.Log(LogLevel.Info, $"Returned Value: {diff}");
+                //_logger.Log(LogLevel.Info, $"Returned Value: {diff}");
             }
             catch (Exception e)
             {
@@ -131,11 +101,11 @@ namespace Autonoceptor.Host
             return diff;
         }
 
-        public async Task<SteeringDirection> GetSteeringDirection()
+        public SteeringDirection GetSteeringDirection()
         {
             SteeringDirection steerDirection;
 
-            var diff = await GetCurrentHeading() - await GetTargetHeading();
+            var diff = GetCurrentHeading() - GetTargetHeading();
 
             if (diff < 0)
             {

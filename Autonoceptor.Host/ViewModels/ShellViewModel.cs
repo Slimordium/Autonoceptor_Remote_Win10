@@ -120,6 +120,11 @@ namespace Autonoceptor.Host.ViewModels
             _session = null;
         }
 
+        public async Task InitMqtt()
+        {
+            await _conductor.InitializeMqtt(BrokerIp);
+        }
+
         private async Task RequestExtendedSession()
         {
             _session = new ExtendedExecutionSession {Reason = ExtendedExecutionReason.LocationTracking};
