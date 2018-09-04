@@ -39,20 +39,14 @@ namespace Autonoceptor.Host
         }
 
         private bool _followingWaypoints;
-        protected async Task<bool> GetFollowingWaypoints()
+        protected bool GetFollowingWaypoints()
         {
-            using (await _asyncLock.LockAsync())
-            {
-                return Volatile.Read(ref _followingWaypoints);
-            }
+            return Volatile.Read(ref _followingWaypoints);
         }
 
-        protected async Task SetFollowingWaypoints(bool isFollowing)
+        protected void SetFollowingWaypoints(bool isFollowing)
         {
-            using (await _asyncLock.LockAsync())
-            {
-                Volatile.Write(ref _followingWaypoints, isFollowing);
-            }
+            Volatile.Write(ref _followingWaypoints, isFollowing);
         }
 
         protected new async Task InitializeAsync()
@@ -72,7 +66,7 @@ namespace Autonoceptor.Host
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
-                    if (!await GetFollowingWaypoints())
+                    if (!GetFollowingWaypoints())
                         return;
 
                     await SetVehicleHeading(
@@ -100,10 +94,10 @@ namespace Autonoceptor.Host
 
         public async Task WaypointFollowEnable(bool enabled)
         {
-            if (await GetFollowingWaypoints() == enabled)
+            if (GetFollowingWaypoints() == enabled)
                 return;
 
-            await SetFollowingWaypoints(enabled);
+            SetFollowingWaypoints(enabled);
 
             if (enabled)
             {
@@ -158,7 +152,7 @@ namespace Autonoceptor.Host
             var ppi = GpsNavParameters.GetTargetPpi();
             var moveMagnitude = GpsNavParameters.GetLastMoveMagnitude();
 
-            if (!await GetFollowingWaypoints())
+            if (!GetFollowingWaypoints())
             {
                 GpsNavParameters.SetTargetPpi(0);
                 GpsNavParameters.SetLastMoveMagnitude(0);
@@ -207,7 +201,7 @@ namespace Autonoceptor.Host
         {
             try
             {
-                if (CurrentWaypointIndex <= Waypoints.Count && await GetFollowingWaypoints())
+                if (CurrentWaypointIndex <= Waypoints.Count && GetFollowingWaypoints())
                     return false;
 
                 await EmergencyBrake();
@@ -304,7 +298,7 @@ namespace Autonoceptor.Host
 
                     GpsNavParameters.SetTargetPpi(520);//This is a pretty even pace, the GPS can keep up with it ok
 
-                    await SetVehicleTorque(MovementDirection.Forward, 45);
+                    await SetVehicleTorque(MovementDirection.Forward, 55); //Get going quickly, let the speed controller do its work
                 }
             }
             catch (Exception e)
