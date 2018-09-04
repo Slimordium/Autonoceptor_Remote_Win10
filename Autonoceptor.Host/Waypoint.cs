@@ -18,7 +18,7 @@ namespace Autonoceptor.Host
         /// <summary>
         /// Radius in inches that is acceptable to come within the waypoint. 
         /// </summary>
-        public int Radius { get; set; } = 40;
+        public int Radius { get; set; } = 50;
     }
 
     public enum WaypointType { Continue, Stop, Pause }

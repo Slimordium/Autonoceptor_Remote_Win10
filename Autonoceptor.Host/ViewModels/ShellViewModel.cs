@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.ExtendedExecution;
 using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
 using Autonoceptor.Shared.Utilities;
 using Caliburn.Micro;
 using Nito.AsyncEx;
@@ -27,6 +28,14 @@ namespace Autonoceptor.Host.ViewModels
         public string Yaw { get; set; }
 
         private bool _started;
+
+        public string LatLon { get; set; }
+
+        public string DistanceToWaypoint { get; set; }
+
+        public string OdometerIn { get; set; }
+
+        private IDisposable _gpsDisposable;
 
         public ShellViewModel()
         {
@@ -54,9 +63,22 @@ namespace Autonoceptor.Host.ViewModels
 
         public string BrokerIp { get; set; } = "172.16.0.246";
 
-        public int GpsNavSpeed { get; set; } = 25;
+        public bool EnableNavSpeedControl
+        {
+            get
+            {
+                if (_conductor != null)
+                    return _conductor.SpeedControlEnabled;
 
-        public int WpBoundryIn { get; set; } = 32;
+                return false;
+            }
+            set
+            {
+                if (_conductor != null)
+                    _conductor.SpeedControlEnabled = value;
+            }
+
+        }
 
         private async Task AddToLog(string entry)
         {
@@ -89,17 +111,50 @@ namespace Autonoceptor.Host.ViewModels
                 .Subscribe(data =>
                 {
                     Yaw = Convert.ToInt32(data.Yaw).ToString(); 
-                    NotifyOfPropertyChange("Yaw");
+                    NotifyOfPropertyChange(nameof(Yaw));
+                });
+
+            _odometerDisposable = _conductor
+                .Odometer
+                .GetObservable()
+                .ObserveOnDispatcher()
+                .Subscribe(d =>
+                {
+                    OdometerIn =$"{d.InTraveled} in";
+                    NotifyOfPropertyChange(nameof(OdometerIn));
+                });
+
+            _gpsDisposable = _conductor
+                .Gps
+                .GetObservable()
+                .ObserveOnDispatcher()
+                .Subscribe(data =>
+                {
+                    //if (_conductor.Waypoints.Any())
+                    //{
+                    //    var distanceHeading = GpsExtensions.GetDistanceAndHeadingToDestination(data.Lat, data.Lon, Waypoints[SelectedWaypoint].GpsFixData.Lat, Waypoints[SelectedWaypoint].GpsFixData.Lon);
+
+                    //    DistanceToWaypoint = $"{distanceHeading[0]} in., {distanceHeading[1]} degrees";
+                    //}
+                    //else
+                    //{
+                    //    DistanceToWaypoint = "No waypoints";
+                    //}
+
+                    LatLon = data.ToString();
+                    NotifyOfPropertyChange(nameof(LatLon));
+                    NotifyOfPropertyChange(nameof(DistanceToWaypoint));
                 });
         }
 
         private IDisposable _yawDisposable;
+        private IDisposable _odometerDisposable;
 
         public async Task GetOdometerData()
         {
-            var odoData = await _conductor.Odometer.GetOdometerData();
+            var odoData = _conductor.Odometer.GetOdometerData();
 
-            await AddToLog($"Pulse per 250ms:{odoData.PulseCount} => {odoData.InTraveled / 12}ft, {odoData.InTraveled}in, {odoData.CmTraveled}cm");
+            await AddToLog($"Pulse per 250ms: {odoData.PulseCount} => {odoData.InTraveled / 12} ft, {odoData.InTraveled}in, {odoData.CmTraveled}cm");
         }
 
         private void CurrentOnResuming(object sender, object o)
@@ -148,19 +203,11 @@ namespace Autonoceptor.Host.ViewModels
 
         public async Task SetGpsNavSpeed()
         {
-            //_conductor.GpsNavMoveMagnitude = GpsNavSpeed;
-
-            //await AddToLog($"Set GPS nav speed %{GpsNavSpeed}");
-
             await _conductor.Gps.InitializeAsync().ConfigureAwait(false);
         }
 
         public async Task SetWpBoundry()
         {
-            //_conductor.WpTriggerDistance = WpBoundryIn;
-
-            //await AddToLog($"WP Trigger distance {WpBoundryIn}in");
-
             try
             {
                 _conductor.Gps.Dispose();

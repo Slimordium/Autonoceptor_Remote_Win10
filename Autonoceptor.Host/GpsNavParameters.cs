@@ -73,24 +73,16 @@ namespace Autonoceptor.Host
 
         public double GetSteeringMagnitude()
         {
-            var diff = Math.Abs(GetCurrentHeading() - GetTargetHeading());
+            var diff = Math.Abs(GetCurrentHeading() - GetTargetHeading()) / 1.5;
 
             try
             {
-
-                //_logger.Log(LogLevel.Info, $"Distance to target: {_distanceToWaypoint}");
-                //_logger.Log(LogLevel.Info, $"Diff: {diff}");
-
-                var maxdif = 20 - 3 * Math.Atan((_distanceToWaypoint - 20) / 5);
-
-                //_logger.Log(LogLevel.Info, $"Maximum difference{maxdif}");
+                var maxdif = 60 - 3 * Math.Atan((_distanceToWaypoint - 20) / 5);
 
                 if (diff > maxdif) //Can turn about 45 degrees 
                 {
                     diff = maxdif;
                 }
-
-                //_logger.Log(LogLevel.Info, $"Returned Value: {diff}");
             }
             catch (Exception e)
             {
