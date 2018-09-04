@@ -29,14 +29,9 @@ namespace Autonoceptor.Service.Hardware
 
         private ImuData _currentImuData = new ImuData();
 
-        private readonly AsyncLock _asyncLock = new AsyncLock();
-
-        public async Task<ImuData> Get()
+        public ImuData Get()
         {
-            using (await _asyncLock.LockAsync())
-            {
-                return _currentImuData;
-            }
+            return Volatile.Read(ref _currentImuData);
         }
 
         public Imu(CancellationToken cancellationToken)
@@ -112,10 +107,7 @@ namespace Autonoceptor.Service.Hardware
 
                             _subject.OnNext(imuData);
 
-                            using (await _asyncLock.LockAsync())
-                            {
-                                _currentImuData = imuData;
-                            }
+                            Volatile.Write(ref _currentImuData, imuData);
                         }
                         catch (Exception e)
                         {

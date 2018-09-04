@@ -132,7 +132,7 @@ namespace Autonoceptor.Host.ViewModels
                 {
                     //if (_conductor.Waypoints.Any())
                     //{
-                    //    var distanceHeading = GpsExtensions.GetDistanceAndHeadingToDestination(data.Lat, data.Lon, Waypoints[SelectedWaypoint].GpsFixData.Lat, Waypoints[SelectedWaypoint].GpsFixData.Lon);
+                    //    var distanceHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(data.Lat, data.Lon, Waypoints[SelectedWaypoint].GpsFixData.Lat, Waypoints[SelectedWaypoint].GpsFixData.Lon);
 
                     //    DistanceToWaypoint = $"{distanceHeading[0]} in., {distanceHeading[1]} degrees";
                     //}
@@ -243,7 +243,7 @@ namespace Autonoceptor.Host.ViewModels
 
             var wp = _conductor.Waypoints[SelectedWaypoint];
 
-            var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(currentLocation.Lat,
+            var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(currentLocation.Lat,
                 currentLocation.Lon, wp.GpsFixData.Lat, wp.GpsFixData.Lon);
 
             await AddToLog($"Distance: {distanceAndHeading[0] / 12} ft, Heading: {distanceAndHeading[1]} degrees");

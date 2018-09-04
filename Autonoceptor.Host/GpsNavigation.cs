@@ -2,6 +2,7 @@
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Imu;
 using Autonoceptor.Shared.Utilities;
 using Nito.AsyncEx;
@@ -67,7 +68,7 @@ namespace Autonoceptor.Host
                 });
 
             _steeringUpdater = Observable
-                .Interval(TimeSpan.FromMilliseconds(100))
+                .Interval(TimeSpan.FromMilliseconds(50))
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
@@ -82,18 +83,18 @@ namespace Autonoceptor.Host
             _gpsHeadingUpdateDisposable = Gps
                 .GetObservable()
                 .ObserveOnDispatcher()
-                .Subscribe(async gpsFixData =>
+                .Subscribe(gpsFixData =>
                 {
                     GpsNavParameters.SetCurrentHeading(gpsFixData.Heading);
                 });
 
             //_imuHeadingUpdateDisposable = Imu
             //    .GetReadObservable()
-            //    .Sample(TimeSpan.FromMilliseconds(100))
+            //    .Sample(TimeSpan.FromMilliseconds(50))
             //    .ObserveOnDispatcher()
-            //    .Subscribe(async imuData =>
+            //    .Subscribe(imuData =>
             //    {
-            //        await GpsNavParameters.SetCurrentHeading(imuData.Yaw);
+            //        GpsNavParameters.SetCurrentHeading(imuData.Yaw);
             //    });
         }
 
@@ -115,9 +116,9 @@ namespace Autonoceptor.Host
                 _gpsNavDisposable = Gps
                     .GetObservable()
                     .ObserveOnDispatcher()
-                    .Subscribe(async fix =>
+                    .Subscribe(async fixData =>
                     {
-                        await SetMoveTargets();
+                        await SetMoveTargets(fixData);
                     });
 
                 if (SpeedControlEnabled)
@@ -125,59 +126,11 @@ namespace Autonoceptor.Host
                     _speedControllerDisposable = Observable
                    .Interval(TimeSpan.FromMilliseconds(50))
                    .ObserveOnDispatcher()
-                   .Subscribe(
-                       async _ =>
-                       {
-                           var ppi = GpsNavParameters.GetTargetPpi();
-                           var moveMagnitude = GpsNavParameters.GetLastMoveMagnitude();
-
-                           if (!await GetFollowingWaypoints())
-                           {
-                               GpsNavParameters.SetTargetPpi(0);
-                               GpsNavParameters.SetLastMoveMagnitude(0);
-
-                               await EmergencyBrake();
-                               return;
-                           }
-
-                           var odometer = Odometer.GetOdometerData();
-
-                           var pulseCount = 0;
-
-                           for (var i = 0; i <= 3; i++)
-                           {
-                               pulseCount = pulseCount + odometer.PulseCount;
-
-                               odometer = Odometer.GetOdometerData();
-                           }
-
-                           pulseCount = pulseCount / 4;
-
-                            //Give it some wiggle ro5
-                           if (pulseCount < ppi + 30 && pulseCount > ppi - 50)
-                           {
-                               return;
-                           }
-
-                           if (pulseCount < ppi)
-                               moveMagnitude = moveMagnitude + 10;
-
-                           if (pulseCount > ppi)
-                               moveMagnitude = moveMagnitude - .7;
-
-                           if (moveMagnitude > 50) //Perhaps .. use pitch accounted for?
-                                moveMagnitude = 50;
-
-                           if (moveMagnitude < 0)
-                               moveMagnitude = 0;
-
-                           await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
-
-                           GpsNavParameters.SetLastMoveMagnitude(moveMagnitude);
-                       });
+                   .Subscribe(async _ =>
+                        {
+                            await UpdateMoveMagnitude();
+                        });
                 }
-
-               
 
                 return;
             }
@@ -198,6 +151,56 @@ namespace Autonoceptor.Host
             //-----------------------------------
 
             await EmergencyBrake();
+        }
+
+        private async Task UpdateMoveMagnitude()
+        {
+            var ppi = GpsNavParameters.GetTargetPpi();
+            var moveMagnitude = GpsNavParameters.GetLastMoveMagnitude();
+
+            if (!await GetFollowingWaypoints())
+            {
+                GpsNavParameters.SetTargetPpi(0);
+                GpsNavParameters.SetLastMoveMagnitude(0);
+
+                await EmergencyBrake();
+                return;
+            }
+
+            var odometer = Odometer.GetOdometerData();
+
+            var pulseCount = 0;
+
+            for (var i = 0; i <= 3; i++)
+            {
+                pulseCount = pulseCount + odometer.PulseCount;
+
+                odometer = Odometer.GetOdometerData();
+            }
+
+            pulseCount = pulseCount / 4;
+
+            //Give it some wiggle room
+            if (pulseCount < ppi + 30 && pulseCount > ppi - 50)
+            {
+                return;
+            }
+
+            if (pulseCount < ppi)
+                moveMagnitude = moveMagnitude + 10;
+
+            if (pulseCount > ppi)
+                moveMagnitude = moveMagnitude - .7;
+
+            if (moveMagnitude > 50) //Perhaps .. use pitch accounted for?
+                moveMagnitude = 50;
+
+            if (moveMagnitude < 0)
+                moveMagnitude = 0;
+
+            await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
+
+            GpsNavParameters.SetLastMoveMagnitude(moveMagnitude);
         }
 
         private async Task<bool> CheckWaypointFollowFinished()
@@ -222,55 +225,49 @@ namespace Autonoceptor.Host
             }
         }
 
-        public async Task SyncImuYaw()
+        public void SyncImuYaw()
         {
-            var uncorrectedYaw = (await Imu.Get()).UncorrectedYaw;
+            var uncorrectedYaw = Imu.Get().UncorrectedYaw;
             var diff = uncorrectedYaw - GpsNavParameters.GetCurrentHeading();
 
             ImuData.YawCorrection = diff;
 
-            var yaw = (await Imu.Get()).Yaw;
+            var yaw = Imu.Get().Yaw;
 
             _logger.Log(LogLevel.Info, $"IMU Yaw correction: {diff}, Corrected Yaw: {yaw}");
         }
 
-        public async Task SyncImuYaw(double heading)
+        public void SyncImuYaw(double heading)
         {
-            var uncorrectedYaw = (await Imu.Get()).UncorrectedYaw;
+            var uncorrectedYaw = Imu.Get().UncorrectedYaw;
             var diff = uncorrectedYaw - heading;
 
             ImuData.YawCorrection = diff;
 
-            var yaw = (await Imu.Get()).Yaw;
+            var yaw = Imu.Get().Yaw;
 
             _logger.Log(LogLevel.Info, $"IMU Yaw correction: {diff}, Corrected Yaw: {yaw}");
         }
 
         //GPS Heading seems almost useless. Using Yaw instead. OK... Set GPS to "Pedestrian nav mode" heading now seems decent...
-        public async Task SetMoveTargets()
+        public async Task SetMoveTargets(GpsFixData gpsFixData)
         {
             if (await CheckWaypointFollowFinished())
                 return;
 
             var currentWp = Waypoints[CurrentWaypointIndex];
 
-            var gpsFixData = await Gps.Get();
-
             try
             {
-                var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(gpsFixData.Lat, gpsFixData.Lon, currentWp.GpsFixData.Lat, currentWp.GpsFixData.Lon);
-                var distance = distanceAndHeading[0];
+                var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsFixData.Lat, gpsFixData.Lon, currentWp.GpsFixData.Lat, currentWp.GpsFixData.Lon);
 
-                var headingToWaypoint = distanceAndHeading[1];
+                SyncImuYaw(gpsFixData.Heading);
 
-                await SyncImuYaw(gpsFixData.Heading);
+                GpsNavParameters.SetTargetHeading(distanceAndHeading.HeadingToWaypoint);
+                GpsNavParameters.SetDistanceToWaypoint(distanceAndHeading.DistanceInInches);
 
-                GpsNavParameters.SetTargetHeading(headingToWaypoint);
-                GpsNavParameters.SetDistanceToWaypoint(distanceAndHeading[0]);
-
-                if (distanceAndHeading[0] < Waypoints[CurrentWaypointIndex].Radius)
+                if (distanceAndHeading.DistanceInInches < Waypoints[CurrentWaypointIndex].Radius)
                 {
-
                     switch (Waypoints[CurrentWaypointIndex].Behaviour)
                     {
                         case WaypointType.Continue:
@@ -302,8 +299,8 @@ namespace Autonoceptor.Host
                 }
                 else
                 {
-                    _logger.Log(LogLevel.Trace, $"Current Heading: {gpsFixData.Heading}, Heading to WP: {headingToWaypoint}");
-                    _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {distance}in, {distance / 12}ft");
+                    _logger.Log(LogLevel.Trace, $"Current Heading: {gpsFixData.Heading}, Heading to WP: {distanceAndHeading.HeadingToWaypoint}");
+                    _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {distanceAndHeading.DistanceInInches}in, {distanceAndHeading.DistanceInFeet}ft");
 
                     GpsNavParameters.SetTargetPpi(520);//This is a pretty even pace, the GPS can keep up with it ok
 
@@ -322,16 +319,16 @@ namespace Autonoceptor.Host
         {
             var steerValue = CenterPwm * 4;
 
-            if (magnitude > 60)
-                magnitude = 60;
+            if (magnitude > 80)
+                magnitude = 80;
 
             switch (direction)
             {
                 case SteeringDirection.Left:
-                    steerValue = Convert.ToUInt16(magnitude.Map(0, 60, CenterPwm, LeftPwmMax)) * 4;
+                    steerValue = Convert.ToUInt16(magnitude.Map(0, 80, CenterPwm, LeftPwmMax)) * 4;
                     break;
                 case SteeringDirection.Right:
-                    steerValue = Convert.ToUInt16(magnitude.Map(0, 60, CenterPwm, RightPwmMax)) * 4;
+                    steerValue = Convert.ToUInt16(magnitude.Map(0, 80, CenterPwm, RightPwmMax)) * 4;
                     break;
             }
 

@@ -33,42 +33,42 @@ namespace Autonoceptor.Host
 
         public double GetTargetPpi()
         {
-                return Volatile.Read(ref _currentPpi);
+            return Volatile.Read(ref _currentPpi);
         }
 
         public void SetTargetPpi(double ppi)
         {
-                Volatile.Write(ref _currentPpi, ppi);
+            Volatile.Write(ref _currentPpi, ppi);
         }
 
         public double GetLastMoveMagnitude()
         {
-                return Volatile.Read(ref _lastMoveMagnitude);
+            return Volatile.Read(ref _lastMoveMagnitude);
         }
 
         public void SetLastMoveMagnitude(double mag)
         {
-                Volatile.Write(ref _lastMoveMagnitude, mag);
+            Volatile.Write(ref _lastMoveMagnitude, mag);
         }
 
         public double GetTargetHeading()
         {
-                return Volatile.Read(ref _targetHeading);
+            return Volatile.Read(ref _targetHeading);
         }
 
         public void SetTargetHeading(double heading)
         {
-                Volatile.Write(ref _targetHeading, heading);
+            Volatile.Write(ref _targetHeading, heading);
         }
 
         public double GetCurrentHeading()
         {
-                return Volatile.Read(ref _currentHeading);
+            return Volatile.Read(ref _currentHeading);
         }
 
         public void SetCurrentHeading(double heading)
         {
-                Volatile.Write(ref _currentHeading, heading);
+            Volatile.Write(ref _currentHeading, heading);
         }
 
         public double GetSteeringMagnitude()
@@ -77,7 +77,7 @@ namespace Autonoceptor.Host
 
             try
             {
-                var maxdif = 60 - 3 * Math.Atan((_distanceToWaypoint - 20) / 5);
+                var maxdif = 80 - 3 * Math.Atan((_distanceToWaypoint - 20) / 5);
 
                 if (diff > maxdif) //Can turn about 45 degrees 
                 {
@@ -87,7 +87,8 @@ namespace Autonoceptor.Host
             catch (Exception e)
             {
                 _logger.Log(LogLevel.Info, e.Message);
-                if (diff > 30) { diff = 30; };
+
+                diff = 0;
             }
             
             return diff;
