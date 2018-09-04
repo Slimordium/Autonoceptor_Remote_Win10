@@ -70,7 +70,7 @@ namespace Autonoceptor.Host
             return await Task.FromResult(initXbox);
         }
 
-        protected async Task<Status> InitializeMqtt(string hostnameOrIp)
+        public async Task<Status> InitializeMqtt(string hostnameOrIp)
         {
             if (MqttClient != null)
             {

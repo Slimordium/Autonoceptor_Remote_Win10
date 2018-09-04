@@ -58,7 +58,7 @@ namespace Autonoceptor.Host
                         if (devices.Any())
                             return;
 
-                        if (XboxDevice != null && !await GetFollowingWaypoints()) //Controller was connected, and not following waypoints, so stop
+                        if (XboxDevice != null && !GetFollowingWaypoints()) //Controller was connected, and not following waypoints, so stop
                         {
                             await EmergencyBrake();
                         }
@@ -86,7 +86,7 @@ namespace Autonoceptor.Host
             if (xboxData.FunctionButtons.Contains(FunctionButton.B))
             {
                 var gpsFix = await Gps.Get();
-                var imu = await Imu.Get();
+                var imu = await Imu.GetLatest();
 
                 Waypoints.Add(new Waypoint
                 {
@@ -104,7 +104,7 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.Start))
             {
-                if (await GetFollowingWaypoints())
+                if (GetFollowingWaypoints())
                     return;
 
                 _logger.Log(LogLevel.Info, $"Starting WP follow {Waypoints.Count} WPs");
@@ -131,8 +131,8 @@ namespace Autonoceptor.Host
             }
 
             //TODO: Fix D-Pad functionality in xbox, use it to increase/decrease speed while navigating waypoints
-            if (await GetFollowingWaypoints())
-                return;
+            //if (await GetFollowingWaypoints())
+            //    return;
 
             if (Stopped)
                 return;
@@ -163,7 +163,13 @@ namespace Autonoceptor.Host
                 movePwm = reverseMagnitude;
             }
 
-            await WriteToHardware(steeringPwm, movePwm); 
+            await PwmController.SetChannelValue(movePwm, MovementChannel);
+
+            if (GetFollowingWaypoints())
+                return;
+
+            await PwmController.SetChannelValue(steeringPwm, SteeringChannel);
+
         }
     }
 }

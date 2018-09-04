@@ -25,22 +25,30 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly CancellationToken _cancellationToken;
 
-        private readonly AsyncLock _asyncLock = new AsyncLock();
-
         private OdometerData _odometerData = new OdometerData();
 
-        public async Task<OdometerData> GetOdometerData()
+        public OdometerData GetOdometerData()
         {
-            using (await _asyncLock.LockAsync())
-            {
-                return _odometerData;
-            }
+            return Volatile.Read(ref _odometerData);
         }
 
         public Odometer(CancellationToken cancellationToken)
         {
             _cancellationToken = cancellationToken;
         }
+
+        private double _previousIn;
+
+        private double _feetPerSecond;
+
+        public double FeetPerSecond
+        {
+            get => Volatile.Read(ref _feetPerSecond);
+            set => Volatile.Write(ref _feetPerSecond, value);
+
+        }
+
+        private IDisposable _fpsDisposable;
 
         public async Task InitializeAsync()
         {
@@ -52,6 +60,17 @@ namespace Autonoceptor.Service.Hardware
             _logger.Log(LogLevel.Info, "Odometer opened");
 
             _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
+
+            _fpsDisposable = Observable.Interval(TimeSpan.FromSeconds(1)).ObserveOnDispatcher().Subscribe(_ =>
+            {
+                var inTraveled = GetOdometerData().InTraveled;
+
+                var fps = (inTraveled - _previousIn) / 12;
+
+                FeetPerSecond = fps;
+
+                Volatile.Write(ref _previousIn, inTraveled);
+            });
 
             _readTask = new Task(async() =>
             {
@@ -114,10 +133,7 @@ namespace Autonoceptor.Service.Hardware
 
                             _subject.OnNext(odometerDataNew);
 
-                            using (await _asyncLock.LockAsync())
-                            {
-                                _odometerData = odometerDataNew;
-                            }
+                            Volatile.Write(ref _odometerData, odometerDataNew);
                                 
                         }
                         catch (Exception e)

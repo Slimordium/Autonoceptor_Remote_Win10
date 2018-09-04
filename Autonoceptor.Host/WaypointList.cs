@@ -84,7 +84,7 @@ namespace Autonoceptor.Host
         //    if (Count <= index + 1)
         //        return 0;
 
-        //    var vals = GpsExtensions.GetDistanceAndHeadingToDestination(this[index].Lat, this[index].Lon, this[index + 1].Lat, this[index + 1].Lon);
+        //    var vals = GpsExtensions.GetDistanceAndHeadingToWaypoint(this[index].Lat, this[index].Lon, this[index + 1].Lat, this[index + 1].Lon);
 
         //    return vals[0];
         //}
@@ -94,7 +94,7 @@ namespace Autonoceptor.Host
         //    if (Count <= index + 1)
         //        return 0;
 
-        //    var vals = GpsExtensions.GetDistanceAndHeadingToDestination(this[index].Lat, this[index].Lon, this[index + 1].Lat, this[index + 1].Lon);
+        //    var vals = GpsExtensions.GetDistanceAndHeadingToWaypoint(this[index].Lat, this[index].Lon, this[index + 1].Lat, this[index + 1].Lon);
 
         //    return vals[1];
         //}
