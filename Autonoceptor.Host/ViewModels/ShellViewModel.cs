@@ -218,9 +218,9 @@ namespace Autonoceptor.Host.ViewModels
             }
         }
 
-        public async Task CalibrateImu()
+        public void CalibrateImu()
         {
-            await _conductor.SyncImuYaw();
+            _conductor.SyncImuYaw();
         }
 
         public async Task GetCurrentPosition()
@@ -232,7 +232,7 @@ namespace Autonoceptor.Host.ViewModels
 
         public async Task GetYpr()
         {
-            var currentImu = await _conductor.Imu.Get();
+            var currentImu = _conductor.Imu.Get();
 
             await AddToLog($"Yaw: {currentImu.Yaw} Pitch: {currentImu.Pitch} Roll: {currentImu.Roll}");
         }
@@ -246,7 +246,7 @@ namespace Autonoceptor.Host.ViewModels
             var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(currentLocation.Lat,
                 currentLocation.Lon, wp.GpsFixData.Lat, wp.GpsFixData.Lon);
 
-            await AddToLog($"Distance: {distanceAndHeading[0] / 12} ft, Heading: {distanceAndHeading[1]} degrees");
+            await AddToLog($"Distance: {distanceAndHeading.DistanceInFeet} ft, Heading: {distanceAndHeading.HeadingToWaypoint} degrees");
         }
 
         public async Task ListWaypoints()

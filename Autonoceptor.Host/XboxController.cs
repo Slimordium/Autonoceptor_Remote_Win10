@@ -86,7 +86,7 @@ namespace Autonoceptor.Host
             if (xboxData.FunctionButtons.Contains(FunctionButton.B))
             {
                 var gpsFix = await Gps.Get();
-                var imu = await Imu.Get();
+                var imu = Imu.Get();
 
                 Waypoints.Add(new Waypoint
                 {
