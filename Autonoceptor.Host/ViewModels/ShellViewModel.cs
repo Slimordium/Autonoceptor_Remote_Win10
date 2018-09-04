@@ -232,7 +232,7 @@ namespace Autonoceptor.Host.ViewModels
 
         public async Task GetYpr()
         {
-            var currentImu = _conductor.Imu.Get();
+            var currentImu = await _conductor.Imu.GetLatest();
 
             await AddToLog($"Yaw: {currentImu.Yaw} Pitch: {currentImu.Pitch} Roll: {currentImu.Roll}");
         }

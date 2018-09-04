@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Reactive.Linq;
+using System.Reactive.Threading.Tasks;
 using System.Threading;
 using System.Threading.Tasks;
 using Autonoceptor.Shared.Gps;
@@ -82,14 +83,14 @@ namespace Autonoceptor.Host
                     GpsNavParameters.SetCurrentHeading(gpsFixData.Heading);
                 });
 
-            //_imuHeadingUpdateDisposable = Imu
-            //    .GetReadObservable()
-            //    .Sample(TimeSpan.FromMilliseconds(50))
-            //    .ObserveOnDispatcher()
-            //    .Subscribe(imuData =>
-            //    {
-            //        GpsNavParameters.SetCurrentHeading(imuData.Yaw);
-            //    });
+            _imuHeadingUpdateDisposable = Imu
+                .GetReadObservable()
+                //.Sample(TimeSpan.FromMilliseconds(50))
+                .ObserveOnDispatcher()
+                .Subscribe(imuData =>
+                {
+                    GpsNavParameters.SetCurrentHeading(imuData.Yaw);
+                });
         }
 
         public async Task WaypointFollowEnable(bool enabled)
@@ -219,26 +220,26 @@ namespace Autonoceptor.Host
             }
         }
 
-        public void SyncImuYaw()
+        public async void SyncImuYaw()
         {
-            var uncorrectedYaw = Imu.Get().UncorrectedYaw;
-            var diff = uncorrectedYaw - GpsNavParameters.GetCurrentHeading();
+            var uncorrectedYaw = await Imu.GetLatest();
+            var diff = uncorrectedYaw.UncorrectedYaw - GpsNavParameters.GetCurrentHeading();
 
-            ImuData.YawCorrection = diff;
+            Imu.YawCorrection = diff;
 
-            var yaw = Imu.Get().Yaw;
+            var yaw = Imu.GetReadObservable().Take(1);
 
             _logger.Log(LogLevel.Info, $"IMU Yaw correction: {diff}, Corrected Yaw: {yaw}");
         }
 
-        public void SyncImuYaw(double heading)
+        public async void SyncImuYaw(double heading)
         {
-            var uncorrectedYaw = Imu.Get().UncorrectedYaw;
-            var diff = uncorrectedYaw - heading;
+            var uncorrectedYaw = await Imu.GetLatest();
+            var diff = uncorrectedYaw.UncorrectedYaw - heading;
 
-            ImuData.YawCorrection = diff;
+            Imu.YawCorrection = diff;
 
-            var yaw = Imu.Get().Yaw;
+            var yaw = Imu.GetReadObservable().Take(1);
 
             _logger.Log(LogLevel.Info, $"IMU Yaw correction: {diff}, Corrected Yaw: {yaw}");
         }
