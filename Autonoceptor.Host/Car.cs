@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Autonoceptor.Service.Hardware;
 using Autonoceptor.Shared.Utilities;
 using Newtonsoft.Json;
 using NLog;
@@ -127,16 +128,16 @@ namespace Autonoceptor.Host
             //GpsNavParameters.SetDistanceToWaypoint(remainingDistance);
             //-----------------------------------------------------
 
-            var pulseCount = 0;
+            var odoDataList = new List<OdometerData>();
 
             for (var i = 0; i <= 2; i++)
             {
                 var odometer = await Odometer.GetLatest();
 
-                pulseCount = pulseCount + odometer.PulseCount;
+                odoDataList.Add(odometer);
             }
 
-            pulseCount = pulseCount / 3; //Average...
+            var pulseCount = odoDataList.Average(d => d.PulseCount); //Average...
 
             //Give it some wiggle room
             if (pulseCount < pulseCountPerUpdate + 30 && pulseCount > pulseCountPerUpdate - 50)
@@ -149,25 +150,28 @@ namespace Autonoceptor.Host
 
             if (pulseCount > pulseCountPerUpdate)
             {
-                if (moveMagnitude > 60)
+                if (moveMagnitude > 50)
                 {
                     moveMagnitude = moveMagnitude - 5;
                 }
-                else if (moveMagnitude > 50)
+                else if (moveMagnitude > 40)
                 {
                     moveMagnitude = moveMagnitude - 2;
                 }
                 else
                 {
-                    moveMagnitude = moveMagnitude - .6;
+                    moveMagnitude = moveMagnitude - 1;
                 }
             }
 
-            if (moveMagnitude > 70)
-                moveMagnitude = 70;
+            if (moveMagnitude > 50)
+                moveMagnitude = 50;
 
             if (moveMagnitude < 0)
                 moveMagnitude = 0;
+
+            if (Stopped)
+                return;
 
             await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
 

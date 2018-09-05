@@ -83,9 +83,9 @@ namespace Autonoceptor.Host.ViewModels
             }
         }
 
-        public double TurnMagnitudeInputModifier { get; set; } = 1.6;
+        public double TurnMagnitudeInputModifier { get; set; } = 1.3;
 
-        public int CruiseControl { get; set; } = 350;
+        public int CruiseControl { get; set; } = 230;
 
         private async Task AddToLog(string entry)
         {

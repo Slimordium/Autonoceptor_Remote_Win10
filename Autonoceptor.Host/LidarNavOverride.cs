@@ -22,13 +22,9 @@ namespace Autonoceptor.Host
 
         private readonly AsyncLock _asyncLock = new AsyncLock();
 
-        private readonly ISubject<LidarData> _sweepSubject = new Subject<LidarData>();
-        public IObservable<LidarData> SweepObservable { get; }
-
         protected LidarNavOverride(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
             : base(cancellationTokenSource, brokerHostnameOrIp)
         {
-            SweepObservable = _sweepSubject.AsObservable();
         }
 
         //TODO: Implement servo sweep, query servo position, and associating servo position with lidar data as a sort of radar sweep. 
@@ -52,10 +48,6 @@ namespace Autonoceptor.Host
             {
                 var data = await SweepInternal(sweep);
 
-                await SetChannelValue(_centerPwm * 4, _lidarServoChannel);
-
-                await Task.Delay(500);
-
                 await SetChannelValue(0, _lidarServoChannel); //Turn servo off
 
                 return await Task.FromResult(data);
@@ -75,8 +67,6 @@ namespace Autonoceptor.Host
                     var lidarData = await Lidar.GetLatest();
                     lidarData.Angle = pwm.Map(_centerPwm, _leftPwm, 0, -45);
                     data.Add(lidarData);
-
-                    _sweepSubject.OnNext(lidarData);
                 }
             }
 
@@ -89,10 +79,14 @@ namespace Autonoceptor.Host
                     var lidarData = await Lidar.GetLatest();
                     lidarData.Angle = pwm.Map(_centerPwm, _rightPwm, 0, 45); ;
                     data.Add(lidarData);
-
-                    _sweepSubject.OnNext(lidarData);
                 }
             }
+
+            await Task.Delay(500);
+
+            await SetChannelValue(_centerPwm * 4, _lidarServoChannel);
+
+            await Task.Delay(250);
 
             return await Task.FromResult(data);
         }
