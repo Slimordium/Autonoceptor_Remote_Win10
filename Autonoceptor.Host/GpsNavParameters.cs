@@ -18,6 +18,7 @@ namespace Autonoceptor.Host
         private double _currentPpi;
         private double _lastMoveMagnitude;
         private double _distanceToWaypoint;
+        private double _currentOdometerDistance;
 
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
@@ -29,6 +30,16 @@ namespace Autonoceptor.Host
         public void SetDistanceToWaypoint(double distanceToTarget)
         {
             Volatile.Write(ref _distanceToWaypoint, distanceToTarget / 12);
+        }
+
+        public void SetOdometerTraveledDistance(double distance)
+        {
+            Volatile.Write(ref _distanceToWaypoint, _currentOdometerDistance);
+        }
+
+        public double GetOdometerTraveledDistance()
+        {
+            return Volatile.Read(ref _currentOdometerDistance);
         }
 
         public double GetTargetPpi()

@@ -66,10 +66,10 @@ namespace Autonoceptor.Service.Hardware
                 _outputStream = new DataWriter(_serialDevice.OutputStream);
                 _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
 
-                for (var i = 0; i < 3; i++)
+                for (var i = 0; i < 3; i++) //This usually does not work the 1st time...
                 {
                     await Task.Delay(500);
-                    _outputStream.WriteBytes(new[] { (byte)'#', (byte)'o', (byte)'0' });
+                    _outputStream.WriteBytes(new[] { (byte)'#', (byte)'o', (byte)'0' }); //Set to pull frame instead of stream
                     await _outputStream.StoreAsync();
                 }
                 
@@ -81,9 +81,9 @@ namespace Autonoceptor.Service.Hardware
 
                     var lastYaw = -1d;
 
-                    while (imuReadings.Count < 2)
+                    //while (imuReadings.Count < 2) //Not sure if we need this?
                     {
-                        _outputStream.WriteBytes(new[] { (byte)'#', (byte)'f' });
+                        _outputStream.WriteBytes(new[] { (byte)'#', (byte)'f' }); //Request next data frame
                         await _outputStream.StoreAsync();
 
                         await _inputStream.LoadAsync(32);
@@ -171,8 +171,6 @@ namespace Autonoceptor.Service.Hardware
                     {
                         _logger.Log(LogLevel.Error, $"{e.Message}");
                     }
-
-                   
                 }
             });
             _readTask.Start();

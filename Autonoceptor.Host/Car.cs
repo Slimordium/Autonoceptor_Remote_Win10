@@ -14,18 +14,7 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-        protected const int RightPwmMax = 1800;
-        protected const int CenterPwm = 1408;
-        protected const int LeftPwmMax = 1015;
 
-        protected const int ReversePwmMax = 1072;
-        protected const int StoppedPwm = 1471;
-        protected const int ForwardPwmMax = 1856;
-
-        protected const ushort MovementChannel = 0;
-        protected const ushort SteeringChannel = 1;
-
-        protected const ushort GpsNavEnabledChannel = 12;
         protected const ushort _extraInputChannel = 13;
         private const ushort _enableMqttChannel = 14;
 
@@ -33,12 +22,7 @@ namespace Autonoceptor.Host
 
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
 
-        private bool _stopped;
-        protected bool Stopped
-        {
-            get => Volatile.Read(ref _stopped);
-            set => Volatile.Write(ref _stopped, value);
-        }
+       
 
         protected string BrokerHostnameOrIp { get; set; }
 
@@ -47,14 +31,14 @@ namespace Autonoceptor.Host
         {
             BrokerHostnameOrIp = brokerHostnameOrIp;
 
-            cancellationTokenSource.Token.Register(async () => { await EmergencyBrake(); });
+            cancellationTokenSource.Token.Register(async () => { await Stop(); });
         }
 
         protected new async Task InitializeAsync()
         {
             await base.InitializeAsync();
 
-            _enableMqttDisposable = PwmController.GetObservable()
+            _enableMqttDisposable = PwmObservable
                 .Where(channel => channel.ChannelId == _enableMqttChannel)
                 .ObserveOnDispatcher()
                 .Subscribe(
@@ -73,27 +57,6 @@ namespace Autonoceptor.Host
                         MqttClient?.Dispose();
                         MqttClient = null;
                     });
-        }
-
-        public async Task EmergencyBrake(bool isCanceled = false)
-        {
-            if (isCanceled)
-            {
-                Stopped = false;
-
-                await Lcd.WriteAsync("Started");
-
-                _logger.Log(LogLevel.Info, "Started");
-
-                return;
-            }
-
-            if (Stopped)
-                return;
-
-            Stopped = true;
-
-            await Stop();
         }
 
         protected void ConfigureSensorPublish()
@@ -142,10 +105,26 @@ namespace Autonoceptor.Host
                     }));
         }
 
-        public async Task Stop()
+        public async Task Stop(bool isCanceled = false)
         {
-            await PwmController.SetChannelValue(StoppedPwm * 4, MovementChannel);
-            await PwmController.SetChannelValue(0, SteeringChannel);
+            if (isCanceled)
+            {
+                Stopped = false;
+
+                await Lcd.WriteAsync("Started");
+
+                _logger.Log(LogLevel.Info, "Started");
+
+                return;
+            }
+
+            await SetChannelValue(StoppedPwm * 4, MovementChannel);
+            await SetChannelValue(0, SteeringChannel);
+
+            if (Stopped)
+                return;
+
+            Stopped = true;
 
             await Lcd.WriteAsync("Stopped");
             _logger.Log(LogLevel.Info, "Stopped");
@@ -153,8 +132,8 @@ namespace Autonoceptor.Host
 
         public async Task DisableServos()
         {
-            await PwmController.SetChannelValue(0, MovementChannel);
-            await PwmController.SetChannelValue(0, SteeringChannel);
+            await SetChannelValue(0, MovementChannel);
+            await SetChannelValue(0, SteeringChannel);
 
             await Task.Delay(100);
 

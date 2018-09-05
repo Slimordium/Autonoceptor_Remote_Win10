@@ -16,6 +16,7 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
+        private IDisposable _xboxButtonDisposable;
         private IDisposable _xboxDisposable;
         private IDisposable _xboxConnectedCheckDisposable;
 
@@ -33,11 +34,20 @@ namespace Autonoceptor.Host
 
             _xboxDisposable = XboxDevice.GetObservable()
                 .Where(xboxData => xboxData != null)
-                .Sample(TimeSpan.FromMilliseconds(30))
+                .Sample(TimeSpan.FromMilliseconds(40))
                 .ObserveOnDispatcher()
                 .Subscribe(async xboxData =>
                 {
                     await OnNextXboxData(xboxData);
+                });
+
+            _xboxButtonDisposable = XboxDevice.GetObservable()
+                .Where(xboxData => xboxData != null && xboxData.FunctionButtons.Any())
+                .Throttle(TimeSpan.FromMilliseconds(250))
+                .ObserveOnDispatcher()
+                .Subscribe(async xboxData =>
+                {
+                    await OnNextXboxButtonData(xboxData);
                 });
 
             await Lcd.WriteAsync("Initialized Xbox");
@@ -60,7 +70,7 @@ namespace Autonoceptor.Host
 
                         if (XboxDevice != null && !GetFollowingWaypoints()) //Controller was connected, and not following waypoints, so stop
                         {
-                            await EmergencyBrake();
+                            await Stop();
                         }
                         else
                         {
@@ -78,9 +88,57 @@ namespace Autonoceptor.Host
 
         private async Task OnNextXboxData(XboxData xboxData)
         {
+            if (Stopped)
+                return;
+
+            ushort steeringPwm = CenterPwm * 4;
+
+            switch (xboxData.RightStick.Direction)
+            {
+                case Direction.UpLeft:
+                case Direction.DownLeft:
+                case Direction.Left:
+                    steeringPwm = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, LeftPwmMax) * 4);
+                    break;
+                case Direction.UpRight:
+                case Direction.DownRight:
+                case Direction.Right:
+                    steeringPwm = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, RightPwmMax) * 4);
+                    break;
+            }
+
+            var reverseMagnitude = Convert.ToUInt16(xboxData.LeftTrigger.Map(0, 33000, StoppedPwm, ReversePwmMax) * 4);
+            var forwardMagnitude = Convert.ToUInt16(xboxData.RightTrigger.Map(0, 33000, StoppedPwm, ForwardPwmMax) * 4);
+
+            var movePwm = forwardMagnitude;
+
+            if (reverseMagnitude < 5500)
+            {
+                movePwm = reverseMagnitude;
+            }
+
+            await SetChannelValue(movePwm, MovementChannel);
+
+            if (GetFollowingWaypoints())
+                return;
+
+            await SetChannelValue(steeringPwm, SteeringChannel);
+        }
+
+        private async Task OnNextXboxButtonData(XboxData xboxData)
+        {
+            if (xboxData.FunctionButtons.Contains(FunctionButton.X))
+            {
+                await Stop();
+
+                await WaypointFollowEnable(false);
+
+                return;
+            }
+
             if (xboxData.FunctionButtons.Contains(FunctionButton.A))
             {
-                await EmergencyBrake(true);
+                await Stop(true);
             }
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.B))
@@ -112,64 +170,13 @@ namespace Autonoceptor.Host
                 return;
             }
 
-            if (xboxData.FunctionButtons.Contains(FunctionButton.X))
-            {
-                await EmergencyBrake();
-
-                await WaypointFollowEnable(false);
-                
-                return;
-            }
-
             if (xboxData.FunctionButtons.Contains(FunctionButton.Y))
             {
                 Waypoints = new WaypointList();
 
                 _logger.Log(LogLevel.Info, "WPs Cleared");
                 await Lcd.WriteAsync($"WPs cleared");
-                return;
             }
-
-            //TODO: Fix D-Pad functionality in xbox, use it to increase/decrease speed while navigating waypoints
-            //if (await GetFollowingWaypoints())
-            //    return;
-
-            if (Stopped)
-                return;
-
-            ushort steeringPwm = CenterPwm * 4;
-
-            switch (xboxData.RightStick.Direction)
-            {
-                case Direction.UpLeft:
-                case Direction.DownLeft:
-                case Direction.Left:
-                    steeringPwm = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, LeftPwmMax) * 4);
-                    break;
-                case Direction.UpRight:
-                case Direction.DownRight:
-                case Direction.Right:
-                    steeringPwm = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, RightPwmMax) * 4);
-                    break;
-            }
-
-            var reverseMagnitude = Convert.ToUInt16(xboxData.LeftTrigger.Map(0, 33000, StoppedPwm, ReversePwmMax) * 4);
-            var forwardMagnitude = Convert.ToUInt16(xboxData.RightTrigger.Map(0, 33000, StoppedPwm, ForwardPwmMax) * 4);
-
-            var movePwm = forwardMagnitude;
-
-            if (reverseMagnitude < 5500)
-            {
-                movePwm = reverseMagnitude;
-            }
-
-            await PwmController.SetChannelValue(movePwm, MovementChannel);
-
-            if (GetFollowingWaypoints())
-                return;
-
-            await PwmController.SetChannelValue(steeringPwm, SteeringChannel);
-
         }
     }
 }

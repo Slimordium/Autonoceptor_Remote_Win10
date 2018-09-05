@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
 using System.Threading;
@@ -18,6 +19,7 @@ namespace Autonoceptor.Host
         private IDisposable _gpsNavSwitchDisposable;
         private IDisposable _speedControllerDisposable;
         private IDisposable _imuHeadingUpdateDisposable;
+        private IDisposable _gpsDisposable;
 
         private readonly AsyncLock _asyncLock = new AsyncLock();
 
@@ -32,7 +34,12 @@ namespace Autonoceptor.Host
         protected GpsNavigation(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp)
             : base(cancellationTokenSource, brokerHostnameOrIp)
         {
-            cancellationTokenSource.Token.Register(async () => { await WaypointFollowEnable(false); });
+            cancellationTokenSource.Token.Register(async () =>
+            {
+                await Stop();
+                await WaypointFollowEnable(false); 
+
+            });
         }
 
         private bool _followingWaypoints;
@@ -52,7 +59,7 @@ namespace Autonoceptor.Host
         {
             await base.InitializeAsync();
 
-            _gpsNavSwitchDisposable = PwmController.GetObservable()
+            _gpsNavSwitchDisposable = PwmObservable
                 .Where(channel => channel.ChannelId == GpsNavEnabledChannel)
                 .ObserveOnDispatcher()
                 .Subscribe(async channelData =>
@@ -60,21 +67,28 @@ namespace Autonoceptor.Host
                     await WaypointFollowEnable(channelData.DigitalValue);
                 });
 
-            _syncImuDisposable = Observable.Interval(TimeSpan.FromSeconds(3)).ObserveOnDispatcher().Subscribe(async _ =>
-            {
+            _syncImuDisposable = Observable
+                .Interval(TimeSpan.FromSeconds(4))
+                .ObserveOnDispatcher()
+                .Subscribe(async _ =>
+                {
+                    await SyncImuYaw();
+                });
 
+            _gpsDisposable = Gps
+                .GetObservable()
+                .ObserveOnDispatcher()
+                .Subscribe(async gpsData =>
+                {
+                    if (!GetFollowingWaypoints())
+                        return;
 
-                await SyncImuYaw();
-            });
+                    await SetMoveTargets(gpsData);
 
-            _gpsDisposable = Gps.GetObservable().ObserveOnDispatcher().Subscribe(async gpsData =>
-            {
-                if (!GetFollowingWaypoints())
-                    return;
-
-                await SetMoveTargets(gpsData);
-            });
-
+                    await SetVehicleHeading(
+                        GpsNavParameters.GetSteeringDirection(),
+                        GpsNavParameters.GetSteeringMagnitude());
+                });
 
             _imuHeadingUpdateDisposable = Imu
                 .GetReadObservable()
@@ -99,14 +113,11 @@ namespace Autonoceptor.Host
                     {
                         _logger.Log(LogLevel.Error, $"ImuHeadingUpdate failed {e.Message}");
 
-                        await EmergencyBrake();
+                        await Stop();
                     }
                 });
         }
 
-        private IDisposable _gpsDisposable;
-
-        private volatile float _startDistanceToWp;
 
         public async Task WaypointFollowEnable(bool enabled)
         {
@@ -134,50 +145,57 @@ namespace Autonoceptor.Host
                 return;
             }
 
+            GpsNavParameters.SetLastMoveMagnitude(0);
+            GpsNavParameters.SetTargetPpi(0);
+
             await Lcd.WriteAsync("WP Follow finished");
             _logger.Log(LogLevel.Info, "WP Follow finished");
 
             CurrentWaypointIndex = 0;
 
-            GpsNavParameters.SetLastMoveMagnitude(0);
-            GpsNavParameters.SetTargetPpi(0);
-
-            await EmergencyBrake();
+            await Stop();
 
             //Cleanup WP Nav specific resources 
             _speedControllerDisposable?.Dispose();
             _speedControllerDisposable = null;
             //-----------------------------------
-
-            
         }
 
         private async Task UpdateMoveMagnitude()
         {
-            var ppi = GpsNavParameters.GetTargetPpi();
-            var moveMagnitude = GpsNavParameters.GetLastMoveMagnitude();
-
             if (!GetFollowingWaypoints())
             {
                 GpsNavParameters.SetTargetPpi(0);
                 GpsNavParameters.SetLastMoveMagnitude(0);
 
-                await EmergencyBrake();
+                await Stop();
                 return;
             }
 
+            var ppi = GpsNavParameters.GetTargetPpi();
+            var moveMagnitude = GpsNavParameters.GetLastMoveMagnitude();
+
             var odometer = await Odometer.GetLatest();
+
+            //-------------Update distance traveled, this should solve overshoot when gps fix is not due for another second.
+            var startDistance = GpsNavParameters.GetOdometerTraveledDistance();
+            var distanceToWaypoint = GpsNavParameters.GetDistanceToWaypoint();
+
+            var remainingDistance = distanceToWaypoint - (odometer.InTraveled - startDistance);
+
+            GpsNavParameters.SetDistanceToWaypoint(remainingDistance);
+            //-----------------------------------------------------
 
             var pulseCount = 0;
 
-            for (var i = 0; i <= 3; i++)
+            for (var i = 0; i <= 2; i++)
             {
                 pulseCount = pulseCount + odometer.PulseCount;
 
                 odometer = await Odometer.GetLatest();
             }
 
-            pulseCount = pulseCount / 4;
+            pulseCount = pulseCount / 3; //Average...
 
             //Give it some wiggle room
             if (pulseCount < ppi + 30 && pulseCount > ppi - 50)
@@ -186,12 +204,12 @@ namespace Autonoceptor.Host
             }
 
             if (pulseCount < ppi)
-                moveMagnitude = moveMagnitude + 10;
+                moveMagnitude = moveMagnitude + 15;
 
             if (pulseCount > ppi)
-                moveMagnitude = moveMagnitude - .7;
+                moveMagnitude = moveMagnitude - .6;
 
-            if (moveMagnitude > 60) //Perhaps .. use pitch accounted for?
+            if (moveMagnitude > 60)
                 moveMagnitude = 60;
 
             if (moveMagnitude < 0)
@@ -206,10 +224,16 @@ namespace Autonoceptor.Host
         {
             try
             {
+                if (!Waypoints.Any())
+                    return true;
+
                 if (CurrentWaypointIndex <= Waypoints.Count && GetFollowingWaypoints())
                     return false;
 
-                await EmergencyBrake();
+                GpsNavParameters.SetLastMoveMagnitude(0);
+                GpsNavParameters.SetTargetPpi(0);
+
+                await Stop();
 
                 _logger.Log(LogLevel.Info, $"Nav finished {Waypoints.Count} WPs");
 
@@ -247,14 +271,15 @@ namespace Autonoceptor.Host
 
             var currentWp = Waypoints[CurrentWaypointIndex];
 
+            var currentOdometerData = await Odometer.GetLatest();
+            GpsNavParameters.SetOdometerTraveledDistance(currentOdometerData.InTraveled);
+
             try
             {
                 var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsFixData.Lat, gpsFixData.Lon, currentWp.GpsFixData.Lat, currentWp.GpsFixData.Lon);
 
                 GpsNavParameters.SetTargetHeading(distanceAndHeading.HeadingToWaypoint);
                 GpsNavParameters.SetDistanceToWaypoint(distanceAndHeading.DistanceInInches);
-
-                GpsNavParameters.SetCurrentHeading(gpsFixData.Heading);
 
                 if (distanceAndHeading.DistanceInInches < Waypoints[CurrentWaypointIndex].Radius)
                 {
@@ -295,14 +320,15 @@ namespace Autonoceptor.Host
                     GpsNavParameters.SetTargetPpi(510);//This is a pretty even pace, the GPS can keep up with it ok
                     GpsNavParameters.SetLastMoveMagnitude(50);
 
-                    await SetVehicleTorque(MovementDirection.Forward, 50); //GetLatest going quickly, let the speed controller do its work
+                    //Dangerous! If already at WP.
+                    //await SetVehicleTorque(MovementDirection.Forward, 50); //GetLatest going quickly, let the speed controller do its work
                 }
             }
             catch (Exception e)
             {
                 _logger.Log(LogLevel.Info, e.Message);
 
-                await EmergencyBrake();
+                await Stop();
             }
         }
 
@@ -323,7 +349,7 @@ namespace Autonoceptor.Host
                     break;
             }
 
-            await PwmController.SetChannelValue(steerValue, SteeringChannel);
+            await SetChannelValue(steerValue, SteeringChannel);
         }
 
         private async Task OffsetAllWaypoints(double latOffset, double lonOffset)
@@ -339,7 +365,7 @@ namespace Autonoceptor.Host
         {
             if (Stopped)
             {
-                await EmergencyBrake();
+                await Stop();
                 return;
             }
 
@@ -355,7 +381,7 @@ namespace Autonoceptor.Host
                     break;
             }
 
-            await PwmController.SetChannelValue(moveValue, MovementChannel);
+            await SetChannelValue(moveValue, MovementChannel);
         }
     }
 }

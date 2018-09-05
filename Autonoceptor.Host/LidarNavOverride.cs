@@ -72,7 +72,7 @@ namespace Autonoceptor.Host
                     .Sample(TimeSpan.FromMilliseconds(50))
                     .Subscribe(async d =>
                     {
-                        var location = await PwmController.GetChannelValue(_lidarServoChannel);
+                        var location = await GetChannelValue(_lidarServoChannel);
 
                         d.Angle = location;
 
@@ -85,21 +85,21 @@ namespace Autonoceptor.Host
                         //Already moves to center after sweep is complete
                         break;
                     case Host.Sweep.Left:
-                        await PwmController.SetChannelValue(_leftPwm * 4, _lidarServoChannel);
+                        await SetChannelValue(_leftPwm * 4, _lidarServoChannel);
                         break;
                     case Host.Sweep.Right:
-                        await PwmController.SetChannelValue(_rightPwm * 4, _lidarServoChannel);
+                        await SetChannelValue(_rightPwm * 4, _lidarServoChannel);
                         break;
                     case Host.Sweep.Full:
-                        await PwmController.SetChannelValue(_leftPwm * 4, _lidarServoChannel);
-                        await PwmController.SetChannelValue(_rightPwm * 4, _lidarServoChannel);
+                        await SetChannelValue(_leftPwm * 4, _lidarServoChannel);
+                        await SetChannelValue(_rightPwm * 4, _lidarServoChannel);
                         break;
                 }
 
                 disposable.Dispose();
                 disposable = null;
 
-                await PwmController.SetChannelValue(_centerPwm * 4, _lidarServoChannel);
+                await SetChannelValue(_centerPwm * 4, _lidarServoChannel);
 
                 return await Task.FromResult(data);
             }
@@ -117,9 +117,9 @@ namespace Autonoceptor.Host
         //TODO: Pass move request into this method. Make turn amount uniform
         protected async Task WriteToHardware(ushort steeringPwm, ushort movePwm)
         {
-            await PwmController.SetChannelValue(steeringPwm, SteeringChannel);
+            await SetChannelValue(steeringPwm, SteeringChannel);
 
-            await PwmController.SetChannelValue(movePwm, MovementChannel);
+            await SetChannelValue(movePwm, MovementChannel);
         }
     }
 
