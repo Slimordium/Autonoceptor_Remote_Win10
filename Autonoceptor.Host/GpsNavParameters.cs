@@ -75,7 +75,7 @@ namespace Autonoceptor.Host
 
         public double GetSteeringMagnitude()
         {
-            var diff = Math.Abs(GetCurrentHeading() - GetTargetHeading()) / 1.8;
+            var diff = Math.Abs(GetCurrentHeading() - GetTargetHeading()) / 1.6;
 
             try
             {

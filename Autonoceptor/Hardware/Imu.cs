@@ -81,7 +81,7 @@ namespace Autonoceptor.Service.Hardware
 
                     var lastYaw = -1d;
 
-                    while (imuReadings.Count < 3)
+                    while (imuReadings.Count < 2)
                     {
                         _outputStream.WriteBytes(new[] { (byte)'#', (byte)'f' });
                         await _outputStream.StoreAsync();
@@ -148,24 +148,31 @@ namespace Autonoceptor.Service.Hardware
                         }
                     }
 
-                    var avgYaw = imuReadings.Average(r => r.Yaw) - YawCorrection;
-                    var avgPitch = imuReadings.Average(r => r.Pitch);
-                    var avgRoll = imuReadings.Average(r => r.Roll);
-                    var avgUncorrectedYaw = imuReadings.Average(r => r.UncorrectedYaw);//.Map(360, 0, 0, 360);
+                    try
+                    {
+                        var avgYaw = imuReadings.Average(r => r.Yaw) - YawCorrection;
+                        var avgPitch = imuReadings.Average(r => r.Pitch);
+                        var avgRoll = imuReadings.Average(r => r.Roll);
+                        var avgUncorrectedYaw = imuReadings.Average(r => r.UncorrectedYaw);
 
-                    if (avgYaw < 0)
-                        avgYaw += 360;
+                        if (avgYaw < 0)
+                            avgYaw += 360;
 
-                    if (avgYaw > 360)
-                        avgYaw -= 360;
+                        if (avgYaw > 360)
+                            avgYaw -= 360;
 
-                    //avgYaw = avgYaw.Map(360, 0, 0, 360);
+                        lastYaw = avgYaw;
 
-                    lastYaw = avgYaw;
+                        var avgImuData = new ImuData { Pitch = avgPitch, Yaw = avgYaw, Roll = avgRoll, UncorrectedYaw = avgUncorrectedYaw };
 
-                    var avgImuData = new ImuData { Pitch = avgPitch, Yaw = avgYaw, Roll = avgRoll, UncorrectedYaw = avgUncorrectedYaw};
+                        _subject.OnNext(avgImuData);
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Log(LogLevel.Error, $"{e.Message}");
+                    }
 
-                    _subject.OnNext(avgImuData);
+                   
                 }
             });
             _readTask.Start();

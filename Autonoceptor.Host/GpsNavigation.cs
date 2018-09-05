@@ -15,13 +15,9 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-        private IDisposable _gpsNavDisposable;
         private IDisposable _gpsNavSwitchDisposable;
-        private IDisposable _odometerDisposable;
         private IDisposable _speedControllerDisposable;
-        private IDisposable _gpsHeadingUpdateDisposable;
         private IDisposable _imuHeadingUpdateDisposable;
-        private IDisposable _steeringUpdater;
 
         private readonly AsyncLock _asyncLock = new AsyncLock();
 
@@ -50,6 +46,8 @@ namespace Autonoceptor.Host
             Volatile.Write(ref _followingWaypoints, isFollowing);
         }
 
+        private IDisposable _syncImuDisposable;
+
         protected new async Task InitializeAsync()
         {
             await base.InitializeAsync();
@@ -62,35 +60,53 @@ namespace Autonoceptor.Host
                     await WaypointFollowEnable(channelData.DigitalValue);
                 });
 
-            _steeringUpdater = Observable
-                .Interval(TimeSpan.FromMilliseconds(50))
-                .ObserveOnDispatcher()
-                .Subscribe(async _ =>
-                {
-                    if (!GetFollowingWaypoints())
-                        return;
+            _syncImuDisposable = Observable.Interval(TimeSpan.FromSeconds(3)).ObserveOnDispatcher().Subscribe(async _ =>
+            {
 
-                    await SetVehicleHeading(
-                        GpsNavParameters.GetSteeringDirection(),
-                        GpsNavParameters.GetSteeringMagnitude());
-                });
 
-            _gpsHeadingUpdateDisposable = Gps
-                .GetObservable()
-                .ObserveOnDispatcher()
-                .Subscribe(gpsFixData =>
-                {
-                    GpsNavParameters.SetCurrentHeading(gpsFixData.Heading);
-                });
+                await SyncImuYaw();
+            });
+
+            _gpsDisposable = Gps.GetObservable().ObserveOnDispatcher().Subscribe(async gpsData =>
+            {
+                if (!GetFollowingWaypoints())
+                    return;
+
+                await SetMoveTargets(gpsData);
+            });
+
 
             _imuHeadingUpdateDisposable = Imu
                 .GetReadObservable()
                 .ObserveOnDispatcher()
-                .Subscribe(imuData =>
+                .Subscribe(async imuData =>
                 {
-                    GpsNavParameters.SetCurrentHeading(imuData.Yaw);
+                    try
+                    {
+                        GpsNavParameters.SetCurrentHeading(imuData.Yaw);
+
+                        if (GetFollowingWaypoints())
+                        {
+                            //var gpsData = await Gps.GetLatest();
+                            //gpsData.Heading = imuData.Yaw;
+
+                            await SetVehicleHeading(
+                                GpsNavParameters.GetSteeringDirection(),
+                                GpsNavParameters.GetSteeringMagnitude());
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Log(LogLevel.Error, $"ImuHeadingUpdate failed {e.Message}");
+
+                        await EmergencyBrake();
+                    }
                 });
         }
+
+        private IDisposable _gpsDisposable;
+
+        private volatile float _startDistanceToWp;
 
         public async Task WaypointFollowEnable(bool enabled)
         {
@@ -103,17 +119,6 @@ namespace Autonoceptor.Host
             {
                 await Lcd.WriteAsync("Started Nav to", 1);
                 await Lcd.WriteAsync($"{Waypoints.Count} WPs", 2);
-
-                _gpsNavDisposable?.Dispose();
-                _odometerDisposable?.Dispose();
-
-                _gpsNavDisposable = Gps
-                    .GetObservable()
-                    .ObserveOnDispatcher()
-                    .Subscribe(async fixData =>
-                    {
-                        await SetMoveTargets(fixData);
-                    });
 
                 if (SpeedControlEnabled)
                 {
@@ -134,17 +139,17 @@ namespace Autonoceptor.Host
 
             CurrentWaypointIndex = 0;
 
-            //Cleanup WP Nav specific resources 
-            _gpsNavDisposable?.Dispose();
-            _odometerDisposable?.Dispose();
-            _speedControllerDisposable?.Dispose();
+            GpsNavParameters.SetLastMoveMagnitude(0);
+            GpsNavParameters.SetTargetPpi(0);
 
-            _gpsNavDisposable = null;
-            _odometerDisposable = null;
+            await EmergencyBrake();
+
+            //Cleanup WP Nav specific resources 
+            _speedControllerDisposable?.Dispose();
             _speedControllerDisposable = null;
             //-----------------------------------
 
-            await EmergencyBrake();
+            
         }
 
         private async Task UpdateMoveMagnitude()
@@ -186,8 +191,8 @@ namespace Autonoceptor.Host
             if (pulseCount > ppi)
                 moveMagnitude = moveMagnitude - .7;
 
-            if (moveMagnitude > 50) //Perhaps .. use pitch accounted for?
-                moveMagnitude = 50;
+            if (moveMagnitude > 60) //Perhaps .. use pitch accounted for?
+                moveMagnitude = 60;
 
             if (moveMagnitude < 0)
                 moveMagnitude = 0;
@@ -221,14 +226,17 @@ namespace Autonoceptor.Host
 
         public async Task SyncImuYaw()
         {
-            var imuData = await Imu.GetLatest();
-            var diff = imuData.UncorrectedYaw - (await Gps.GetLatest()).Heading;
+            try
+            {
+                var imuData = await Imu.GetLatest();
+                var diff = imuData.UncorrectedYaw - (await Gps.GetLatest()).Heading;
 
-            Imu.YawCorrection = diff;
-
-            var data = await Imu.GetLatest();
-
-            _logger.Log(LogLevel.Info, $"IMU Yaw correction: {diff}, Corrected Yaw: {data.Yaw}");
+                Imu.YawCorrection = diff;
+            }
+            catch (Exception e)
+            {
+                _logger.Log(LogLevel.Error, $"Sync failed {e.Message}");
+            }
         }
 
         //GPS Heading seems almost useless. Using Yaw instead. OK... Set GPS to "Pedestrian nav mode" heading now seems decent...
@@ -243,10 +251,10 @@ namespace Autonoceptor.Host
             {
                 var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsFixData.Lat, gpsFixData.Lon, currentWp.GpsFixData.Lat, currentWp.GpsFixData.Lon);
 
-                await SyncImuYaw();
-
                 GpsNavParameters.SetTargetHeading(distanceAndHeading.HeadingToWaypoint);
                 GpsNavParameters.SetDistanceToWaypoint(distanceAndHeading.DistanceInInches);
+
+                GpsNavParameters.SetCurrentHeading(gpsFixData.Heading);
 
                 if (distanceAndHeading.DistanceInInches < Waypoints[CurrentWaypointIndex].Radius)
                 {
@@ -284,9 +292,10 @@ namespace Autonoceptor.Host
                     _logger.Log(LogLevel.Trace, $"Current Heading: {gpsFixData.Heading}, Heading to WP: {distanceAndHeading.HeadingToWaypoint}");
                     _logger.Log(LogLevel.Trace, $"GPS Distance to WP: {distanceAndHeading.DistanceInInches}in, {distanceAndHeading.DistanceInFeet}ft");
 
-                    GpsNavParameters.SetTargetPpi(520);//This is a pretty even pace, the GPS can keep up with it ok
+                    GpsNavParameters.SetTargetPpi(510);//This is a pretty even pace, the GPS can keep up with it ok
+                    GpsNavParameters.SetLastMoveMagnitude(50);
 
-                    await SetVehicleTorque(MovementDirection.Forward, 65); //GetLatest going quickly, let the speed controller do its work
+                    await SetVehicleTorque(MovementDirection.Forward, 50); //GetLatest going quickly, let the speed controller do its work
                 }
             }
             catch (Exception e)
@@ -328,6 +337,12 @@ namespace Autonoceptor.Host
 
         private async Task SetVehicleTorque(MovementDirection direction, double magnitude)
         {
+            if (Stopped)
+            {
+                await EmergencyBrake();
+                return;
+            }
+
             var moveValue = StoppedPwm * 4;
 
             switch (direction)
