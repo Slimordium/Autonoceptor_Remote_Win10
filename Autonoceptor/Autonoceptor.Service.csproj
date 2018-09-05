@@ -123,6 +123,9 @@
     <PackageReference Include="AsyncEnumerator">
       <Version>2.2.1</Version>
     </PackageReference>
+    <PackageReference Include="MathNet.Numerics">
+      <Version>4.5.1</Version>
+    </PackageReference>
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform">
       <Version>6.0.8</Version>
     </PackageReference>

@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Reactive.Threading.Tasks;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
@@ -25,11 +26,9 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly CancellationToken _cancellationToken;
 
-        private OdometerData _odometerData = new OdometerData();
-
-        public OdometerData GetOdometerData()
+        public async Task<OdometerData> GetLatest()
         {
-            return Volatile.Read(ref _odometerData);
+            return await _subject.ObserveOnDispatcher().Take(1);
         }
 
         public Odometer(CancellationToken cancellationToken)
@@ -37,16 +36,9 @@ namespace Autonoceptor.Service.Hardware
             _cancellationToken = cancellationToken;
         }
 
-        private double _previousIn;
+        private volatile float _previousIn;
 
-        private double _feetPerSecond;
-
-        public double FeetPerSecond
-        {
-            get => Volatile.Read(ref _feetPerSecond);
-            set => Volatile.Write(ref _feetPerSecond, value);
-
-        }
+        private volatile float _feetPerSecond;
 
         private IDisposable _fpsDisposable;
 
@@ -61,15 +53,15 @@ namespace Autonoceptor.Service.Hardware
 
             _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
 
-            _fpsDisposable = Observable.Interval(TimeSpan.FromSeconds(1)).ObserveOnDispatcher().Subscribe(_ =>
+            _fpsDisposable = Observable.Interval(TimeSpan.FromSeconds(1)).ObserveOnDispatcher().Subscribe(async _ =>
             {
-                var inTraveled = GetOdometerData().InTraveled;
+                var inTraveled = (await GetLatest()).InTraveled;
 
                 var fps = (inTraveled - _previousIn) / 12;
 
-                FeetPerSecond = fps;
+                _feetPerSecond = fps;
 
-                Volatile.Write(ref _previousIn, inTraveled);
+                _previousIn = inTraveled;
             });
 
             _readTask = new Task(async() =>
@@ -131,10 +123,9 @@ namespace Autonoceptor.Service.Hardware
                                 lastOdometer.PulseCount = pulse;
                             }
 
-                            _subject.OnNext(odometerDataNew);
+                            odometerDataNew.FeetPerSecond = _feetPerSecond;
 
-                            Volatile.Write(ref _odometerData, odometerDataNew);
-                                
+                            _subject.OnNext(odometerDataNew);
                         }
                         catch (Exception e)
                         {
@@ -160,6 +151,8 @@ namespace Autonoceptor.Service.Hardware
         public float CmTraveled { get; set; }
 
         public float InTraveled { get; set; }
+
+        public float FeetPerSecond { get; set; }
 
     }
 }

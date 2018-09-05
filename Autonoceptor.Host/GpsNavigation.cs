@@ -85,7 +85,6 @@ namespace Autonoceptor.Host
 
             _imuHeadingUpdateDisposable = Imu
                 .GetReadObservable()
-                //.Sample(TimeSpan.FromMilliseconds(50))
                 .ObserveOnDispatcher()
                 .Subscribe(imuData =>
                 {
@@ -162,7 +161,7 @@ namespace Autonoceptor.Host
                 return;
             }
 
-            var odometer = Odometer.GetOdometerData();
+            var odometer = await Odometer.GetLatest();
 
             var pulseCount = 0;
 
@@ -170,7 +169,7 @@ namespace Autonoceptor.Host
             {
                 pulseCount = pulseCount + odometer.PulseCount;
 
-                odometer = Odometer.GetOdometerData();
+                odometer = await Odometer.GetLatest();
             }
 
             pulseCount = pulseCount / 4;
@@ -220,28 +219,16 @@ namespace Autonoceptor.Host
             }
         }
 
-        public async void SyncImuYaw()
+        public async Task SyncImuYaw()
         {
-            var uncorrectedYaw = await Imu.GetLatest();
-            var diff = uncorrectedYaw.UncorrectedYaw - GpsNavParameters.GetCurrentHeading();
+            var imuData = await Imu.GetLatest();
+            var diff = imuData.UncorrectedYaw - (await Gps.GetLatest()).Heading;
 
             Imu.YawCorrection = diff;
 
-            var yaw = Imu.GetReadObservable().Take(1);
+            var data = await Imu.GetLatest();
 
-            _logger.Log(LogLevel.Info, $"IMU Yaw correction: {diff}, Corrected Yaw: {yaw}");
-        }
-
-        public async void SyncImuYaw(double heading)
-        {
-            var uncorrectedYaw = await Imu.GetLatest();
-            var diff = uncorrectedYaw.UncorrectedYaw - heading;
-
-            Imu.YawCorrection = diff;
-
-            var yaw = Imu.GetReadObservable().Take(1);
-
-            _logger.Log(LogLevel.Info, $"IMU Yaw correction: {diff}, Corrected Yaw: {yaw}");
+            _logger.Log(LogLevel.Info, $"IMU Yaw correction: {diff}, Corrected Yaw: {data.Yaw}");
         }
 
         //GPS Heading seems almost useless. Using Yaw instead. OK... Set GPS to "Pedestrian nav mode" heading now seems decent...
@@ -256,7 +243,7 @@ namespace Autonoceptor.Host
             {
                 var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsFixData.Lat, gpsFixData.Lon, currentWp.GpsFixData.Lat, currentWp.GpsFixData.Lon);
 
-                SyncImuYaw(gpsFixData.Heading);
+                await SyncImuYaw();
 
                 GpsNavParameters.SetTargetHeading(distanceAndHeading.HeadingToWaypoint);
                 GpsNavParameters.SetDistanceToWaypoint(distanceAndHeading.DistanceInInches);
@@ -299,7 +286,7 @@ namespace Autonoceptor.Host
 
                     GpsNavParameters.SetTargetPpi(520);//This is a pretty even pace, the GPS can keep up with it ok
 
-                    await SetVehicleTorque(MovementDirection.Forward, 55); //Get going quickly, let the speed controller do its work
+                    await SetVehicleTorque(MovementDirection.Forward, 65); //GetLatest going quickly, let the speed controller do its work
                 }
             }
             catch (Exception e)

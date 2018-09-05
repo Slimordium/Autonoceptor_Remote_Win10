@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Reactive.Threading.Tasks;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
@@ -26,6 +27,11 @@ namespace Autonoceptor.Service.Hardware
         public Tf02Lidar(CancellationToken cancellationToken)
         {
             _cancellationToken = cancellationToken;
+        }
+
+        public async Task<LidarData> GetLatest()
+        {
+            return await _subject.ObserveOnDispatcher().Take(1);
         }
 
         public async Task InitializeAsync()

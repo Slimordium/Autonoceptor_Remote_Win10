@@ -71,6 +71,8 @@ namespace Autonoceptor.Host
             Volatile.Write(ref _currentHeading, heading);
         }
 
+        //SO the reason we need the divide by 1.8, is that the wheels turn 30degrees instantly, the car does NOT! 
+
         public double GetSteeringMagnitude()
         {
             var diff = Math.Abs(GetCurrentHeading() - GetTargetHeading()) / 1.8;

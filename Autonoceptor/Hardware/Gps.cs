@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Reactive.Threading.Tasks;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
@@ -14,14 +15,10 @@ namespace Autonoceptor.Service.Hardware
 {
     public class Gps
     {
-        private readonly AsyncLock _asyncLock = new AsyncLock();
-
         private readonly CancellationToken _cancellationToken;
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         private readonly Subject<GpsFixData> _subject = new Subject<GpsFixData>();
-
-        private GpsFixData _currentLocation = new GpsFixData();
 
         private bool _disposed = true;
 
@@ -37,12 +34,9 @@ namespace Autonoceptor.Service.Hardware
             _cancellationToken = cancellationToken;
         }
 
-        public async Task<GpsFixData> Get()
+        public async Task<GpsFixData> GetLatest()
         {
-            using (await _asyncLock.LockAsync())
-            {
-                return _currentLocation;
-            }
+            return await _subject.ObserveOnDispatcher().Take(1);
         }
 
         public void Dispose()
@@ -120,11 +114,6 @@ namespace Autonoceptor.Service.Hardware
 
                         //The data is accumulative, so only need to publish once
                         _subject.OnNext(gpsFixData);
-
-                        using (await _asyncLock.LockAsync())
-                        {
-                            _currentLocation = gpsFixData;
-                        }
                     }
                     catch (Exception e)
                     {

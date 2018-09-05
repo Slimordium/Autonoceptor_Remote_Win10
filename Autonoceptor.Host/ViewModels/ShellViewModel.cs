@@ -118,9 +118,9 @@ namespace Autonoceptor.Host.ViewModels
                 .Odometer
                 .GetObservable()
                 .ObserveOnDispatcher()
-                .Subscribe(d =>
+                .Subscribe(odoData =>
                 {
-                    OdometerIn =$"{d.InTraveled} in";
+                    OdometerIn = $"FPS: {odoData.FeetPerSecond}, Pulse: {odoData.PulseCount}, {odoData.InTraveled / 12} ft, {odoData.InTraveled}in";
                     NotifyOfPropertyChange(nameof(OdometerIn));
                 });
 
@@ -152,9 +152,9 @@ namespace Autonoceptor.Host.ViewModels
 
         public async Task GetOdometerData()
         {
-            var odoData = _conductor.Odometer.GetOdometerData();
+            var odoData = await _conductor.Odometer.GetLatest();
 
-            await AddToLog($"Pulse per 250ms: {odoData.PulseCount} => {odoData.InTraveled / 12} ft, {odoData.InTraveled}in, {odoData.CmTraveled}cm");
+            await AddToLog($"FPS: {odoData.FeetPerSecond}, Pulse: {odoData.PulseCount}, {odoData.InTraveled / 12} ft, {odoData.InTraveled}in");
         }
 
         private void CurrentOnResuming(object sender, object o)
@@ -225,7 +225,7 @@ namespace Autonoceptor.Host.ViewModels
 
         public async Task GetCurrentPosition()
         {
-            var currentLocation = await _conductor.Gps.Get();
+            var currentLocation = await _conductor.Gps.GetLatest();
 
             await AddToLog($"At Lat: {currentLocation.Lat}, Lon: {currentLocation.Lon}, Heading: {currentLocation.Heading}");
         }
@@ -239,7 +239,7 @@ namespace Autonoceptor.Host.ViewModels
 
         public async Task GetHeadingDistanceToSelected()
         {
-            var currentLocation = await _conductor.Gps.Get();
+            var currentLocation = await _conductor.Gps.GetLatest();
 
             var wp = _conductor.Waypoints[SelectedWaypoint];
 

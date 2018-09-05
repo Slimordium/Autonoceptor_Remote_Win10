@@ -27,8 +27,8 @@
 
         <TextBlock Text="IMU Yaw, Odo." Grid.Row="1" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
         <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Left" Height="40" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Name="Yaw" Width="100"></TextBlock>
-            <TextBlock Name="OdometerIn" Width="100" HorizontalAlignment="Left"></TextBlock>
+            <TextBlock Name="Yaw" Width="40"  VerticalAlignment="Center"></TextBlock>
+            <TextBlock Name="OdometerIn" Width="180" HorizontalAlignment="Left"  VerticalAlignment="Center"></TextBlock>
         </StackPanel>
 
         <TextBlock Text="GPS" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
@@ -41,7 +41,7 @@
         <TextBox Name="BrokerIp" Grid.Row="0" Width="560" Grid.Column="1" HorizontalAlignment="Left"></TextBox>
         <Button Name="InitMqtt" Grid.Column="2" Grid.Row="0" Content="Init MQTT" HorizontalAlignment="Center"></Button>
 
-        <Button Name="GetOdometerData" Grid.Column="3" Grid.Row="2" Content="Get Odometer data" HorizontalAlignment="Center" Width="200"></Button>
+        <Button Name="GetOdometerData" Grid.Column="3" Grid.Row="2" Content="GetLatest Odometer data" HorizontalAlignment="Center" Width="200"></Button>
         <StackPanel Grid.Column="2" Grid.Row="1" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
             <Button Name="InitGps" Content="Init GPS" ></Button>
             <Button Name="DisposeGps" Content="Dispose GPS"></Button>
