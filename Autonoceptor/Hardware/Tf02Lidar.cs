@@ -74,7 +74,6 @@ namespace Autonoceptor.Service.Hardware
                     if (lidarData.Reliability <= 5 || lidarData.Reliability > 8) //If the value is a 7 or 8, it is reliable. Ignore the rest
                         continue;
 
-
                     _subject.OnNext(lidarData);
                 }
             });

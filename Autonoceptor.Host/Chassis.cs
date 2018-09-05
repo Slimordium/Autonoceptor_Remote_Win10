@@ -33,7 +33,7 @@ namespace Autonoceptor.Host
 
         public Odometer Odometer { get; private set; }
         public Imu Imu { get; private set; }
-        protected Tf02Lidar Lidar { get; private set; }
+        public Tf02Lidar Lidar { get; private set; }
         protected SparkFunSerial16X2Lcd Lcd { get; } = new SparkFunSerial16X2Lcd();
         private MaestroPwmController PwmController { get; set; }
         public Gps Gps { get; private set; }

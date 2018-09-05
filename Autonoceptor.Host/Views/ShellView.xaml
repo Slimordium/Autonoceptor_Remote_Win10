@@ -34,9 +34,15 @@
             <Button Name="DisposeMqtt" Content="Dispose" HorizontalAlignment="Left"></Button>
         </StackPanel>
 
-        <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Left" Height="40" Width="350" Orientation="Horizontal" VerticalAlignment="Center">
+        <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Left" Height="40" Width="620" Orientation="Horizontal" VerticalAlignment="Center">
             <TextBlock Name="Yaw" Width="90"  VerticalAlignment="Center"></TextBlock>
             <TextBlock Name="OdometerIn" Width="180" HorizontalAlignment="Left"  VerticalAlignment="Center"></TextBlock>
+            <TextBlock Name="Lidar" Width="220" HorizontalAlignment="Left"  VerticalAlignment="Center"></TextBlock>
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Grid.Row="1" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
+            <Button Name="SweepLeft" Content="Lidar Sweep Left" ></Button>
+            <Button Name="SweepRight" Content="Lidar Sweep Right"></Button>
         </StackPanel>
 
         <TextBlock Text="GPS" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
@@ -59,8 +65,8 @@
             <ComboBox.ItemTemplate>
                 <DataTemplate>
                     <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding Lat}" Width="120"/>
-                            <TextBlock Text="{Binding Lon}" Width="120"/>
+                            <TextBlock Text="{Binding Lat}" Width="220"/>
+                            <TextBlock Text="{Binding Lon}" Width="220"/>
                         </StackPanel>
                 </DataTemplate>
             </ComboBox.ItemTemplate>
@@ -68,11 +74,13 @@
             <Button Name="GetDistanceHeading" Content="Get Dist/Heading"></Button>
         </StackPanel>
 
+        <CheckBox Name="EnableNavSpeedControl" Grid.Row="4" Grid.Column="0" FontSize="12">GPS Nav speed?</CheckBox>
+
         <StackPanel Grid.Column="1" Grid.Row="4" HorizontalAlignment="Left" Grid.ColumnSpan="4"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="600">
             <TextBlock Width="110"  VerticalAlignment="Center">Turn input modifier:</TextBlock>
-            <Slider Name="TurnMagnitudeInputModifier" Grid.Row="7" Grid.Column="1" Minimum="1" Maximum="3" Value="1.6" Width="100" VerticalAlignment="Center"></Slider>
+            <Slider Name="TurnMagnitudeInputModifier" StepFrequency=".01" Minimum="1" Maximum="3" Value="1.6" Width="100" VerticalAlignment="Center"></Slider>
             <TextBlock Width="65"  VerticalAlignment="Center">Nav speed:</TextBlock>
-            <Slider Name="CruiseControl" Grid.Row="7" Grid.Column="1" Minimum="100" Maximum="700" Value="350" Width="100" VerticalAlignment="Center"></Slider>
+            <Slider Name="CruiseControl" Minimum="100" Maximum="700" StepFrequency="1" Value="350" Width="100" VerticalAlignment="Center"></Slider>
             <Button Name="SetNavParams" Content="Set"></Button>
         </StackPanel>
 

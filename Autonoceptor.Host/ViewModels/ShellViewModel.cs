@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.ExtendedExecution;
 using Windows.UI.Xaml;
-using Windows.UI.Xaml.Controls;
 using Autonoceptor.Shared.Utilities;
 using Caliburn.Micro;
+using Newtonsoft.Json;
 using Nito.AsyncEx;
 using NLog.Targets.Rx;
 
@@ -21,19 +21,17 @@ namespace Autonoceptor.Host.ViewModels
         private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         private readonly Conductor _conductor;
 
+        private IDisposable _gpsDisposable;
+        private IDisposable _lidarDisposable;
+        private IDisposable _odometerDisposable;
+
         private ExtendedExecutionSession _session;
 
         private IDisposable _sessionDisposable;
 
-        public string Yaw { get; set; }
-
         private bool _started;
 
-        public string LatLon { get; set; }
-
-        public string OdometerIn { get; set; }
-
-        private IDisposable _gpsDisposable;
+        private IDisposable _yawDisposable;
 
         public ShellViewModel()
         {
@@ -53,6 +51,14 @@ namespace Autonoceptor.Host.ViewModels
             RxTarget.LogObservable.ObserveOnDispatcher().Subscribe(async e => { await AddToLog(e); });
         }
 
+        public string Yaw { get; set; }
+
+        public string LatLon { get; set; }
+
+        public string Lidar { get; set; }
+
+        public string OdometerIn { get; set; }
+
         public BindableCollection<string> Log { get; set; } = new BindableCollection<string>();
 
         public BindableCollection<Waypoint> Waypoints { get; set; } = new BindableCollection<Waypoint>();
@@ -68,15 +74,18 @@ namespace Autonoceptor.Host.ViewModels
                 if (_conductor != null)
                     return _conductor.SpeedControlEnabled;
 
-                return false;
+                return true;
             }
             set
             {
                 if (_conductor != null)
                     _conductor.SpeedControlEnabled = value;
             }
-
         }
+
+        public double TurnMagnitudeInputModifier { get; set; } = 1.6;
+
+        public int CruiseControl { get; set; } = 350;
 
         private async Task AddToLog(string entry)
         {
@@ -108,7 +117,7 @@ namespace Autonoceptor.Host.ViewModels
                 .ObserveOnDispatcher()
                 .Subscribe(data =>
                 {
-                    Yaw = $"Yaw: {Convert.ToInt32(data.Yaw)}"; 
+                    Yaw = $"Yaw: {Convert.ToInt32(data.Yaw)}";
                     NotifyOfPropertyChange(nameof(Yaw));
                 });
 
@@ -118,7 +127,8 @@ namespace Autonoceptor.Host.ViewModels
                 .ObserveOnDispatcher()
                 .Subscribe(odoData =>
                 {
-                    OdometerIn = $"FPS: {odoData.FeetPerSecond}, Pulse: {odoData.PulseCount}, {odoData.InTraveled / 12} ft, {odoData.InTraveled}in";
+                    OdometerIn =
+                        $"FPS: {odoData.FeetPerSecond}, Pulse: {odoData.PulseCount}, {odoData.InTraveled / 12} ft, {odoData.InTraveled}in";
                     NotifyOfPropertyChange(nameof(OdometerIn));
                 });
 
@@ -131,14 +141,19 @@ namespace Autonoceptor.Host.ViewModels
                     LatLon = data.ToString();
                     NotifyOfPropertyChange(nameof(LatLon));
                 });
+
+            _lidarDisposable = _conductor
+                .Lidar
+                .GetObservable()
+                .Where(d => d != null)
+                .Sample(TimeSpan.FromMilliseconds(100))
+                .ObserveOnDispatcher()
+                .Subscribe(data =>
+                {
+                    Lidar = $"Distance: {data.Distance}, Strength: {data.Strength}";
+                    NotifyOfPropertyChange(nameof(Lidar));
+                });
         }
-
-        private IDisposable _yawDisposable;
-        private IDisposable _odometerDisposable;
-
-        public double TurnMagnitudeInputModifier { get; set; }
-
-        public int CruiseControl { get; set; }
 
         private void SetNavParams()
         {
@@ -146,14 +161,39 @@ namespace Autonoceptor.Host.ViewModels
             _conductor.Waypoints.SetSteerMagnitudeModifier(TurnMagnitudeInputModifier);
         }
 
+        public async Task SweepLeft()
+        {
+            var sweepData = await _conductor.Sweep(Sweep.Left);
+
+            foreach (var d in sweepData)
+            {
+                await AddToLog($"Angle: {d.Angle} Distance: {d.Distance} Strength: {d.Strength}");
+            }
+        }
+
+        public async Task SweepRight()
+        {
+            var sweepData = await _conductor.Sweep(Sweep.Right);
+
+            foreach (var d in sweepData)
+            {
+                await AddToLog($"Angle: {d.Angle} Distance: {d.Distance} Strength: {d.Strength}");
+            }
+        }
+
         private void CurrentOnResuming(object sender, object o)
         {
             _sessionDisposable?.Dispose();
 
-            _sessionDisposable = Observable.Interval(TimeSpan.FromMinutes(4))
-                .Subscribe(async _ => { await RequestExtendedSession(); });
+            _sessionDisposable = Observable
+                .Interval(TimeSpan.FromMinutes(4))
+                .Subscribe(async _ =>
+                {
+                    await RequestExtendedSession(); 
+                });
 
-            Observable.Timer(TimeSpan.FromSeconds(5))
+            Observable.Timer(TimeSpan
+                .FromSeconds(3))
                 .ObserveOnDispatcher()
                 .Subscribe(async _ => { await StartConductor().ConfigureAwait(false); });
         }
@@ -168,10 +208,7 @@ namespace Autonoceptor.Host.ViewModels
         {
             try
             {
-                if (!Waypoints.Any())
-                {
-                    await ListWaypoints();
-                }
+                if (!Waypoints.Any()) await ListWaypoints();
 
                 if (!Waypoints.Any())
                     return;
@@ -180,9 +217,11 @@ namespace Autonoceptor.Host.ViewModels
 
                 var wp = _conductor.Waypoints.ActiveWaypoints[SelectedWaypoint];
 
-                var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsFixData.Lat, gpsFixData.Lon, wp.Lat, wp.Lon);
+                var distanceAndHeading =
+                    GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsFixData.Lat, gpsFixData.Lon, wp.Lat, wp.Lon);
 
-                await AddToLog($"Distance: {distanceAndHeading.DistanceInFeet}ft, Heading: {distanceAndHeading.HeadingToWaypoint}");
+                await AddToLog(
+                    $"Distance: {distanceAndHeading.DistanceInFeet}ft, Heading: {distanceAndHeading.HeadingToWaypoint}");
             }
             catch (Exception e)
             {
@@ -235,13 +274,14 @@ namespace Autonoceptor.Host.ViewModels
 
         public async Task ListWaypoints()
         {
+            Waypoints = new BindableCollection<Waypoint>();
+
             if (_conductor.Waypoints.Count == 0)
             {
                 await AddToLog("No waypoints in list");
+                NotifyOfPropertyChange(nameof(Waypoints));
                 return;
             }
-
-            Waypoints = new BindableCollection<Waypoint>();
 
             Waypoints.AddRange(_conductor.Waypoints.ActiveWaypoints);
 

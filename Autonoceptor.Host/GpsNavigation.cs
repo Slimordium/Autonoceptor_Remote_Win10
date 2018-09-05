@@ -77,6 +77,7 @@ namespace Autonoceptor.Host
 
                 _gpsDisposable = Gps
                     .GetObservable()
+                    .Where(d => d != null)
                     .ObserveOnDispatcher()
                     .Subscribe(async gpsData =>
                     {
@@ -93,6 +94,7 @@ namespace Autonoceptor.Host
 
                 _imuHeadingUpdateDisposable = Imu
                     .GetReadObservable()
+                    .Where(d => d != null)
                     .ObserveOnDispatcher()
                     .Subscribe(async imuData =>
                     {
