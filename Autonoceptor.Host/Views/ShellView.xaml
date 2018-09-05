@@ -10,12 +10,13 @@
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Width="Auto" Height="Auto">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="120"/>
-            <ColumnDefinition Width="565"/>
-            <ColumnDefinition />
+            <ColumnDefinition Width="640"/>
+            <ColumnDefinition Width="255"/>
             <ColumnDefinition />
             <ColumnDefinition Width="460" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
+            <RowDefinition Height="40" />
             <RowDefinition Height="40" />
             <RowDefinition Height="40" />
             <RowDefinition Height="40" />
@@ -25,49 +26,57 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TextBlock Text="IMU Yaw, Odo." Grid.Row="1" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
-        <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Left" Height="40" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Name="Yaw" Width="40"  VerticalAlignment="Center"></TextBlock>
+        <TextBlock Text="MQTT Broker IP" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
+        <TextBox Name="BrokerIp" Grid.Row="0" Width="250" Grid.Column="1" HorizontalAlignment="Left"></TextBox>
+
+        <StackPanel Grid.Row="0" Grid.Column="2" HorizontalAlignment="Left" Height="40" Width="350" Orientation="Horizontal" VerticalAlignment="Center">
+            <Button Name="InitMqtt" Content="Init." HorizontalAlignment="Left"></Button>
+            <Button Name="DisposeMqtt" Content="Dispose" HorizontalAlignment="Left"></Button>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Left" Height="40" Width="350" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock Name="Yaw" Width="90"  VerticalAlignment="Center"></TextBlock>
             <TextBlock Name="OdometerIn" Width="180" HorizontalAlignment="Left"  VerticalAlignment="Center"></TextBlock>
         </StackPanel>
 
         <TextBlock Text="GPS" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
-        <TextBlock Name="LatLon" Text="0" Width="640" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center"></TextBlock>
+        <TextBlock Name="LatLon" Width="640" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center"></TextBlock>
 
-        <TextBlock Text="Distance to WP" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
-        <TextBlock Name="DistanceToWaypoint" Text="0" Width="560" Grid.Row="3" Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center"></TextBlock>
-
-        <TextBlock Text="Broker IP" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
-        <TextBox Name="BrokerIp" Grid.Row="0" Width="560" Grid.Column="1" HorizontalAlignment="Left"></TextBox>
-        <Button Name="InitMqtt" Grid.Column="2" Grid.Row="0" Content="Init MQTT" HorizontalAlignment="Center"></Button>
-
-        <Button Name="GetOdometerData" Grid.Column="3" Grid.Row="2" Content="GetLatest Odometer data" HorizontalAlignment="Center" Width="200"></Button>
-        <StackPanel Grid.Column="2" Grid.Row="1" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
-            <Button Name="InitGps" Content="Init GPS" ></Button>
-            <Button Name="DisposeGps" Content="Dispose GPS"></Button>
+        <StackPanel Grid.Column="2" Grid.Row="2" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
+            <Button Name="InitGps" Content="Init." ></Button>
+            <Button Name="DisposeGps" Content="Dispose"></Button>
         </StackPanel>
-       
-        <Button Name="CalibrateImu" Grid.Column="4" Grid.Row="1" Content="Calibrate IMU/GPS Heading" HorizontalAlignment="Center" Width="200"></Button>
 
         <!--<CheckBox Grid.Column="2" Grid.Row="2" Content="GPS Nav controlled speed" HorizontalAlignment="Left" x:Name="EnableNavSpeedControl"></CheckBox>-->
 
-        <ComboBox Name="WaypointsCombo" Grid.Column="4" Grid.Row="2" 
+        <Button Name="ListWaypoints" Grid.Column="0" Grid.Row="3" Content="Get Waypoints" HorizontalAlignment="Center" Width="100"></Button>
+        <StackPanel Grid.Column="1" Grid.Row="3" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
+            <ComboBox Name="WaypointsCombo"
                   ItemsSource="{Binding Waypoints}" 
                   SelectedIndex="{Binding SelectedWaypoint}"
-                  HorizontalAlignment="Center" Width="450" >
+                  HorizontalAlignment="Left" Width="480" 
+                  VerticalAlignment="Center">
             <ComboBox.ItemTemplate>
                 <DataTemplate>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding GpsFixData}" Width="210"/>
-                    </StackPanel>
+                            <TextBlock Text="{Binding Lat}" Width="120"/>
+                            <TextBlock Text="{Binding Lon}" Width="120"/>
+                        </StackPanel>
                 </DataTemplate>
             </ComboBox.ItemTemplate>
         </ComboBox>
-        
+            <Button Name="GetDistanceHeading" Content="Get Dist/Heading"></Button>
+        </StackPanel>
 
-        <Button Name="ListWaypoints" Grid.Column="3" Grid.Row="3" Content="List Waypoints" HorizontalAlignment="Center" Width="200"></Button>
+        <StackPanel Grid.Column="1" Grid.Row="4" HorizontalAlignment="Left" Grid.ColumnSpan="4"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="600">
+            <TextBlock Width="110"  VerticalAlignment="Center">Turn input modifier:</TextBlock>
+            <Slider Name="TurnMagnitudeInputModifier" Grid.Row="7" Grid.Column="1" Minimum="1" Maximum="3" Value="1.6" Width="100" VerticalAlignment="Center"></Slider>
+            <TextBlock Width="65"  VerticalAlignment="Center">Nav speed:</TextBlock>
+            <Slider Name="CruiseControl" Grid.Row="7" Grid.Column="1" Minimum="100" Maximum="700" Value="350" Width="100" VerticalAlignment="Center"></Slider>
+            <Button Name="SetNavParams" Content="Set"></Button>
+        </StackPanel>
 
-        <ScrollViewer Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="5" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="{Binding Path=Width, ElementName=LogColumn}" Margin="3.4,0,0,-0.4">
+        <ScrollViewer Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="5" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="{Binding Path=Width, ElementName=LogColumn}" Margin="3.4,0,0,-0.4">
             <ListBox x:Name="LogBox" FontSize="13" FontFamily="Arial Narrow" ItemsSource="{Binding Log}" BorderThickness="0" SelectionMode="Multiple" Margin="5,0,0,0" >
             </ListBox>
         </ScrollViewer>

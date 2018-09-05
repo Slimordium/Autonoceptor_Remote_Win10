@@ -27,7 +27,7 @@ namespace Autonoceptor.Host
             InitializeComponent();
         }
 
-        protected override async void Configure()
+        protected override void Configure()
         {
             _container = new WinRTContainer();
 

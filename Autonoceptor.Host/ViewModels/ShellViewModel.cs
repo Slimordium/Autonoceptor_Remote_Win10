@@ -31,8 +31,6 @@ namespace Autonoceptor.Host.ViewModels
 
         public string LatLon { get; set; }
 
-        public string DistanceToWaypoint { get; set; }
-
         public string OdometerIn { get; set; }
 
         private IDisposable _gpsDisposable;
@@ -48,7 +46,7 @@ namespace Autonoceptor.Host.ViewModels
                 .Subscribe(async _ => { await RequestExtendedSession(); });
 
             //Automatically start...
-            Observable.Timer(TimeSpan.FromSeconds(5))
+            Observable.Timer(TimeSpan.FromSeconds(2))
                 .ObserveOnDispatcher()
                 .Subscribe(async _ => { await StartConductor().ConfigureAwait(false); });
 
@@ -110,7 +108,7 @@ namespace Autonoceptor.Host.ViewModels
                 .ObserveOnDispatcher()
                 .Subscribe(data =>
                 {
-                    Yaw = Convert.ToInt32(data.Yaw).ToString(); 
+                    Yaw = $"Yaw: {Convert.ToInt32(data.Yaw)}"; 
                     NotifyOfPropertyChange(nameof(Yaw));
                 });
 
@@ -130,31 +128,22 @@ namespace Autonoceptor.Host.ViewModels
                 .ObserveOnDispatcher()
                 .Subscribe(data =>
                 {
-                    //if (_conductor.Waypoints.Any())
-                    //{
-                    //    var distanceHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(data.Lat, data.Lon, Waypoints[SelectedWaypoint].GpsFixData.Lat, Waypoints[SelectedWaypoint].GpsFixData.Lon);
-
-                    //    DistanceToWaypoint = $"{distanceHeading[0]} in., {distanceHeading[1]} degrees";
-                    //}
-                    //else
-                    //{
-                    //    DistanceToWaypoint = "No waypoints";
-                    //}
-
                     LatLon = data.ToString();
                     NotifyOfPropertyChange(nameof(LatLon));
-                    NotifyOfPropertyChange(nameof(DistanceToWaypoint));
                 });
         }
 
         private IDisposable _yawDisposable;
         private IDisposable _odometerDisposable;
 
-        public async Task GetOdometerData()
-        {
-            var odoData = await _conductor.Odometer.GetLatest();
+        public double TurnMagnitudeInputModifier { get; set; }
 
-            await AddToLog($"FPS: {odoData.FeetPerSecond}, Pulse: {odoData.PulseCount}, {odoData.InTraveled / 12} ft, {odoData.InTraveled}in");
+        public int CruiseControl { get; set; }
+
+        private void SetNavParams()
+        {
+            _conductor.SetCruiseControl(CruiseControl);
+            _conductor.Waypoints.SetSteerMagnitudeModifier(TurnMagnitudeInputModifier);
         }
 
         private void CurrentOnResuming(object sender, object o)
@@ -173,6 +162,32 @@ namespace Autonoceptor.Host.ViewModels
         {
             _session?.Dispose();
             _session = null;
+        }
+
+        public async Task GetDistanceHeading()
+        {
+            try
+            {
+                if (!Waypoints.Any())
+                {
+                    await ListWaypoints();
+                }
+
+                if (!Waypoints.Any())
+                    return;
+
+                var gpsFixData = await _conductor.Gps.GetLatest();
+
+                var wp = _conductor.Waypoints.ActiveWaypoints[SelectedWaypoint];
+
+                var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsFixData.Lat, gpsFixData.Lon, wp.Lat, wp.Lon);
+
+                await AddToLog($"Distance: {distanceAndHeading.DistanceInFeet}ft, Heading: {distanceAndHeading.HeadingToWaypoint}");
+            }
+            catch (Exception e)
+            {
+                await AddToLog(e.Message);
+            }
         }
 
         public async Task InitMqtt()
@@ -201,12 +216,12 @@ namespace Autonoceptor.Host.ViewModels
             }
         }
 
-        public async Task SetGpsNavSpeed()
+        public async Task InitGps()
         {
             await _conductor.Gps.InitializeAsync().ConfigureAwait(false);
         }
 
-        public async Task SetWpBoundry()
+        public async Task DisposeGps()
         {
             try
             {
@@ -218,53 +233,19 @@ namespace Autonoceptor.Host.ViewModels
             }
         }
 
-        public void CalibrateImu()
-        {
-            _conductor.SyncImuYaw();
-        }
-
-        public async Task GetCurrentPosition()
-        {
-            var currentLocation = await _conductor.Gps.GetLatest();
-
-            await AddToLog($"At Lat: {currentLocation.Lat}, Lon: {currentLocation.Lon}, Heading: {currentLocation.Heading}");
-        }
-
-        public async Task GetYpr()
-        {
-            var currentImu = await _conductor.Imu.GetLatest();
-
-            await AddToLog($"Yaw: {currentImu.Yaw} Pitch: {currentImu.Pitch} Roll: {currentImu.Roll}");
-        }
-
-        public async Task GetHeadingDistanceToSelected()
-        {
-            var currentLocation = await _conductor.Gps.GetLatest();
-
-            var wp = _conductor.Waypoints[SelectedWaypoint];
-
-            var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(currentLocation.Lat,
-                currentLocation.Lon, wp.GpsFixData.Lat, wp.GpsFixData.Lon);
-
-            await AddToLog($"Distance: {distanceAndHeading.DistanceInFeet} ft, Heading: {distanceAndHeading.HeadingToWaypoint} degrees");
-        }
-
         public async Task ListWaypoints()
         {
-            var wps = _conductor.Waypoints;
-
-            if (!wps.Any())
+            if (_conductor.Waypoints.Count == 0)
+            {
                 await AddToLog("No waypoints in list");
-
-            foreach (var waypoint in wps)
-                await AddToLog(
-                    $"Lat: {waypoint.GpsFixData.Lat} Lon: {waypoint.GpsFixData.Lon} - {waypoint.GpsFixData.Quality}");
+                return;
+            }
 
             Waypoints = new BindableCollection<Waypoint>();
 
-            Waypoints.AddRange(_conductor.Waypoints);
+            Waypoints.AddRange(_conductor.Waypoints.ActiveWaypoints);
 
-            NotifyOfPropertyChange("Waypoints");
+            NotifyOfPropertyChange(nameof(Waypoints));
         }
 
         private async void CurrentOnSuspending(object sender, SuspendingEventArgs suspendingEventArgs)

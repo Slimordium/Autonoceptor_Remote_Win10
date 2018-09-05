@@ -105,12 +105,14 @@ namespace Autonoceptor.Host
             }
         }
 
+        //TODO: You can add waypoints that take precedence over the current one using Waypoints.AddFirst(wayPoint goes here)
+
         //TODO: Sweep here?
         private async Task UpdateLidarNavOverride(LidarData lidarData) //Implement 2D map. Modify "write to hardware method" to with values to avoid ?
         {
             //if (lidarData.Distance < 40)
             //{
-            //    await EmergencyBrake();
+            //    await Stop();
             //}
         }
 

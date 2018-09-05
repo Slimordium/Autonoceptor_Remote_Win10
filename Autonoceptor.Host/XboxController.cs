@@ -19,6 +19,7 @@ namespace Autonoceptor.Host
         private IDisposable _xboxButtonDisposable;
         private IDisposable _xboxDisposable;
         private IDisposable _xboxConnectedCheckDisposable;
+        private IDisposable _xboxDpadDisposable;
 
         public XboxController(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
             : base(cancellationTokenSource, brokerHostnameOrIp)
@@ -28,6 +29,12 @@ namespace Autonoceptor.Host
         private async Task ConfigureXboxObservable()
         {
             _xboxDisposable?.Dispose();
+            _xboxButtonDisposable?.Dispose();
+            _xboxDpadDisposable?.Dispose();
+
+            _xboxDisposable = null;
+            _xboxButtonDisposable = null;
+            _xboxDpadDisposable = null;
 
             if (XboxDevice == null)
                 return;
@@ -43,11 +50,20 @@ namespace Autonoceptor.Host
 
             _xboxButtonDisposable = XboxDevice.GetObservable()
                 .Where(xboxData => xboxData != null && xboxData.FunctionButtons.Any())
-                .Throttle(TimeSpan.FromMilliseconds(250))
+                .Throttle(TimeSpan.FromMilliseconds(125))
                 .ObserveOnDispatcher()
                 .Subscribe(async xboxData =>
                 {
                     await OnNextXboxButtonData(xboxData);
+                });
+
+            _xboxDpadDisposable = XboxDevice.GetObservable()
+                .Where(xboxData => xboxData != null && xboxData.Dpad != Direction.None)
+                .Throttle(TimeSpan.FromMilliseconds(125))
+                .ObserveOnDispatcher()
+                .Subscribe(async xboxData =>
+                {
+                    await OnNextXboxDpadData(xboxData);
                 });
 
             await Lcd.WriteAsync("Initialized Xbox");
@@ -58,37 +74,66 @@ namespace Autonoceptor.Host
             await base.InitializeAsync();
 
             _xboxConnectedCheckDisposable = Observable
-                .Interval(TimeSpan.FromMilliseconds(500))
+                .Interval(TimeSpan.FromMilliseconds(1000))
                 .ObserveOnDispatcher()
                 .Subscribe(
                     async _ =>
                     {
                         var devices = await DeviceInformation.FindAllAsync(HidDevice.GetDeviceSelector(0x01, 0x05));
 
-                        if (devices.Any())
+                        if (devices.Any() && XboxDevice == null)
+                        {
+                            try
+                            {
+                                var init = await InitializeXboxController();
+
+                                if (!init)
+                                    return;
+
+                                _logger.Log(LogLevel.Error, $"Xbox connected");
+
+                                await ConfigureXboxObservable();
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Log(LogLevel.Error, $"Xbox re-init: {e.Message}");
+                            }
+                           
+                            return;
+                        }
+
+                        if (devices.Any() || XboxDevice == null)
                             return;
 
-                        if (XboxDevice != null && !GetFollowingWaypoints()) //Controller was connected, and not following waypoints, so stop
-                        {
+                        await DisposeXboxResources();
+
+                        if (!FollowingWaypoints)
                             await Stop();
-                        }
-                        else
-                        {
-                            var init = await InitializeXboxController();
-
-                            if (!init)
-                                return;
-
-                            await ConfigureXboxObservable();
-                        }
                     });
 
             await ConfigureXboxObservable();
         }
 
+        private async Task DisposeXboxResources()
+        {
+            _xboxDisposable?.Dispose();
+            _xboxButtonDisposable?.Dispose();
+            _xboxDpadDisposable?.Dispose();
+
+            _xboxDisposable = null;
+            _xboxButtonDisposable = null;
+            _xboxDpadDisposable = null;
+
+            await Task.Delay(250);
+
+            XboxDevice?.Dispose();
+
+            XboxDevice = null;
+        }
+
         private async Task OnNextXboxData(XboxData xboxData)
         {
-            if (Stopped)
+            if (Stopped || FollowingWaypoints)
                 return;
 
             ushort steeringPwm = CenterPwm * 4;
@@ -119,10 +164,12 @@ namespace Autonoceptor.Host
 
             await SetChannelValue(movePwm, MovementChannel);
 
-            if (GetFollowingWaypoints())
-                return;
-
             await SetChannelValue(steeringPwm, SteeringChannel);
+        }
+
+        private async Task OnNextXboxDpadData(XboxData xboxData)
+        {
+            _logger.Log(LogLevel.Info, xboxData.Dpad);
         }
 
         private async Task OnNextXboxButtonData(XboxData xboxData)
@@ -139,17 +186,20 @@ namespace Autonoceptor.Host
             if (xboxData.FunctionButtons.Contains(FunctionButton.A))
             {
                 await Stop(true);
+                return;
             }
+
+            if (FollowingWaypoints)
+                return;
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.B))
             {
                 var gpsFix = await Gps.GetLatest();
-                var imu = await Imu.GetLatest();
 
-                Waypoints.Add(new Waypoint
+                await Waypoints.AddFirst(new Waypoint
                 {
-                    GpsFixData = gpsFix,
-                    ImuData = imu
+                    Lat = gpsFix.Lat,
+                    Lon = gpsFix.Lon,
                 });
 
                 await Lcd.WriteAsync($"WP {Waypoints.Count} added");
@@ -162,9 +212,6 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.Start))
             {
-                if (GetFollowingWaypoints())
-                    return;
-
                 _logger.Log(LogLevel.Info, $"Starting WP follow {Waypoints.Count} WPs");
                 await WaypointFollowEnable(true);
                 return;
@@ -172,7 +219,7 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.Y))
             {
-                Waypoints = new WaypointList();
+                Waypoints.ClearWaypoints();
 
                 _logger.Log(LogLevel.Info, "WPs Cleared");
                 await Lcd.WriteAsync($"WPs cleared");

@@ -1,17 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Autonoceptor.Shared.Utilities;
 using Newtonsoft.Json;
+using Nito.AsyncEx;
 using NLog;
 
 namespace Autonoceptor.Host
 {
-    public class WaypointList : List<Waypoint>
+    public class WaypointList 
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         private readonly string _filename = $"waypoints.json";
+
+        private List<Waypoint> _waypoints = new List<Waypoint>();
+        private List<Waypoint> _preStartWaypoints = new List<Waypoint>();
+        private readonly AsyncLock _asyncLock = new AsyncLock();
 
         //.000001 should only record waypoint every 1.1132m or 3.65223097ft
         //The third decimal place is worth up to 110 m: it can identify a large agricultural field or institutional campus.
@@ -34,69 +41,193 @@ namespace Autonoceptor.Host
         ///The eighth decimal place is worth up to 1.1 mm: this is good for charting motions of tectonic plates and movements of volcanoes. Permanent, corrected, constantly-running GPS base stations might be able to achieve this level of accuracy.
         /// </summary>
         /// <param name="minWaypointDistance"></param>
-        public WaypointList(double minWaypointDistance = .000001)
+        public WaypointList(double minWaypointDistance = .0000001)
         {
             _minWaypointDistance = minWaypointDistance;
         }
 
-        public new void Add(Waypoint waypoint)
+        public int Count => _waypoints.Count;
+
+        public List<Waypoint> ActiveWaypoints => _waypoints;
+
+        public async Task AddFirst(Waypoint waypoint)
         {
-            if (!this.Any(fixData => Math.Abs(fixData.GpsFixData.Lat - waypoint.GpsFixData.Lat) < _minWaypointDistance || Math.Abs(fixData.GpsFixData.Lon - waypoint.GpsFixData.Lon) < _minWaypointDistance))
+            using (var l = await _asyncLock.LockAsync())
             {
-                base.Add(waypoint);
+                if (!_waypoints.Any(fixData =>
+                    Math.Abs(fixData.Lat - waypoint.Lat) < _minWaypointDistance ||
+                    Math.Abs(fixData.Lon - waypoint.Lon) < _minWaypointDistance))
+                {
+                    _waypoints.Insert(0, waypoint);
+                    _preStartWaypoints.Insert(0, waypoint);
+                }
+            }
+        }
+
+        public async Task AddLast(Waypoint waypoint)
+        {
+            using (var l = await _asyncLock.LockAsync())
+            {
+                if (!_waypoints.Any(fixData =>
+                    Math.Abs(fixData.Lat - waypoint.Lat) < _minWaypointDistance ||
+                    Math.Abs(fixData.Lon - waypoint.Lon) < _minWaypointDistance))
+                {
+                    _waypoints.Add(waypoint);
+                    _preStartWaypoints.Add(waypoint);
+                }
+            }
+        }
+
+        public async Task ClearWaypoints()
+        {
+            using (var l = await _asyncLock.LockAsync())
+            {
+                _waypoints = new List<Waypoint>();
+                _preStartWaypoints = new List<Waypoint>();
+            }
+        }
+
+        public async Task ResetActiveWaypoints()
+        {
+            using (var l = await _asyncLock.LockAsync())
+            {
+                _waypoints = new List<Waypoint>(_preStartWaypoints);
             }
         }
 
         public async Task<bool> Save()
         {
-            try
+            using (var l = await _asyncLock.LockAsync())
             {
-                await FileExtensions.SaveStringToFile(_filename, JsonConvert.SerializeObject(this));
-                return true;
-            }
-            catch (Exception e)
-            {
-                _logger.Log(LogLevel.Error, $"Could not save waypoints => {e.Message}");
-                return false;
+                try
+                {
+                    await FileExtensions.SaveStringToFile(_filename, JsonConvert.SerializeObject(_waypoints));
+                    return true;
+                }
+                catch (Exception e)
+                {
+                    _logger.Log(LogLevel.Error, $"Could not save waypoints => {e.Message}");
+                    return false;
+                }
             }
         }
 
-        public async Task<WaypointList> Load()
+        public async Task Load()
         {
-            try
+            using (var l = await _asyncLock.LockAsync())
             {
-                var newlist = JsonConvert.DeserializeObject<WaypointList>(await _filename.ReadStringFromFile());
-                return newlist;
-            }
-            catch (Exception e)
-            {
-                _logger.Log(LogLevel.Error, $"Could not load waypoints => {e.Message}");
-
-                return new WaypointList();
+                try
+                {
+                    _waypoints = JsonConvert.DeserializeObject<List<Waypoint>>(await _filename.ReadStringFromFile());
+                }
+                catch (Exception e)
+                {
+                    _logger.Log(LogLevel.Error, $"Could not load waypoints => {e.Message}");
+                }
             }
         }
 
+        public async Task<MoveRequest> GetMoveRequestForNextWaypoint(double yourLat, double yourLon, double currentHeading)
+        {
+            using (var l = await _asyncLock.LockAsync())
+            {
+                var nextWp = _waypoints.FirstOrDefault();
 
-        //TODO: Broken
+                var moveReq = new MoveRequest();
 
-        //public double GetInchesToNextWaypoint(int index)
-        //{
-        //    if (Count <= index + 1)
-        //        return 0;
+                if (nextWp == null)
+                {
+                    return null;
+                }
 
-        //    var vals = GpsExtensions.GetDistanceAndHeadingToWaypoint(this[index].Lat, this[index].Lon, this[index + 1].Lat, this[index + 1].Lon);
+                var dh = GpsExtensions.GetDistanceAndHeadingToWaypoint(yourLat, yourLon, nextWp.Lat, nextWp.Lon);
 
-        //    return vals[0];
-        //}
+                var directionAndMagnitude = GetSteeringDirectionAndMagnitude(currentHeading, dh.HeadingToWaypoint, dh.DistanceInFeet);
 
-        //public double GetHeadingToNextWaypoint(int index)
-        //{
-        //    if (Count <= index + 1)
-        //        return 0;
+                moveReq.Distance = dh.DistanceInInches;
+                moveReq.SteeringDirection = directionAndMagnitude.Item1;
+                moveReq.SteeringMagnitude = directionAndMagnitude.Item2;
 
-        //    var vals = GpsExtensions.GetDistanceAndHeadingToWaypoint(this[index].Lat, this[index].Lon, this[index + 1].Lat, this[index + 1].Lon);
+                if (dh.DistanceInInches <= nextWp.Radius)
+                {
+                    _waypoints.RemoveAt(0);
+                }
+                else
+                {
+                    return moveReq;
+                }
 
-        //    return vals[1];
-        //}
+                nextWp = _waypoints.FirstOrDefault();
+
+                if (nextWp == null)
+                    return null;
+
+                dh = GpsExtensions.GetDistanceAndHeadingToWaypoint(yourLat, yourLon, nextWp.Lat, nextWp.Lon);
+
+                directionAndMagnitude = GetSteeringDirectionAndMagnitude(currentHeading, dh.HeadingToWaypoint, dh.DistanceInFeet);
+
+                moveReq.Distance = dh.DistanceInInches;
+                moveReq.SteeringDirection = directionAndMagnitude.Item1;
+                moveReq.SteeringMagnitude = directionAndMagnitude.Item2;
+
+                return moveReq;
+            }
+        }
+
+        private Tuple<SteeringDirection, double> GetSteeringDirectionAndMagnitude(double currentHeading, double headingToWaypoint, double distanceInFt)
+        {
+            var steeringDirection = GetSteeringDirection(currentHeading, headingToWaypoint);
+            var steeringMagnitude = GetSteeringMagnitude(currentHeading, headingToWaypoint, distanceInFt);
+
+            return new Tuple<SteeringDirection, double>(steeringDirection, steeringMagnitude);
+        }
+
+        private double _steerMagModifier = 1.5;
+
+        public void SetSteerMagnitudeModifier(double mod)
+        {
+            Volatile.Write(ref _steerMagModifier, mod);
+        }
+
+        public double GetSteeringMagnitude(double currentHeading, double targetHeading, double distanceToWaypoint)
+        {
+            var diff = Math.Abs(currentHeading - targetHeading) / Volatile.Read(ref _steerMagModifier);
+
+            try
+            {
+                var maxdif = 100 - 3 * Math.Atan((distanceToWaypoint - 20) / 5);
+
+                if (diff > maxdif)
+                {
+                    diff = maxdif;
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Log(LogLevel.Info, e.Message);
+
+                diff = 0;
+            }
+
+            return diff;
+        }
+
+        public SteeringDirection GetSteeringDirection(double currentHeading, double targetHeading)
+        {
+            SteeringDirection steerDirection;
+
+            var diff = currentHeading - targetHeading;
+
+            if (diff < 0)
+            {
+                steerDirection = Math.Abs(diff) > 180 ? SteeringDirection.Left : SteeringDirection.Right;
+            }
+            else
+            {
+                steerDirection = Math.Abs(diff) > 180 ? SteeringDirection.Right : SteeringDirection.Left;
+            }
+
+            return steerDirection;
+        }
     }
 }

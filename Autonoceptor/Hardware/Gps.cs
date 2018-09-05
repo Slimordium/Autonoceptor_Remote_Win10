@@ -18,7 +18,7 @@ namespace Autonoceptor.Service.Hardware
         private readonly CancellationToken _cancellationToken;
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-        private readonly Subject<GpsFixData> _subject = new Subject<GpsFixData>();
+        private readonly ISubject<GpsFixData> _subject = new BehaviorSubject<GpsFixData>(new GpsFixData());
 
         private bool _disposed = true;
 
