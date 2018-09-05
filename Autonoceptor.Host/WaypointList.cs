@@ -78,6 +78,17 @@ namespace Autonoceptor.Host
             }
         }
 
+        public async Task RemoveWaypoint(Waypoint waypoint)
+        {
+            using (var l = await _asyncLock.LockAsync())
+            {
+                var waypoints = new List<Waypoint>(_waypoints);
+                waypoints.Remove(waypoint);
+
+                _waypoints = new List<Waypoint>(waypoints);
+            }
+        }
+
         public async Task ClearWaypoints()
         {
             using (var l = await _asyncLock.LockAsync())
