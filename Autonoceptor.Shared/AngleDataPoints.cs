@@ -63,6 +63,18 @@ namespace Autonoceptor.Shared
         public Tuple<double, double> FindLargestGap()
         {
 
+            double largestGap = 0;
+            double bisector = 0;
+
+            for (int q = 1; q <= this.Count; q++)
+            {
+                if (this.Keys[q] - this.Keys[q-1] > largestGap)
+                {
+                    largestGap = this.Keys[q] - this.Keys[q - 1];
+                }
+            }
+
+            this.Count
         }
 
     }
