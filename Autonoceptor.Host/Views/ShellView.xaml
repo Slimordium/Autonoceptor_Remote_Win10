@@ -35,7 +35,7 @@
         </StackPanel>
 
         <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Left" Height="40" Width="620" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Name="Yaw" Width="90"  VerticalAlignment="Center"></TextBlock>
+            <TextBlock Name="Yaw" Width="70"  VerticalAlignment="Center"></TextBlock>
             <TextBlock Name="OdometerIn" Width="180" HorizontalAlignment="Left"  VerticalAlignment="Center"></TextBlock>
             <TextBlock Name="Lidar" Width="220" HorizontalAlignment="Left"  VerticalAlignment="Center"></TextBlock>
         </StackPanel>
