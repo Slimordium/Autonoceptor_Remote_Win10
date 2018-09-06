@@ -80,7 +80,7 @@
             <TextBlock Width="110"  VerticalAlignment="Center">Turn input modifier:</TextBlock>
             <Slider Name="TurnMagnitudeInputModifier" StepFrequency=".01" Minimum="1" Maximum="3" Value="1.6" Width="100" VerticalAlignment="Center"></Slider>
             <TextBlock Width="65"  VerticalAlignment="Center">Nav speed:</TextBlock>
-            <Slider Name="CruiseControl" Minimum="100" Maximum="700" StepFrequency="1" Value="350" Width="100" VerticalAlignment="Center"></Slider>
+            <Slider Name="CruiseControl" Minimum="100" Maximum="900" StepFrequency="1" Value="350" Width="100" VerticalAlignment="Center"></Slider>
             <Button Name="SetNavParams" Content="Set"></Button>
         </StackPanel>
 

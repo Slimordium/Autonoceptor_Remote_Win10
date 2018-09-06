@@ -117,7 +117,7 @@
       <DependentUpon>ShellView.xaml</DependentUpon>
     </Compile>
     <Compile Include="Waypoint.cs" />
-    <Compile Include="WaypointList.cs" />
+    <Compile Include="WaypointQueue.cs" />
     <Compile Include="XboxController.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -10,7 +10,7 @@ using NLog;
 
 namespace Autonoceptor.Host
 {
-    public class WaypointList : Queue<Waypoint>
+    public class WaypointQueue : Queue<Waypoint>
     {
         private static readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
@@ -30,18 +30,12 @@ namespace Autonoceptor.Host
 
                 return _currentWaypoint;
             }
-            private set => _currentWaypoint = value;
+            set => _currentWaypoint = value;
         }
 
         private static double _steerMagModifier = 1.5;
 
         //.000001 should only record waypoint every 1.1132m or 3.65223097ft
-        //The third decimal place is worth up to 110 m: it can identify a large agricultural field or institutional campus.
-        //The fourth decimal place is worth up to 11 m: it can identify a parcel of land.It is comparable to the typical accuracy of an uncorrected GPS unit with no interference.
-        //The fifth decimal place is worth up to 1.1 m: it distinguish trees from each other. Accuracy to this level with commercial GPS units can only be achieved with differential correction.            //Write GPS fix data to file, if switch is closed. Gps publishes fix data once a second
-        //The sixth decimal place is worth up to 0.11 m: you can use this for laying out structures in detail, for designing landscapes, building roads. It should be more than good enough for tracking movements of glaciers and rivers. This can be achieved by taking painstaking measures with GPS, such as differentially corrected GPS.
-        //The seventh decimal place is worth up to 11 mm: this is good for much surveying and is near the limit of what GPS-based techniques can achieve.
-        //The eighth decimal place is worth up to 1.1 mm: this is good for charting motions of tectonic plates and movements of volcanoes. Permanent, corrected, constantly-running GPS base stations might be able to achieve this level of accuracy.
         //https://en.wikipedia.org/wiki/Decimal_degrees
         //http://navspark.mybigcommerce.com/content/S1722DR8_v0.4.pdf
 
@@ -56,7 +50,7 @@ namespace Autonoceptor.Host
         ///The eighth decimal place is worth up to 1.1 mm: this is good for charting motions of tectonic plates and movements of volcanoes. Permanent, corrected, constantly-running GPS base stations might be able to achieve this level of accuracy.
         /// </summary>
         /// <param name="minWaypointDistance"></param>
-        public WaypointList(double minWaypointDistance = .0000001)
+        public WaypointQueue(double minWaypointDistance = .0000001)
         {
             _minWaypointDistance = minWaypointDistance;
         }
@@ -71,14 +65,6 @@ namespace Autonoceptor.Host
                 {
                     base.Enqueue(waypoint);
                 }
-            }
-        }
-
-        public async Task ClearWaypoints()
-        {
-            using (await _asyncLock.LockAsync())
-            {
-                Clear();
             }
         }
 
@@ -208,16 +194,16 @@ namespace Autonoceptor.Host
 
         public static double GetSteeringMagnitude(double currentHeading, double targetHeading, double distanceToWaypoint)
         {
-            var differenceInDegrees = Math.Abs(currentHeading - targetHeading) / Volatile.Read(ref _steerMagModifier);
+            var differenceInDegrees = Math.Abs(currentHeading - targetHeading);// / Volatile.Read(ref _steerMagModifier);
 
             try
             {
-                var maxAllowedMagnitude = 100 - 3 * Math.Atan((distanceToWaypoint - 20) / 5);
+                //var maxAllowedMagnitude = 100 - 3 * Math.Atan((distanceToWaypoint - 20) / 5);
 
-                if (differenceInDegrees > maxAllowedMagnitude)
-                {
-                    differenceInDegrees = maxAllowedMagnitude;
-                }
+                //if (differenceInDegrees > maxAllowedMagnitude)
+                //{
+                //    differenceInDegrees = maxAllowedMagnitude;
+                //}
             }
             catch (Exception e)
             {

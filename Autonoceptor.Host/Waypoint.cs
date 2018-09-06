@@ -1,9 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Threading;
-using Autonoceptor.Shared;
-using Autonoceptor.Shared.Gps;
-using Autonoceptor.Shared.Imu;
-
+﻿
 namespace Autonoceptor.Host
 {
     public class Waypoint
@@ -23,7 +18,7 @@ namespace Autonoceptor.Host
         /// However, there is a delay between getting a GPS updated, and when we turn, which means it adds about 1-1.5 of decision making
         /// time per update, or in short, you will need to be 12+ feet away. 
         /// </summary>
-        public int Radius { get; set; } = 50;
+        public int Radius { get; set; } = 65;
 
         public override string ToString()
         {

@@ -219,7 +219,11 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.Y))
             {
-                await Waypoints.ClearWaypoints();
+                Waypoints.Clear();
+
+                Waypoints.CurrentWaypoint = null;
+
+                await Waypoints.Save();
 
                 _logger.Log(LogLevel.Info, "WPs Cleared");
                 await Lcd.WriteAsync($"WPs cleared");

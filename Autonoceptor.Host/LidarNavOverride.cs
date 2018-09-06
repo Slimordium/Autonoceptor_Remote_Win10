@@ -66,44 +66,48 @@ namespace Autonoceptor.Host
                         _isDangerZone[Zone.Center] = false;//Zone is safe
                     }
 
-                    if (_isDangerZone[Zone.Center]) //Check next zone
-                    {
-                        data = await Sweep(Host.Sweep.Right);
-                    }
-                    else
-                    {
-                        //Center zone is safe, so no need to scan any other zone
-                        //reset other zones
-                        _isDangerZone[Zone.Left] = false;
-                        _isDangerZone[Zone.Right] = false;
+                    //if (_isDangerZone[Zone.Center]) //Check next zone
+                    //{
+                    //    data = await Sweep(Host.Sweep.Right);
+                    //}
+                    //else
+                    //{
+                    //    //Center zone is safe, so no need to scan any other zone
+                    //    //reset other zones
+                    //    _isDangerZone[Zone.Left] = false;
+                    //    _isDangerZone[Zone.Right] = false;
 
-                        return; 
-                    }
+                    //    await SetChannelValue(_centerPwm, _lidarServoChannel);
 
-                    if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
-                    {
-                        _isDangerZone[Zone.Right] = true;
-                    }
+                    //    return; 
+                    //}
 
-                    if (_isDangerZone[Zone.Right]) //Check next zone
-                    {
-                        data = await Sweep(Host.Sweep.Left);
-                    }
-                    else
-                    {
-                        _isDangerZone[Zone.Left] = false; //Reset to default
-                        return; //Center zone is not safe, right zone is safe
-                    }
+                    //if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
+                    //{
+                    //    _isDangerZone[Zone.Right] = true;
+                    //}
 
-                    if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
-                    {
-                        _isDangerZone[Zone.Left] = true;
-                    }
-                    else
-                    {
-                        _isDangerZone[Zone.Left] = false;//Zone is safe
-                    }
+                    //if (_isDangerZone[Zone.Right]) //Check next zone
+                    //{
+                    //    data = await Sweep(Host.Sweep.Left);
+                    //}
+                    //else
+                    //{
+                    //    await SetChannelValue(_centerPwm, _lidarServoChannel);
+                    //    _isDangerZone[Zone.Left] = false; //Reset to default
+                    //    return; //Center zone is not safe, right zone is safe
+                    //}
 
+                    //if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
+                    //{
+                    //    _isDangerZone[Zone.Left] = true;
+                    //}
+                    //else
+                    //{
+                    //    _isDangerZone[Zone.Left] = false;//Zone is safe
+                    //}
+
+                    await SetChannelValue(_centerPwm, _lidarServoChannel);
                     //If we get here, we are screwed because all zones are dangerous. 
                 });
         }
@@ -135,7 +139,11 @@ namespace Autonoceptor.Host
                         await SetChannelValue(pwm * 4, _lidarServoChannel);
 
                         var lidarData = await Lidar.GetLatest();
-                        lidarData.Angle = pwm.Map(_centerPwm, _leftPwm, 0, -45);
+
+                        if (!lidarData.IsValid)
+                            continue;
+
+                        lidarData.Angle = Math.Round(pwm.Map(_centerPwm, _leftPwm, 0, -45));
                         data.Add(lidarData);
                     }
 
@@ -148,7 +156,11 @@ namespace Autonoceptor.Host
                         await SetChannelValue(pwm * 4, _lidarServoChannel);
 
                         var lidarData = await Lidar.GetLatest();
-                        lidarData.Angle = pwm.Map(_centerPwm, _rightPwm, 0, 45); ;
+
+                        if (!lidarData.IsValid)
+                            continue;
+
+                        lidarData.Angle = Math.Round(pwm.Map(_centerPwm, _rightPwm, 0, 45)); ;
                         data.Add(lidarData);
                     }
 
@@ -161,8 +173,11 @@ namespace Autonoceptor.Host
                         await SetChannelValue(pwm * 4, _lidarServoChannel);
 
                         var lidarData = await Lidar.GetLatest();
-                        lidarData.Angle = pwm.Map(_leftMidPwm, _rightMidPwm, -15, 15);
 
+                        if (!lidarData.IsValid)
+                            continue;
+
+                        lidarData.Angle = Math.Round(pwm.Map(_leftMidPwm, _rightMidPwm, -15, 15));
                         data.Add(lidarData);
                     }
 

@@ -36,7 +36,7 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task InitializeAsync()
         {
-            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("A105BLG5", 115200, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20));
+            _serialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("A105BLG5", 115200, TimeSpan.FromMilliseconds(15), TimeSpan.FromMilliseconds(15));
 
             if (_serialDevice == null)
                 return;
@@ -82,7 +82,6 @@ namespace Autonoceptor.Service.Hardware
                         if (lidarData.Reliability <= 5 || lidarData.Reliability > 8) //If the value is a 7 or 8, it is reliable. Ignore the rest
                         {
                             lidarData.IsValid = false;
-                            continue;
                         }
                     }
                     catch (TimeoutException)

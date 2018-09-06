@@ -25,7 +25,7 @@ namespace Autonoceptor.Host
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
         private IDisposable _speedControllerDisposable;
 
-        public WaypointList Waypoints { get; set; } = new WaypointList();
+        public WaypointQueue Waypoints { get; set; } = new WaypointQueue();
 
         protected string BrokerHostnameOrIp { get; set; }
 
@@ -122,25 +122,9 @@ namespace Autonoceptor.Host
             if (pulseCountPerUpdate < 1) //Probably stopped...
                 return; 
 
-            //-------------Update distance traveled, this should solve overshoot when gps fix is not due for another second.
-            //var startDistance = GpsNavParameters.GetOdometerTraveledDistance();
-            //var distanceToWaypoint = GpsNavParameters.GetDistanceToWaypoint();
+            var odometer = await Odometer.GetLatest();
 
-            //var remainingDistance = distanceToWaypoint - (odometer.InTraveled - startDistance);
-
-            //GpsNavParameters.SetDistanceToWaypoint(remainingDistance);
-            //-----------------------------------------------------
-
-            var odoDataList = new List<OdometerData>();
-
-            for (var i = 0; i <= 2; i++)
-            {
-                var odometer = await Odometer.GetLatest();
-
-                odoDataList.Add(odometer);
-            }
-
-            var pulseCount = odoDataList.Average(d => d.PulseCount); //Average...
+            var pulseCount = odometer.PulseCount;
 
             //Give it some wiggle room
             if (pulseCount < pulseCountPerUpdate + 30 && pulseCount > pulseCountPerUpdate - 50)
@@ -149,7 +133,7 @@ namespace Autonoceptor.Host
             }
 
             if (pulseCount < pulseCountPerUpdate)
-                moveMagnitude = moveMagnitude + 15;
+                moveMagnitude = moveMagnitude + 40;
 
             if (pulseCount > pulseCountPerUpdate)
             {
@@ -163,12 +147,12 @@ namespace Autonoceptor.Host
                 }
                 else
                 {
-                    moveMagnitude = moveMagnitude - 1;
+                    moveMagnitude = moveMagnitude - .7;
                 }
             }
 
-            if (moveMagnitude > 50)
-                moveMagnitude = 50;
+            if (moveMagnitude > 55)
+                moveMagnitude = 55;
 
             if (moveMagnitude < 0)
                 moveMagnitude = 0;
@@ -206,11 +190,11 @@ namespace Autonoceptor.Host
             _speedControllerDisposable?.Dispose();
             _speedControllerDisposable = null;
 
-            Volatile.Write(ref _moveMagnitude, 0);
+            Volatile.Write(ref _moveMagnitude, 30);
             Volatile.Write(ref _pulseCountPerUpdate, pulseCountPerUpdateInterval);
 
             _speedControllerDisposable = Observable
-                .Interval(TimeSpan.FromMilliseconds(50))
+                .Interval(TimeSpan.FromMilliseconds(100))
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {

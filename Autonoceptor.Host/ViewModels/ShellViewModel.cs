@@ -83,9 +83,9 @@ namespace Autonoceptor.Host.ViewModels
             }
         }
 
-        public double TurnMagnitudeInputModifier { get; set; } = 1.3;
+        public double TurnMagnitudeInputModifier { get; set; } = 1; // LEAVE AT 1 NOT NEEDED
 
-        public int CruiseControl { get; set; } = 230;
+        public int CruiseControl { get; set; } = 340;
 
         private async Task AddToLog(string entry)
         {
@@ -150,7 +150,15 @@ namespace Autonoceptor.Host.ViewModels
                 .ObserveOnDispatcher()
                 .Subscribe(data =>
                 {
-                    Lidar = $"Distance: {data.Distance}, Strength: {data.Strength}";
+                    if (!data.IsValid)
+                    {
+                        //Lidar = "Invalid signal";
+                    }
+                    else
+                    {
+                        Lidar = $"Distance: {data.Distance}, Strength: {data.Strength}";
+                    }
+
                     NotifyOfPropertyChange(nameof(Lidar));
                 });
         }
