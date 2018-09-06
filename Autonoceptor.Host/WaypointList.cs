@@ -89,6 +89,9 @@ namespace Autonoceptor.Host
                 try
                 {
                     await FileExtensions.SaveStringToFile(_filename, JsonConvert.SerializeObject(this));
+
+                    _logger.Log(LogLevel.Info, $"Saved {Count} waypoints");
+
                     return true;
                 }
                 catch (Exception e)
@@ -113,6 +116,8 @@ namespace Autonoceptor.Host
 
                     Clear(); //Remove everything from the queue
 
+                    _logger.Log(LogLevel.Info, $"Loaded {waypoints.Count} waypoints");
+
                     foreach (var wp in waypoints)
                     {
                         base.Enqueue(wp);
@@ -129,8 +134,8 @@ namespace Autonoceptor.Host
         {
             using (await _asyncLock.LockAsync())
             {
-                if (CurrentWaypoint == null)
-                    CurrentWaypoint = Peek();
+                if (!this.Any())
+                    return null;//Most likely we have already finished navigating
 
                 var moveReq = new MoveRequest();
                 

@@ -134,6 +134,12 @@ namespace Autonoceptor.Host
                 var currentLocation = await Gps.GetLatest();
                 var moveRequest = await Waypoints.GetMoveRequestForNextWaypoint(currentLocation.Lat, currentLocation.Lon, currentLocation.Heading);
 
+                if (moveRequest == null)
+                {
+                    _logger.Log(LogLevel.Info, "Either no waypoints, or there was only one and we were already at it.");
+                    return;
+                }
+
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
                 await Lcd.WriteAsync("Started Nav to", 1);
