@@ -56,7 +56,7 @@ namespace Autonoceptor.Host
                 });
 
             _syncImuDisposable = Observable
-                .Interval(TimeSpan.FromSeconds(5))
+                .Interval(TimeSpan.FromSeconds(4))
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
