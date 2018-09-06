@@ -89,6 +89,8 @@ namespace Autonoceptor.Host
                             return;
                         }
 
+                        await Odometer.ZeroTripMeter();//0 the trip meter
+
                         await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
                     });
 
@@ -109,6 +111,8 @@ namespace Autonoceptor.Host
                                 await WaypointFollowEnable(false);
                                 return;
                             }
+
+                            
 
                             await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
                         }

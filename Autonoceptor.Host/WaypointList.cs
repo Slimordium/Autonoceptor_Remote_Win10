@@ -10,15 +10,15 @@ using NLog;
 
 namespace Autonoceptor.Host
 {
-    public class WaypointList 
+    public class WaypointList : Queue<Waypoint>
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         private readonly string _filename = $"waypoints.json";
 
-        private List<Waypoint> _waypoints = new List<Waypoint>();
-        private List<Waypoint> _preStartWaypoints = new List<Waypoint>();
         private readonly AsyncLock _asyncLock = new AsyncLock();
+        private Waypoint _currentWaypoint;
+        private double _steerMagModifier = 1.5;
 
         //.000001 should only record waypoint every 1.1132m or 3.65223097ft
         //The third decimal place is worth up to 110 m: it can identify a large agricultural field or institutional campus.
@@ -46,46 +46,16 @@ namespace Autonoceptor.Host
             _minWaypointDistance = minWaypointDistance;
         }
 
-        public int Count => _waypoints.Count;
-
-        public List<Waypoint> ActiveWaypoints => _waypoints;
-
-        public async Task AddFirst(Waypoint waypoint)
+        public new async Task Enqueue(Waypoint waypoint)
         {
             using (var l = await _asyncLock.LockAsync())
             {
-                if (!_waypoints.Any(fixData =>
+                if (!this.Any(fixData =>
                     Math.Abs(fixData.Lat - waypoint.Lat) < _minWaypointDistance ||
                     Math.Abs(fixData.Lon - waypoint.Lon) < _minWaypointDistance))
                 {
-                    _waypoints.Insert(0, waypoint);
-                    _preStartWaypoints.Insert(0, waypoint);
+                    base.Enqueue(waypoint);
                 }
-            }
-        }
-
-        public async Task AddLast(Waypoint waypoint)
-        {
-            using (var l = await _asyncLock.LockAsync())
-            {
-                if (!_waypoints.Any(fixData =>
-                    Math.Abs(fixData.Lat - waypoint.Lat) < _minWaypointDistance ||
-                    Math.Abs(fixData.Lon - waypoint.Lon) < _minWaypointDistance))
-                {
-                    _waypoints.Add(waypoint);
-                    _preStartWaypoints.Add(waypoint);
-                }
-            }
-        }
-
-        public async Task RemoveWaypoint(Waypoint waypoint)
-        {
-            using (var l = await _asyncLock.LockAsync())
-            {
-                var waypoints = new List<Waypoint>(_waypoints);
-                waypoints.Remove(waypoint);
-
-                _waypoints = new List<Waypoint>(waypoints);
             }
         }
 
@@ -93,16 +63,7 @@ namespace Autonoceptor.Host
         {
             using (var l = await _asyncLock.LockAsync())
             {
-                _waypoints = new List<Waypoint>();
-                _preStartWaypoints = new List<Waypoint>();
-            }
-        }
-
-        public async Task ResetActiveWaypoints()
-        {
-            using (var l = await _asyncLock.LockAsync())
-            {
-                _waypoints = new List<Waypoint>(_preStartWaypoints);
+                Clear();
             }
         }
 
@@ -112,7 +73,7 @@ namespace Autonoceptor.Host
             {
                 try
                 {
-                    await FileExtensions.SaveStringToFile(_filename, JsonConvert.SerializeObject(_waypoints));
+                    await FileExtensions.SaveStringToFile(_filename, JsonConvert.SerializeObject(this));
                     return true;
                 }
                 catch (Exception e)
@@ -129,7 +90,14 @@ namespace Autonoceptor.Host
             {
                 try
                 {
-                    _waypoints = JsonConvert.DeserializeObject<List<Waypoint>>(await _filename.ReadStringFromFile());
+                    var waypoints = JsonConvert.DeserializeObject<Queue<Waypoint>>(await _filename.ReadStringFromFile());
+
+                    Clear();
+
+                    foreach (var wp in waypoints)
+                    {
+                        base.Enqueue(wp);
+                    }
                 }
                 catch (Exception e)
                 {
@@ -138,46 +106,60 @@ namespace Autonoceptor.Host
             }
         }
 
-        public async Task<MoveRequest> GetMoveRequestForNextWaypoint(double yourLat, double yourLon, double currentHeading)
+        public async Task<MoveRequest> GetMoveRequestForNextWaypoint(double yourLat, double yourLon, double currentHeading, double overrideCalculatedDistanceRemaining = 0)
         {
             using (var l = await _asyncLock.LockAsync())
             {
-                var nextWp = _waypoints.FirstOrDefault();
+                if (_currentWaypoint == null)
+                    _currentWaypoint = Peek();
 
                 var moveReq = new MoveRequest();
+                
+                var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(yourLat, yourLon, _currentWaypoint.Lat, _currentWaypoint.Lon);
 
-                if (nextWp == null)
+                var radiusDistanceInCheck = 0d; //This is the GPS distance to WP, or the calculated distance from our current Lat/Lon
+
+                Tuple<SteeringDirection, double> directionAndMagnitude;
+
+                if (overrideCalculatedDistanceRemaining > 0)
                 {
-                    return null;
+                    moveReq.Distance = overrideCalculatedDistanceRemaining;
+                    radiusDistanceInCheck = overrideCalculatedDistanceRemaining;
+                    directionAndMagnitude = GetSteeringDirectionAndMagnitude(currentHeading, distanceAndHeading.HeadingToWaypoint, overrideCalculatedDistanceRemaining);
                 }
-
-                var dh = GpsExtensions.GetDistanceAndHeadingToWaypoint(yourLat, yourLon, nextWp.Lat, nextWp.Lon);
-
-                var directionAndMagnitude = GetSteeringDirectionAndMagnitude(currentHeading, dh.HeadingToWaypoint, dh.DistanceInFeet);
-
-                moveReq.Distance = dh.DistanceInInches;
+                else
+                {
+                    moveReq.Distance = distanceAndHeading.DistanceInInches;
+                    radiusDistanceInCheck = distanceAndHeading.DistanceInInches;
+                    directionAndMagnitude = GetSteeringDirectionAndMagnitude(currentHeading, distanceAndHeading.HeadingToWaypoint, distanceAndHeading.DistanceInInches);
+                }
+                
                 moveReq.SteeringDirection = directionAndMagnitude.Item1;
                 moveReq.SteeringMagnitude = directionAndMagnitude.Item2;
 
-                if (dh.DistanceInInches <= nextWp.Radius)
+                if (radiusDistanceInCheck <= _currentWaypoint.Radius)
                 {
-                    _waypoints.RemoveAt(0);
+                    Dequeue(); //Remove waypoint from queue, as we have arrived, move on to next one if available
+
+                    if (!this.Any())
+                        return null; //At last waypoint
+
+                    _currentWaypoint = Peek();
                 }
                 else
                 {
                     return moveReq;
                 }
 
-                nextWp = _waypoints.FirstOrDefault();
+                //Don't override distance, since this is the next one, and the override distance does not apply
 
-                if (nextWp == null)
-                    return null;
+                moveReq = new MoveRequest();
 
-                dh = GpsExtensions.GetDistanceAndHeadingToWaypoint(yourLat, yourLon, nextWp.Lat, nextWp.Lon);
+                distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(yourLat, yourLon, _currentWaypoint.Lat, _currentWaypoint.Lon);
 
-                directionAndMagnitude = GetSteeringDirectionAndMagnitude(currentHeading, dh.HeadingToWaypoint, dh.DistanceInFeet);
+                moveReq.Distance = distanceAndHeading.DistanceInInches;
+                directionAndMagnitude = GetSteeringDirectionAndMagnitude(currentHeading, distanceAndHeading.HeadingToWaypoint, distanceAndHeading.DistanceInInches);
 
-                moveReq.Distance = dh.DistanceInInches;
                 moveReq.SteeringDirection = directionAndMagnitude.Item1;
                 moveReq.SteeringMagnitude = directionAndMagnitude.Item2;
 
@@ -193,8 +175,6 @@ namespace Autonoceptor.Host
             return new Tuple<SteeringDirection, double>(steeringDirection, steeringMagnitude);
         }
 
-        private double _steerMagModifier = 1.5;
-
         public void SetSteerMagnitudeModifier(double mod)
         {
             Volatile.Write(ref _steerMagModifier, mod);
@@ -202,40 +182,40 @@ namespace Autonoceptor.Host
 
         public double GetSteeringMagnitude(double currentHeading, double targetHeading, double distanceToWaypoint)
         {
-            var diff = Math.Abs(currentHeading - targetHeading) / Volatile.Read(ref _steerMagModifier);
+            var differenceInDegrees = Math.Abs(currentHeading - targetHeading) / Volatile.Read(ref _steerMagModifier);
 
             try
             {
-                var maxdif = 100 - 3 * Math.Atan((distanceToWaypoint - 20) / 5);
+                var maxAllowedMagnitude = 100 - 3 * Math.Atan((distanceToWaypoint - 20) / 5);
 
-                if (diff > maxdif)
+                if (differenceInDegrees > maxAllowedMagnitude)
                 {
-                    diff = maxdif;
+                    differenceInDegrees = maxAllowedMagnitude;
                 }
             }
             catch (Exception e)
             {
                 _logger.Log(LogLevel.Info, e.Message);
 
-                diff = 0;
+                differenceInDegrees = 0;
             }
 
-            return diff;
+            return differenceInDegrees;
         }
 
         public SteeringDirection GetSteeringDirection(double currentHeading, double targetHeading)
         {
             SteeringDirection steerDirection;
 
-            var diff = currentHeading - targetHeading;
+            var angleDifferenceInDegrees = currentHeading - targetHeading;
 
-            if (diff < 0)
+            if (angleDifferenceInDegrees < 0)
             {
-                steerDirection = Math.Abs(diff) > 180 ? SteeringDirection.Left : SteeringDirection.Right;
+                steerDirection = Math.Abs(angleDifferenceInDegrees) > 180 ? SteeringDirection.Left : SteeringDirection.Right;
             }
             else
             {
-                steerDirection = Math.Abs(diff) > 180 ? SteeringDirection.Right : SteeringDirection.Left;
+                steerDirection = Math.Abs(angleDifferenceInDegrees) > 180 ? SteeringDirection.Right : SteeringDirection.Left;
             }
 
             return steerDirection;

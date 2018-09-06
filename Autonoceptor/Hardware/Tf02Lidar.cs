@@ -22,7 +22,7 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly CancellationToken _cancellationToken;
 
-        private ILogger _logger = LogManager.GetCurrentClassLogger();
+        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         public Tf02Lidar(CancellationToken cancellationToken)
         {
@@ -50,29 +50,50 @@ namespace Autonoceptor.Service.Hardware
             {
                 while (!_cancellationToken.IsCancellationRequested)
                 {
-                    var byteCount = await _inputStream.LoadAsync(8);
-                    var bytes = new byte[byteCount];
-                    _inputStream.ReadBytes(bytes);
+                    var lidarData = new LidarData();
 
-                    var byteList = bytes.ToList();
-
-                    var loc = byteList.IndexOf(0x59);
-
-                    if (loc + 7 > byteList.Count)
-                        continue;
-
-                    if (bytes[0] != 0x59 && bytes[1] != 0x59)
-                        continue;
-
-                    var lidarData = new LidarData
+                    try
                     {
-                        Distance = (ushort)BitConverter.ToInt16(bytes, 2),
-                        Strength = (ushort)BitConverter.ToInt16(bytes, 4),
-                        Reliability = bytes[6]
-                    };
+                        var byteCount = await _inputStream.LoadAsync(8);
 
-                    if (lidarData.Reliability <= 5 || lidarData.Reliability > 8) //If the value is a 7 or 8, it is reliable. Ignore the rest
-                        continue;
+                        if (byteCount == 0)
+                            continue;
+
+                        var bytes = new byte[byteCount];
+                        _inputStream.ReadBytes(bytes);
+
+                        var byteList = bytes.ToList();
+
+                        var loc = byteList.IndexOf(0x59);
+
+                        if (loc + 7 > byteList.Count)
+                            continue;
+
+                        if (bytes[0] != 0x59 && bytes[1] != 0x59)
+                            continue;
+
+                        lidarData = new LidarData
+                        {
+                            Distance = (ushort) BitConverter.ToInt16(bytes, 2),
+                            Strength = (ushort) BitConverter.ToInt16(bytes, 4),
+                            Reliability = bytes[6]
+                        };
+
+                        if (lidarData.Reliability <= 5 || lidarData.Reliability > 8) //If the value is a 7 or 8, it is reliable. Ignore the rest
+                        {
+                            lidarData.IsValid = false;
+                        }
+                    }
+                    catch (TimeoutException)
+                    {
+                        _logger.Log(LogLevel.Error, $"Lidar timed out");
+                        lidarData.IsValid = false;
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Log(LogLevel.Error, $"Lidar error: {e.Message}");
+                        lidarData.IsValid = false;
+                    }
 
                     _subject.OnNext(lidarData);
                 }
