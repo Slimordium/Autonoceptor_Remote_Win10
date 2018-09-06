@@ -8,6 +8,8 @@ namespace Autonoceptor.Host
 {
     public class Waypoint
     {
+        public double DistanceToWaypoint { get; set; }
+
         public double Lat { get; set; }
         public double Lon { get; set; }
 

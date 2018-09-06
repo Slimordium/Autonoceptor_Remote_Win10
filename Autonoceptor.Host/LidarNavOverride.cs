@@ -30,7 +30,7 @@ namespace Autonoceptor.Host
         private int _maxStrength;
         private int _minStrength;
 
-        private int _dangerDistance = 300;
+        private int _dangerDistance = 400;
         //-------------------------------------------------------
 
         private readonly AsyncLock _asyncLock = new AsyncLock();
@@ -48,6 +48,8 @@ namespace Autonoceptor.Host
         {
             await base.InitializeAsync();
 
+            return;
+
             _lidarDataDisposable = Observable
                 .Interval(TimeSpan.FromSeconds(2)) //At 2+ feet per second, this scans the center zone every 4 feet.
                 .ObserveOnDispatcher()
@@ -55,7 +57,7 @@ namespace Autonoceptor.Host
                 {
                     var data = await Sweep(Host.Sweep.Center);
 
-                    if (data.Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
+                    if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
                     {
                         _isDangerZone[Zone.Center] = true;
                     }
@@ -78,7 +80,7 @@ namespace Autonoceptor.Host
                         return; 
                     }
 
-                    if (data.Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
+                    if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
                     {
                         _isDangerZone[Zone.Right] = true;
                     }
@@ -93,7 +95,7 @@ namespace Autonoceptor.Host
                         return; //Center zone is not safe, right zone is safe
                     }
 
-                    if (data.Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
+                    if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
                     {
                         _isDangerZone[Zone.Left] = true;
                     }

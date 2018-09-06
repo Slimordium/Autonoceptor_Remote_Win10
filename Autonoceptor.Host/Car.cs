@@ -119,6 +119,9 @@ namespace Autonoceptor.Host
             var moveMagnitude = Volatile.Read(ref _moveMagnitude);
             var pulseCountPerUpdate = Volatile.Read(ref _pulseCountPerUpdate);
 
+            if (pulseCountPerUpdate < 1) //Probably stopped...
+                return; 
+
             //-------------Update distance traveled, this should solve overshoot when gps fix is not due for another second.
             //var startDistance = GpsNavParameters.GetOdometerTraveledDistance();
             //var distanceToWaypoint = GpsNavParameters.GetDistanceToWaypoint();
@@ -182,6 +185,9 @@ namespace Autonoceptor.Host
         {
             var moveValue = StoppedPwm * 4;
 
+            if (magnitude > 80)
+                magnitude = 80;
+
             switch (direction)
             {
                 case MovementDirection.Forward:
@@ -198,6 +204,7 @@ namespace Autonoceptor.Host
         public void EnableCruiseControl(int pulseCountPerUpdateInterval)
         {
             _speedControllerDisposable?.Dispose();
+            _speedControllerDisposable = null;
 
             Volatile.Write(ref _moveMagnitude, 0);
             Volatile.Write(ref _pulseCountPerUpdate, pulseCountPerUpdateInterval);

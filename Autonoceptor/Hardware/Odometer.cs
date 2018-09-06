@@ -2,12 +2,10 @@
 using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
-using System.Reactive.Threading.Tasks;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
-using Nito.AsyncEx;
 using NLog;
 
 namespace Autonoceptor.Service.Hardware

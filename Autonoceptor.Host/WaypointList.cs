@@ -12,7 +12,7 @@ namespace Autonoceptor.Host
 {
     public class WaypointList : Queue<Waypoint>
     {
-        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         private readonly string _filename = $"waypoints.json";
 
@@ -33,7 +33,7 @@ namespace Autonoceptor.Host
             private set => _currentWaypoint = value;
         }
 
-        private double _steerMagModifier = 1.5;
+        private static double _steerMagModifier = 1.5;
 
         //.000001 should only record waypoint every 1.1132m or 3.65223097ft
         //The third decimal place is worth up to 110 m: it can identify a large agricultural field or institutional campus.
@@ -111,7 +111,7 @@ namespace Autonoceptor.Host
                 {
                     var waypoints = JsonConvert.DeserializeObject<Queue<Waypoint>>(await _filename.ReadStringFromFile());
 
-                    Clear();
+                    Clear(); //Remove everything from the queue
 
                     foreach (var wp in waypoints)
                     {
@@ -186,10 +186,12 @@ namespace Autonoceptor.Host
             }
         }
 
-        private Tuple<SteeringDirection, double> GetSteeringDirectionAndMagnitude(double currentHeading, double headingToWaypoint, double distanceInFt)
+        private static Tuple<SteeringDirection, double> GetSteeringDirectionAndMagnitude(double currentHeading, double headingToWaypoint, double distanceInFt)
         {
             var steeringDirection = GetSteeringDirection(currentHeading, headingToWaypoint);
             var steeringMagnitude = GetSteeringMagnitude(currentHeading, headingToWaypoint, distanceInFt);
+
+            //var steeringMagnitude = GetSteeringMagnitudeAlternate(currentHeading, headingToWaypoint, distanceInFt);
 
             return new Tuple<SteeringDirection, double>(steeringDirection, steeringMagnitude);
         }
@@ -199,7 +201,7 @@ namespace Autonoceptor.Host
             Volatile.Write(ref _steerMagModifier, mod);
         }
 
-        public double GetSteeringMagnitude(double currentHeading, double targetHeading, double distanceToWaypoint)
+        public static double GetSteeringMagnitude(double currentHeading, double targetHeading, double distanceToWaypoint)
         {
             var differenceInDegrees = Math.Abs(currentHeading - targetHeading) / Volatile.Read(ref _steerMagModifier);
 
@@ -222,7 +224,23 @@ namespace Autonoceptor.Host
             return differenceInDegrees;
         }
 
-        public SteeringDirection GetSteeringDirection(double currentHeading, double targetHeading)
+        public static double GetSteeringMagnitudeAlternate(double currentHeading, double targetHeading, double distanceToWaypoint)
+        {
+            var differenceInDegrees = Math.Abs(currentHeading - targetHeading);
+
+            //Cap the distance we care about to 180in / 15ft
+            if (distanceToWaypoint > 180)
+                distanceToWaypoint = 180;
+
+            var divider = distanceToWaypoint * .01; //180 = 1.8
+
+            var newDifferenceInDegrees = differenceInDegrees / divider;
+
+
+            return newDifferenceInDegrees;
+        }
+
+        public static SteeringDirection GetSteeringDirection(double currentHeading, double targetHeading)
         {
             SteeringDirection steerDirection;
 

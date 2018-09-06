@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,7 +33,7 @@ namespace Autonoceptor.Host
             });
             
             //Somewhere in my driveway...
-            //Waypoints.AddFirst(new Waypoint{Lat = 40.147721, Lon = -105.110756 });//40.147721, -105.110756
+            //Waypoints.Enqueue(new Waypoint{Lat = 40.147721, Lon = -105.110756 });//40.147721, -105.110756
         }
 
         private bool _followingWaypoints;
@@ -71,9 +72,17 @@ namespace Autonoceptor.Host
 
             FollowingWaypoints = enabled;
 
-            if (enabled && Waypoints.Count > 0)
+            if (enabled)
             {
                 await Waypoints.Load(); //Load waypoint file from disk
+
+                if (!Waypoints.Any())
+                {
+                    FollowingWaypoints = false;
+                    _logger.Log(LogLevel.Info, "No waypoints found?");
+                    await Lcd.WriteAsync("No WP!");
+                    return;
+                }
 
                 _gpsDisposable = Gps
                     .GetObservable()
@@ -111,8 +120,6 @@ namespace Autonoceptor.Host
                                 await WaypointFollowEnable(false);
                                 return;
                             }
-
-                            
 
                             await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
                         }
