@@ -17,7 +17,22 @@ namespace Autonoceptor.Host
         private readonly string _filename = $"waypoints.json";
 
         private readonly AsyncLock _asyncLock = new AsyncLock();
+
         private Waypoint _currentWaypoint;
+        public Waypoint CurrentWaypoint
+        {
+            get
+            {
+                if (_currentWaypoint == null && this.Any())
+                {
+                    _currentWaypoint = Peek();
+                }
+
+                return _currentWaypoint;
+            }
+            private set => _currentWaypoint = value;
+        }
+
         private double _steerMagModifier = 1.5;
 
         //.000001 should only record waypoint every 1.1132m or 3.65223097ft
@@ -48,7 +63,7 @@ namespace Autonoceptor.Host
 
         public new async Task Enqueue(Waypoint waypoint)
         {
-            using (var l = await _asyncLock.LockAsync())
+            using (await _asyncLock.LockAsync())
             {
                 if (!this.Any(fixData =>
                     Math.Abs(fixData.Lat - waypoint.Lat) < _minWaypointDistance ||
@@ -61,7 +76,7 @@ namespace Autonoceptor.Host
 
         public async Task ClearWaypoints()
         {
-            using (var l = await _asyncLock.LockAsync())
+            using (await _asyncLock.LockAsync())
             {
                 Clear();
             }
@@ -69,7 +84,7 @@ namespace Autonoceptor.Host
 
         public async Task<bool> Save()
         {
-            using (var l = await _asyncLock.LockAsync())
+            using (await _asyncLock.LockAsync())
             {
                 try
                 {
@@ -84,9 +99,13 @@ namespace Autonoceptor.Host
             }
         }
 
+        /// <summary>
+        /// This needs to be called before navigating
+        /// </summary>
+        /// <returns></returns>
         public async Task Load()
         {
-            using (var l = await _asyncLock.LockAsync())
+            using (await _asyncLock.LockAsync())
             {
                 try
                 {
@@ -108,14 +127,14 @@ namespace Autonoceptor.Host
 
         public async Task<MoveRequest> GetMoveRequestForNextWaypoint(double yourLat, double yourLon, double currentHeading, double overrideCalculatedDistanceRemaining = 0)
         {
-            using (var l = await _asyncLock.LockAsync())
+            using (await _asyncLock.LockAsync())
             {
-                if (_currentWaypoint == null)
-                    _currentWaypoint = Peek();
+                if (CurrentWaypoint == null)
+                    CurrentWaypoint = Peek();
 
                 var moveReq = new MoveRequest();
                 
-                var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(yourLat, yourLon, _currentWaypoint.Lat, _currentWaypoint.Lon);
+                var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(yourLat, yourLon, CurrentWaypoint.Lat, CurrentWaypoint.Lon);
 
                 var radiusDistanceInCheck = 0d; //This is the GPS distance to WP, or the calculated distance from our current Lat/Lon
 
@@ -137,14 +156,14 @@ namespace Autonoceptor.Host
                 moveReq.SteeringDirection = directionAndMagnitude.Item1;
                 moveReq.SteeringMagnitude = directionAndMagnitude.Item2;
 
-                if (radiusDistanceInCheck <= _currentWaypoint.Radius)
+                if (radiusDistanceInCheck <= CurrentWaypoint.Radius)
                 {
                     Dequeue(); //Remove waypoint from queue, as we have arrived, move on to next one if available
 
                     if (!this.Any())
                         return null; //At last waypoint
 
-                    _currentWaypoint = Peek();
+                    CurrentWaypoint = Peek();
                 }
                 else
                 {
@@ -155,7 +174,7 @@ namespace Autonoceptor.Host
 
                 moveReq = new MoveRequest();
 
-                distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(yourLat, yourLon, _currentWaypoint.Lat, _currentWaypoint.Lon);
+                distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(yourLat, yourLon, CurrentWaypoint.Lat, CurrentWaypoint.Lon);
 
                 moveReq.Distance = distanceAndHeading.DistanceInInches;
                 directionAndMagnitude = GetSteeringDirectionAndMagnitude(currentHeading, distanceAndHeading.HeadingToWaypoint, distanceAndHeading.DistanceInInches);

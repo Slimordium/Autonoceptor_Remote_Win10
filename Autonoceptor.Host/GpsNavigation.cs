@@ -32,7 +32,7 @@ namespace Autonoceptor.Host
             });
             
             //Somewhere in my driveway...
-            Waypoints.AddFirst(new Waypoint{Lat = 40.147721, Lon = -105.110756 });//40.147721, -105.110756
+            //Waypoints.AddFirst(new Waypoint{Lat = 40.147721, Lon = -105.110756 });//40.147721, -105.110756
         }
 
         private bool _followingWaypoints;
@@ -73,7 +73,7 @@ namespace Autonoceptor.Host
 
             if (enabled && Waypoints.Count > 0)
             {
-                await Waypoints.ResetActiveWaypoints();
+                await Waypoints.Load(); //Load waypoint file from disk
 
                 _gpsDisposable = Gps
                     .GetObservable()

@@ -215,13 +215,17 @@ namespace Autonoceptor.Host.ViewModels
 
                 var gpsFixData = await _conductor.Gps.GetLatest();
 
-                var wp = _conductor.Waypoints.ActiveWaypoints[SelectedWaypoint];
+                var wp = _conductor.Waypoints.CurrentWaypoint;
 
-                var distanceAndHeading =
-                    GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsFixData.Lat, gpsFixData.Lon, wp.Lat, wp.Lon);
+                if (wp == null)
+                {
+                    await AddToLog($"No waypoints in queue");
+                    return;
+                }
 
-                await AddToLog(
-                    $"Distance: {distanceAndHeading.DistanceInFeet}ft, Heading: {distanceAndHeading.HeadingToWaypoint}");
+                var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsFixData.Lat, gpsFixData.Lon, wp.Lat, wp.Lon);
+
+                await AddToLog($"Distance: {distanceAndHeading.DistanceInFeet}ft, Heading: {distanceAndHeading.HeadingToWaypoint}");
             }
             catch (Exception e)
             {
@@ -283,7 +287,7 @@ namespace Autonoceptor.Host.ViewModels
                 return;
             }
 
-            Waypoints.AddRange(_conductor.Waypoints.ActiveWaypoints);
+            Waypoints.AddRange(_conductor.Waypoints.ToArray());
 
             NotifyOfPropertyChange(nameof(Waypoints));
         }

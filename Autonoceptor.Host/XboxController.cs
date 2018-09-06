@@ -196,7 +196,7 @@ namespace Autonoceptor.Host
             {
                 var gpsFix = await Gps.GetLatest();
 
-                await Waypoints.AddFirst(new Waypoint
+                await Waypoints.Enqueue(new Waypoint
                 {
                     Lat = gpsFix.Lat,
                     Lon = gpsFix.Lon,
@@ -219,7 +219,7 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.Y))
             {
-                Waypoints.ClearWaypoints();
+                await Waypoints.ClearWaypoints();
 
                 _logger.Log(LogLevel.Info, "WPs Cleared");
                 await Lcd.WriteAsync($"WPs cleared");
