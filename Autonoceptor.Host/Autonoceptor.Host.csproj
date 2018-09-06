@@ -107,7 +107,6 @@
     <Compile Include="Chassis.cs" />
     <Compile Include="Conductor.cs" />
     <Compile Include="FileExtensions.cs" />
-    <Compile Include="GpsNavParameters.cs" />
     <Compile Include="LidarNavOverride.cs" />
     <Compile Include="MoveRequest.cs" />
     <Compile Include="GpsNavigation.cs" />

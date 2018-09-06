@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Reactive.Threading.Tasks;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
@@ -26,6 +27,11 @@ namespace Autonoceptor.Service.Hardware
         public Tf02Lidar(CancellationToken cancellationToken)
         {
             _cancellationToken = cancellationToken;
+        }
+
+        public async Task<LidarData> GetLatest()
+        {
+            return await _subject.ObserveOnDispatcher().Take(1);
         }
 
         public async Task InitializeAsync()
@@ -67,7 +73,6 @@ namespace Autonoceptor.Service.Hardware
 
                     if (lidarData.Reliability <= 5 || lidarData.Reliability > 8) //If the value is a 7 or 8, it is reliable. Ignore the rest
                         continue;
-
 
                     _subject.OnNext(lidarData);
                 }
