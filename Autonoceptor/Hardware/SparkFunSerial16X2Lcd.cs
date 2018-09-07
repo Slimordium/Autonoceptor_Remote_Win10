@@ -43,31 +43,51 @@ namespace Autonoceptor.Service.Hardware
             if (_lcdSerialDevice == null)
                 return;
 
+            _logger.Log(LogLevel.Info, "Lcd Opened");
+
+            _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
+        }
+
+        public void DisposeLcdUpdate()
+        {
+            _updateObservable?.Dispose();
+            _updateObservable = null;
+        }
+
+        public void ConfigureLcdWriters()
+        {
             _updateObservable = Observable
                 .Interval(TimeSpan.FromMilliseconds(250))
                 .ObserveOnDispatcher()
                 .Subscribe(
-                async _ =>
-                {
-                    _displayGroups.TryGetValue(_currentGroup, out var displayGroup);
-
-                    if (displayGroup == null)
-                        return;
-
-                    if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))
+                    async _ =>
                     {
-                        await WriteAsync(displayGroup.DisplayItems[1], displayGroup.TopLine);
-                    }
+                        _displayGroups.TryGetValue(_currentGroup, out var displayGroup);
 
-                    if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
-                    {
-                        await WriteAsync(displayGroup.DisplayItems[2], displayGroup.TopLine + 1);
-                    }
-                });
+                        if (displayGroup == null)
+                            return;
 
-            _logger.Log(LogLevel.Info, "Lcd Opened");
+                        if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))
+                        {
+                            await WriteAsync(displayGroup.DisplayItems[1], displayGroup.TopLine);
+                        }
 
-            _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
+                        if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
+                        {
+                            if (!string.IsNullOrEmpty(displayGroup.DisplayItems[2]))
+                            {
+                                await WriteToSecondLineAsync(displayGroup.DisplayItems[2]);
+                            }
+                            else
+                            {
+                                await WriteToSecondLineAsync("                ");
+                            }
+                        }
+                        else
+                        {
+                            await WriteToSecondLineAsync("                ");
+                        }
+                    });
         }
 
         private volatile int _currentGroup;
@@ -104,6 +124,10 @@ namespace Autonoceptor.Service.Hardware
                         {
                             await WriteToSecondLineAsync("                ");
                         }
+                    }
+                    else
+                    {
+                        await WriteToSecondLineAsync("                ");
                     }
                 }
                 catch (Exception e)
@@ -190,7 +214,14 @@ namespace Autonoceptor.Service.Hardware
 
                     if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
                     {
-                        await WriteToSecondLineAsync(displayGroup.DisplayItems[2]);
+                        if (!string.IsNullOrEmpty(displayGroup.DisplayItems[2]))
+                        {
+                            await WriteToSecondLineAsync(displayGroup.DisplayItems[2]);
+                        }
+                        else
+                        {
+                            await WriteToSecondLineAsync("                ");
+                        }
                     }
                     else
                     {
@@ -210,9 +241,18 @@ namespace Autonoceptor.Service.Hardware
             {
                 try
                 {
-                    displayGroup.GroupId = _displayGroups.Count + 1;
-
-                    _displayGroups.TryAdd(displayGroup.GroupId, displayGroup);
+                    var newGroupId = _displayGroups.Count + 1;
+                    
+                    if (!_displayGroups.ContainsKey(displayGroup.GroupId))
+                    {
+                        displayGroup.GroupId = newGroupId;
+                        _displayGroups.TryAdd(displayGroup.GroupId, displayGroup);
+                    }
+                    else
+                    {
+                        _displayGroups.TryGetValue(displayGroup.GroupId, out var existingGroup);
+                        return existingGroup;
+                    }
 
                     if (!display)
                         return displayGroup;
@@ -242,9 +282,9 @@ namespace Autonoceptor.Service.Hardware
                 {
                     _logger.Log(LogLevel.Error, e.Message);
                 }
-            }
 
-            return displayGroup;
+                return displayGroup;
+            }
         }
 
         public async Task UpdateDisplayGroup(DisplayGroup displayGroup, bool display = false)

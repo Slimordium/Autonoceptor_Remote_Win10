@@ -17,10 +17,8 @@ namespace Autonoceptor.Host
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
 
-        protected const ushort _extraInputChannel = 13;
-        private const ushort _enableMqttChannel = 14;
+        protected const ushort _extraInputChannel = 14;
 
-        private IDisposable _enableMqttDisposable;
 
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
         private IDisposable _speedControllerDisposable;
@@ -39,13 +37,24 @@ namespace Autonoceptor.Host
 
         private DisplayGroup _displayGroup;
 
-        protected new async Task InitializeAsync()
+        protected new void DisposeLcdWriters()
         {
-            await base.InitializeAsync();
+            _odoLcdDisposable?.Dispose();
+            _odoLcdDisposable = null;
 
-            Waypoints = new WaypointQueue(.0000001, Lcd);
+            base.DisposeLcdWriters();
+        }
 
-            await Waypoints.InitializeAsync();
+        protected new async Task ConfigureLcdWriters()
+        {
+            base.ConfigureLcdWriters();
+
+            _odoLcdDisposable = Odometer.GetObservable().Sample(TimeSpan.FromMilliseconds(250)).ObserveOnDispatcher()
+                .Subscribe(
+                    async odoData =>
+                    {
+                        await WriteToLcd($"FPS: {Math.Round(odoData.FeetPerSecond, 1)},PC: {odoData.PulseCount}", $"Trv: {Math.Round(odoData.InTraveled / 12, 1)}ft");
+                    });
 
             var displayGroup = new DisplayGroup
             {
@@ -54,33 +63,19 @@ namespace Autonoceptor.Host
             };
 
             _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
+        }
 
-            _enableMqttDisposable = PwmObservable
-                .Where(channel => channel.ChannelId == _enableMqttChannel)
-                .ObserveOnDispatcher()
-                .Subscribe(
-                    async channel =>
-                    {
-                        if (channel.DigitalValue)
-                        {
-                            var status = await InitializeMqtt(BrokerHostnameOrIp);
+        protected new async Task InitializeAsync()
+        {
+            await base.InitializeAsync();
 
-                            if (status == Status.Initialized)
-                                ConfigureSensorPublish();
+            Waypoints = new WaypointQueue(.0000001, Lcd);
 
-                            return;
-                        }
+            await Waypoints.InitializeAsync();
 
-                        MqttClient?.Dispose();
-                        MqttClient = null;
-                    });
 
-            _odoLcdDisposable = Odometer.GetObservable().Sample(TimeSpan.FromMilliseconds(250)).ObserveOnDispatcher()
-                .Subscribe(
-                    async odoData =>
-                    {
-                        await WriteToLcd($"FPS: {Math.Round(odoData.FeetPerSecond, 1)},PC: {odoData.PulseCount}", $"Trv: {Math.Round(odoData.InTraveled / 12, 1)}ft");
-                    });
+
+            await ConfigureLcdWriters();
 
             await Stop();
             await DisableServos();

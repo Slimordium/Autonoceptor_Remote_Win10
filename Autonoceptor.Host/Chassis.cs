@@ -95,6 +95,16 @@ namespace Autonoceptor.Host
             return await Task.FromResult(initXbox);
         }
 
+        protected void DisposeLcdWriters()
+        {
+            Lcd.DisposeLcdUpdate();
+        }
+
+        protected void ConfigureLcdWriters()
+        {
+            Lcd.ConfigureLcdWriters();
+        }
+
         protected async Task SetChannelValue(int value, ushort channel)
         {
             if (Stopped && (channel == MovementChannel || channel == SteeringChannel))

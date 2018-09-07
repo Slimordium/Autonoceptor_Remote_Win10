@@ -46,10 +46,17 @@ namespace Autonoceptor.Host
 
         private static DisplayGroup _displayGroup;
 
-        //TODO: Implement servo sweep, query servo position, and associating servo position with lidar data as a sort of radar sweep. 
-        protected new async Task InitializeAsync()
+        protected new  void DisposeLcdWriters()
         {
-            await base.InitializeAsync();
+            _lidarLcdDisposable?.Dispose();
+            _lidarDataDisposable = null;
+
+            base.DisposeLcdWriters();
+        }
+
+        protected new async Task ConfigureLcdWriters()
+        {
+            await base.ConfigureLcdWriters();
 
             var displayGroup = new DisplayGroup
             {
@@ -73,6 +80,14 @@ namespace Autonoceptor.Host
 
                     await Lcd.UpdateDisplayGroup(_displayGroup);
                 });
+        }
+
+        //TODO: Implement servo sweep, query servo position, and associating servo position with lidar data as a sort of radar sweep. 
+        protected new async Task InitializeAsync()
+        {
+            await base.InitializeAsync();
+
+
 
             return;
 

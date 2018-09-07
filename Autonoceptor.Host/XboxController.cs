@@ -22,13 +22,17 @@ namespace Autonoceptor.Host
         private IDisposable _xboxDisposable;
         private IDisposable _xboxConnectedCheckDisposable;
         private IDisposable _xboxDpadDisposable;
+        private IDisposable _gpsNavSwitchDisposable;
+
+        private const ushort _enableLcdDisopsable = 13;
+        private IDisposable _enableLcdDisposable;
 
         public XboxController(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
             : base(cancellationTokenSource, brokerHostnameOrIp)
         {
         }
          
-        private async Task ConfigureXboxObservable()
+        private void ConfigureXboxObservable()
         {
             _xboxDisposable?.Dispose();
             _xboxButtonDisposable?.Dispose();
@@ -71,9 +75,9 @@ namespace Autonoceptor.Host
 
         private DisplayGroup _displayGroup;
 
-        public new async Task InitializeAsync()
+        protected new async Task ConfigureLcdWriters()
         {
-            await base.InitializeAsync();
+            await base.ConfigureLcdWriters();
 
             var displayGroup = new DisplayGroup
             {
@@ -82,6 +86,39 @@ namespace Autonoceptor.Host
             };
 
             _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
+        }
+
+        public new async Task InitializeAsync()
+        {
+            await base.InitializeAsync();
+
+            _gpsNavSwitchDisposable = PwmObservable
+                .Where(channel => channel.ChannelId == GpsNavEnabledChannel)
+                .ObserveOnDispatcher()
+                .Subscribe(async channelData =>
+                {
+                    DisposeLcdWriters();
+
+                    await Task.Delay(500);
+
+                    await WaypointFollowEnable(channelData.DigitalValue);
+                });
+
+            _enableLcdDisposable = PwmObservable
+                .Where(channel => channel.ChannelId == _enableLcdDisopsable)
+                .Sample(TimeSpan.FromMilliseconds(500))
+                .ObserveOnDispatcher()
+                .Subscribe(
+                    async channel =>
+                    {
+                        if (channel.DigitalValue)
+                        {
+                            await ConfigureLcdWriters();
+                            return;
+                        }
+
+                        DisposeLcdWriters();
+                    });
 
             _xboxConnectedCheckDisposable = Observable
                 .Interval(TimeSpan.FromMilliseconds(1000))
@@ -102,7 +139,7 @@ namespace Autonoceptor.Host
 
                                 _logger.Log(LogLevel.Error, $"Xbox connected");
 
-                                await ConfigureXboxObservable();
+                                ConfigureXboxObservable();
                             }
                             catch (Exception e)
                             {
@@ -121,7 +158,7 @@ namespace Autonoceptor.Host
                             await Stop();
                     });
 
-            await ConfigureXboxObservable();
+            ConfigureXboxObservable();
         }
 
         private async Task DisposeXboxResources()

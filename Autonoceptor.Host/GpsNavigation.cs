@@ -16,7 +16,7 @@ namespace Autonoceptor.Host
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         private IDisposable _syncImuDisposable;
-        private IDisposable _gpsNavSwitchDisposable;
+        
         private IDisposable _imuHeadingUpdateDisposable;
         private IDisposable _gpsDisposable;
 
@@ -46,25 +46,20 @@ namespace Autonoceptor.Host
             set => Volatile.Write(ref _followingWaypoints, value);
         }
 
-        protected new async Task InitializeAsync()
+        protected new void DisposeLcdWriters()
         {
-            await base.InitializeAsync();
+            _imuLcdLoggerDisposable?.Dispose();
+            _gpsLcdLoggerDisposable?.Dispose();
 
-            _gpsNavSwitchDisposable = PwmObservable
-                .Where(channel => channel.ChannelId == GpsNavEnabledChannel)
-                .ObserveOnDispatcher()
-                .Subscribe(async channelData =>
-                {
-                    await WaypointFollowEnable(channelData.DigitalValue);
-                });
+            _imuLcdLoggerDisposable = null;
+            _gpsLcdLoggerDisposable = null;
 
-            _syncImuDisposable = Observable
-                .Interval(TimeSpan.FromSeconds(4)) //sync every 8-12ft when moving
-                .ObserveOnDispatcher()
-                .Subscribe(async _ =>
-                {
-                    await SyncImuYaw();
-                });
+            base.DisposeLcdWriters();
+        }
+
+        protected new async Task ConfigureLcdWriters()
+        {
+            await base.ConfigureLcdWriters();
 
             _imuLcdLoggerDisposable = Imu
                 .GetReadObservable()
@@ -100,6 +95,21 @@ namespace Autonoceptor.Host
 
             _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
             _displayGroupImu = await Lcd.AddDisplayGroup(displayGroupImu);
+        }
+
+        protected new async Task InitializeAsync()
+        {
+            await base.InitializeAsync();
+
+            _syncImuDisposable = Observable
+                .Interval(TimeSpan.FromSeconds(4)) //sync every 8-12ft when moving
+                .ObserveOnDispatcher()
+                .Subscribe(async _ =>
+                {
+                    await SyncImuYaw();
+                });
+
+            await ConfigureLcdWriters();
         }
 
         private DisplayGroup _displayGroup;
