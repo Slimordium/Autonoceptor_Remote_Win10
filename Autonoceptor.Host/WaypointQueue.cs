@@ -216,6 +216,14 @@ namespace Autonoceptor.Host
             }
         }
 
+        public async Task<double> GetWaypointSpeedSetting()
+        {
+            using (await _asyncLock.LockAsync())
+            {
+                return Peek().WaypointSpeed;
+            }
+        }
+
         private static Tuple<SteeringDirection, double> GetSteeringDirectionAndMagnitude(double currentHeading, double headingToWaypoint, double distanceInFt)
         {
             var steeringDirection = GetSteeringDirection(currentHeading, headingToWaypoint);
