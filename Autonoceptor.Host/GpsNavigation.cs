@@ -83,7 +83,7 @@ namespace Autonoceptor.Host
                 .Subscribe(
                     async gpsFixData =>
                     {
-                        await WriteToLcd($"{gpsFixData.Lat}, {gpsFixData.SatellitesInView}", $"{gpsFixData.Lon}, {gpsFixData.Quality}");
+                        await WriteToLcd($"{gpsFixData.Lat},{gpsFixData.SatellitesInView},{gpsFixData.Hdop}", $"{gpsFixData.Lon},{gpsFixData.Quality}");
                     });
 
             var displayGroup = new DisplayGroup
@@ -109,8 +109,6 @@ namespace Autonoceptor.Host
 
         private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
         {
-            _logger.Log(LogLevel.Info, $"{line1} / {line2}");
-
             _displayGroup.DisplayItems = new Dictionary<int, string>
             {
                 {1, line1 },

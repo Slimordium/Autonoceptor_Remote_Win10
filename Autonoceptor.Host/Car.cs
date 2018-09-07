@@ -75,14 +75,19 @@ namespace Autonoceptor.Host
                         MqttClient = null;
                     });
 
+            _odoLcdDisposable = Odometer.GetObservable().Sample(TimeSpan.FromMilliseconds(250)).ObserveOnDispatcher()
+                .Subscribe(
+                    async odoData =>
+                    {
+                        await WriteToLcd($"Fps {Math.Round(odoData.FeetPerSecond, 1)}", $"Ft {Math.Round(odoData.InTraveled / 12, 1)}");
+                    });
+
             await Stop();
             await DisableServos();
         }
 
         private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
         {
-            _logger.Log(LogLevel.Info, $"{line1} / {line2}");
-
             _displayGroup.DisplayItems = new Dictionary<int, string>
             {
                 {1, line1 },
@@ -140,6 +145,7 @@ namespace Autonoceptor.Host
 
         private double _pulseCountPerUpdate;
         private double _moveMagnitude;
+        private IDisposable _odoLcdDisposable;
 
         private async Task UpdateMoveMagnitude()
         {
