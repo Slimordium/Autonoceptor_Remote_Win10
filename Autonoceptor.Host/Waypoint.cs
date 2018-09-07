@@ -5,11 +5,14 @@ namespace Autonoceptor.Host
     {
         public double DistanceToWaypoint { get; set; }
 
-        public double Lat { get { return Lat + LatOffset; } set; }
-        public double Lon { get { return Lon + LonOffset; } set; }
+        public double Lat { get { return _lat + LatOffset; } set { _lat = value; } }
+        public double Lon { get { return _lon + LonOffset; } set { _lon = value; } }
 
-        public static double LatOffset;
-        public static double LonOffset;
+        public static double LatOffset { get; set; }
+        public static double LonOffset { get; set; }
+
+        private double _lat;
+        private double _lon;
 
         public WaypointType Behaviour { get; set; } = WaypointType.Continue;
 
