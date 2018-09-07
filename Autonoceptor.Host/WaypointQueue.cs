@@ -182,8 +182,6 @@ namespace Autonoceptor.Host
             var steeringDirection = GetSteeringDirection(currentHeading, headingToWaypoint);
             var steeringMagnitude = GetSteeringMagnitude(currentHeading, headingToWaypoint, distanceInFt);
 
-            //var steeringMagnitude = GetSteeringMagnitudeAlternate(currentHeading, headingToWaypoint, distanceInFt);
-
             return new Tuple<SteeringDirection, double>(steeringDirection, steeringMagnitude);
         }
 
@@ -194,41 +192,9 @@ namespace Autonoceptor.Host
 
         public static double GetSteeringMagnitude(double currentHeading, double targetHeading, double distanceToWaypoint)
         {
-            var differenceInDegrees = Math.Abs(currentHeading - targetHeading);// / Volatile.Read(ref _steerMagModifier);
-
-            try
-            {
-                //var maxAllowedMagnitude = 100 - 3 * Math.Atan((distanceToWaypoint - 20) / 5);
-
-                //if (differenceInDegrees > maxAllowedMagnitude)
-                //{
-                //    differenceInDegrees = maxAllowedMagnitude;
-                //}
-            }
-            catch (Exception e)
-            {
-                _logger.Log(LogLevel.Info, e.Message);
-
-                differenceInDegrees = 0;
-            }
-
-            return differenceInDegrees;
-        }
-
-        public static double GetSteeringMagnitudeAlternate(double currentHeading, double targetHeading, double distanceToWaypoint)
-        {
             var differenceInDegrees = Math.Abs(currentHeading - targetHeading);
 
-            //Cap the distance we care about to 180in / 15ft
-            if (distanceToWaypoint > 180)
-                distanceToWaypoint = 180;
-
-            var divider = distanceToWaypoint * .01; //180 = 1.8
-
-            var newDifferenceInDegrees = differenceInDegrees / divider;
-
-
-            return newDifferenceInDegrees;
+            return differenceInDegrees;
         }
 
         public static SteeringDirection GetSteeringDirection(double currentHeading, double targetHeading)

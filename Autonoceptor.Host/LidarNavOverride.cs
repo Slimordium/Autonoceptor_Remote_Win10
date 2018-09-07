@@ -5,6 +5,7 @@ using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Threading;
 using System.Threading.Tasks;
+using Autonoceptor.Service.Hardware;
 using Autonoceptor.Shared;
 using Autonoceptor.Shared.Utilities;
 using Nito.AsyncEx;
@@ -47,6 +48,14 @@ namespace Autonoceptor.Host
         protected new async Task InitializeAsync()
         {
             await base.InitializeAsync();
+
+            var displayGroup = new DisplayGroup
+            {
+                DisplayItems = new Dictionary<int, string> { { 1, "Init Lidar nav" }, { 2, "Complete" } },
+                GroupName = "LidarNav"
+            };
+
+            await Lcd.AddDisplayGroup(displayGroup);
 
             return;
 

@@ -14,6 +14,7 @@ namespace Autonoceptor.Service.Hardware
         public int GroupId { get; set; }
         public string GroupName { get; set; }
         public Dictionary<int, string> DisplayItems = new Dictionary<int, string>();
+        public int TopLine { get; set; } = 1;
     }
 
     /// <summary>
@@ -35,7 +36,7 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task InitializeAsync()
         {
-            _lcdSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("AH03FJHM", 9600, TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(50));
+            _lcdSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("DN051BLI", 9600, TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(50));
          
             if (_lcdSerialDevice == null)
                 return;
@@ -49,28 +50,28 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task NextGroup()
         {
-            using (await _asyncMutex.LockAsync())
+            //using (await _asyncMutex.LockAsync())
             {
                 try
                 {
                     _currentGroup++;
 
                     if (_currentGroup > _displayGroups.Count)
-                        _currentGroup = 0;
+                        _currentGroup = 1;
 
-                    if (_currentGroup < 0)
+                    if (_currentGroup < 1)
                         _currentGroup = _displayGroups.Count - 1;
 
                     var displayGroup = _displayGroups[_currentGroup];
 
-                    if (displayGroup.DisplayItems.ContainsKey(1))
+                    if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))
                     {
-                        await WriteAsync(displayGroup.DisplayItems[1], 1);
+                        await WriteAsync(displayGroup.DisplayItems[1], displayGroup.TopLine);
                     }
 
-                    if (displayGroup.DisplayItems.ContainsKey(2))
+                    if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
                     {
-                        await WriteAsync(displayGroup.DisplayItems[2], 2);
+                        await WriteAsync(displayGroup.DisplayItems[2], displayGroup.TopLine + 1);
                     }
                 }
                 catch (Exception e)
@@ -80,32 +81,79 @@ namespace Autonoceptor.Service.Hardware
             }
         }
 
+        public async Task NextLineGroup()
+        {
+            var displayGroup = _displayGroups[_currentGroup];
+
+            if (displayGroup.TopLine + 2 >= displayGroup.DisplayItems.Count)
+            {
+                _displayGroups[_currentGroup].TopLine += 2;
+            }
+            else
+            {
+                return;
+            }
+
+            if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))
+            {
+                await WriteAsync(displayGroup.DisplayItems[1], displayGroup.TopLine);
+            }
+
+            if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
+            {
+                await WriteAsync(displayGroup.DisplayItems[2], displayGroup.TopLine + 1);
+            }
+        }
+
+        public async Task PreviousLineGroup()
+        {
+            var displayGroup = _displayGroups[_currentGroup];
+
+            if (displayGroup.TopLine - 2 >= 1)
+            {
+                _displayGroups[_currentGroup].TopLine -= 2;
+            }
+            else
+            {
+                return;
+            }
+
+            if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))
+            {
+                await WriteAsync(displayGroup.DisplayItems[1], displayGroup.TopLine);
+            }
+
+            if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
+            {
+                await WriteAsync(displayGroup.DisplayItems[2], displayGroup.TopLine + 1);
+            }
+        }
+
         public async Task PreviousGroup()
         {
-            using (await _asyncMutex.LockAsync())
+            //using (await _asyncMutex.LockAsync())
             {
                 try
                 {
                     _currentGroup--;
 
                     if (_currentGroup > _displayGroups.Count)
-                        _currentGroup = 0;
+                        _currentGroup = 1;
 
-                    if (_currentGroup < 0)
+                    if (_currentGroup < 1)
                         _currentGroup = _displayGroups.Count - 1;
 
                     var displayGroup = _displayGroups[_currentGroup];
 
-                    if (displayGroup.DisplayItems.ContainsKey(1))
+                    if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))
                     {
-                        await WriteAsync(displayGroup.DisplayItems[1], 1);
+                        await WriteAsync(displayGroup.DisplayItems[1], displayGroup.TopLine);
                     }
 
-                    if (displayGroup.DisplayItems.ContainsKey(2))
+                    if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
                     {
-                        await WriteAsync(displayGroup.DisplayItems[2], 2);
+                        await WriteAsync(displayGroup.DisplayItems[2], displayGroup.TopLine + 1);
                     }
-
                 }
                 catch (Exception e)
                 {
@@ -116,7 +164,7 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task<DisplayGroup> AddDisplayGroup(DisplayGroup displayGroup, bool display = false)
         {
-            using (await _asyncMutex.LockAsync())
+            //using (await _asyncMutex.LockAsync())
             {
                 try
                 {
@@ -148,7 +196,7 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task UpdateDisplayGroup(DisplayGroup displayGroup, bool display = false)
         {
-            using (await _asyncMutex.LockAsync())
+            //using (await _asyncMutex.LockAsync())
             {
                 try
                 {
