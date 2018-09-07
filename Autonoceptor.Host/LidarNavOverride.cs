@@ -262,11 +262,17 @@ namespace Autonoceptor.Host
             //This is where you would override to steer us out of danger
             if (channel == SteeringChannel && _isDangerZone.Any(z => z.Value))
             {
-                var dangerZone = _isDangerZone.Where(zone => zone.Value);
-
                 foreach (var z in _isDangerZone)
                 {
                     _logger.Log(LogLevel.Info, $"Zone {z.Key} danger: {z.Value}");
+                }
+
+                var dangerZones = _isDangerZone.Where(zone => zone.Value);
+                var safeZones = _isDangerZone.Where(zone => !zone.Value);
+
+                if (safeZones.Count() == 1)
+                {
+                    _logger.Log(LogLevel.Info, $"Turn {safeZones.First().Key} now!");
                 }
 
                 //await base.SetChannelValue(value, channel); //steer towards safe zone
