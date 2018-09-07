@@ -25,7 +25,7 @@ namespace Autonoceptor.Host
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
         private IDisposable _speedControllerDisposable;
 
-        public WaypointQueue Waypoints { get; set; } = new WaypointQueue();
+        public WaypointQueue Waypoints { get; set; }
 
         protected string BrokerHostnameOrIp { get; set; }
 
@@ -40,6 +40,8 @@ namespace Autonoceptor.Host
         protected new async Task InitializeAsync()
         {
             await base.InitializeAsync();
+
+            Waypoints = new WaypointQueue(.0000001, Lcd);
 
             var displayGroup = new DisplayGroup
             {
