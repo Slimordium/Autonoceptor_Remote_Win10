@@ -57,7 +57,7 @@ namespace Autonoceptor.Host
 
             _xboxButtonDisposable = XboxDevice.GetObservable()
                 .Where(xboxData => xboxData != null && xboxData.FunctionButtons.Any())
-                .Throttle(TimeSpan.FromMilliseconds(125))
+                .Sample(TimeSpan.FromMilliseconds(125))
                 .ObserveOnDispatcher()
                 .Subscribe(async xboxData =>
                 {
@@ -66,7 +66,7 @@ namespace Autonoceptor.Host
 
             _xboxDpadDisposable = XboxDevice.GetObservable()
                 .Where(xboxData => xboxData != null && xboxData.Dpad != Direction.None)
-                .Throttle(TimeSpan.FromMilliseconds(125))
+                .Sample(TimeSpan.FromMilliseconds(125))
                 .ObserveOnDispatcher()
                 .Subscribe(async xboxData =>
                 {

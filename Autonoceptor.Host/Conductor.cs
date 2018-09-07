@@ -23,9 +23,6 @@ namespace Autonoceptor.Host
             await Stop();
             await DisableServos();
 
-            await Lcd.WriteAsync("Suspending...", 1);
-            await Lcd.WriteAsync("Disposed...", 2);
-
             _logger.Log(LogLevel.Error, $"Suspending {e.SuspendingOperation.Deadline}");
         }
 

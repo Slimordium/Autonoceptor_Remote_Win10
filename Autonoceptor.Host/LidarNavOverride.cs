@@ -288,13 +288,13 @@ namespace Autonoceptor.Host
             if (magnitude > 100)
                 magnitude = 100;
 
-            var correction = CheckDangerZone(direction, magnitude);
+            //var correction = CheckDangerZone(direction, magnitude);
 
-            if (correction.Item1 != direction)
-            {
-                direction = correction.Item1;
-                magnitude = correction.Item2;
-            }
+            //if (correction.Item1 != direction)
+            //{
+            //    direction = correction.Item1;
+            //    magnitude = correction.Item2;
+            //}
 
             switch (direction)
             {
