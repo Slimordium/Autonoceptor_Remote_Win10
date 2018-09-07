@@ -128,7 +128,10 @@ namespace Autonoceptor.Host
                 try
                 {
                     string filename = GetFileName();
-                    var waypoints = JsonConvert.DeserializeObject<List<Waypoint>>(await filename.ReadStringFromFile());
+
+                    var fileString = await filename.ReadStringFromFile();
+
+                    var waypoints = JsonConvert.DeserializeObject<List<Waypoint>>(fileString);
 
                     Clear(); //Remove everything from the queue
 
@@ -137,7 +140,7 @@ namespace Autonoceptor.Host
                         base.Enqueue(wp);
                     }
 
-                    //this.StartPoints = waypoints.StartPoints;
+                    //StartPoints = waypoints.StartPoints;
 
                     await WriteToLcd($"#Set {_waypointSetNumber}", "Load Successful", true);
                 }
