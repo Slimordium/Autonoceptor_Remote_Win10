@@ -144,7 +144,8 @@ namespace Autonoceptor.Host
                     }
 
                     string startpointsfilename = GetStartPointsFileName();
-                    this.StartPoints = JsonConvert.DeserializeObject<List<Waypoint>>(await startpointsfilename.ReadStringFromFile());
+                    var startpointsstring = await startpointsfilename.ReadStringFromFile();
+                    StartPoints = JsonConvert.DeserializeObject<List<Waypoint>>(startpointsstring);
 
                     await WriteToLcd($"#Set {_waypointSetNumber}", "Load Successful", true);
                 }
@@ -320,7 +321,7 @@ namespace Autonoceptor.Host
 
         public string GetStartPointsFileName()
         {
-            return $"StartPoints{WaypointSetNumber}.json";
+            return $"StartPoints{_waypointSetNumber}.json";
         }
         
         public async Task IncreaseWaypointSetNumber()
