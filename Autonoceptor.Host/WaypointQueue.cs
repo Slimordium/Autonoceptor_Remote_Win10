@@ -102,7 +102,8 @@ namespace Autonoceptor.Host
             {
                 try
                 {
-                    await FileExtensions.SaveStringToFile(GetFileName(), JsonConvert.SerializeObject(this));
+                    string filename = GetFileName();
+                    await FileExtensions.SaveStringToFile(filename, JsonConvert.SerializeObject(this));
 
                     await WriteToLcd($"Saved {Count}", "waypoints...", true);
 
@@ -126,7 +127,8 @@ namespace Autonoceptor.Host
             {
                 try
                 {
-                    WaypointQueue waypoints = JsonConvert.DeserializeObject<WaypointQueue>(await GetFileName().ReadStringFromFile());
+                    string filename = GetFileName();
+                    WaypointQueue waypoints = JsonConvert.DeserializeObject<WaypointQueue>(await filename.ReadStringFromFile());
 
                     Clear(); //Remove everything from the queue
 
@@ -137,11 +139,11 @@ namespace Autonoceptor.Host
 
                     this.StartPoints = waypoints.StartPoints;
 
-                    await WriteToLcd($"Waypoint Set {WaypointSetNumber}", "Load Successful", true);
+                    await WriteToLcd($"#Set {WaypointSetNumber}", "Load Successful", true);
                 }
                 catch (Exception e)
                 {
-                    await WriteToLcd($"Waypoint Set {WaypointSetNumber}", "Load Failed New Set", true);
+                    await WriteToLcd($"Set #{WaypointSetNumber}", "Create New Set", true);
 
                     Clear();
                     StartPoints = new List<Waypoint>();
