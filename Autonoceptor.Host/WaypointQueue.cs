@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -14,9 +14,7 @@ namespace Autonoceptor.Host
     public class WaypointQueue : Queue<Waypoint>
     {
         private static readonly ILogger _logger = LogManager.GetCurrentClassLogger();
-
-        private readonly string _filename = $"waypoints.json";
-
+        
         private readonly AsyncLock _asyncLock = new AsyncLock();
 
         private Waypoint _currentWaypoint;
@@ -104,7 +102,7 @@ namespace Autonoceptor.Host
             {
                 try
                 {
-                    await FileExtensions.SaveStringToFile(_filename, JsonConvert.SerializeObject(this));
+                    await FileExtensions.SaveStringToFile(GetFileName(), JsonConvert.SerializeObject(this));
 
                     await WriteToLcd($"Saved {Count}", "waypoints...", true);
 
@@ -128,7 +126,7 @@ namespace Autonoceptor.Host
             {
                 try
                 {
-                    WaypointQueue waypoints = JsonConvert.DeserializeObject<WaypointQueue>(await _filename.ReadStringFromFile());
+                    WaypointQueue waypoints = JsonConvert.DeserializeObject<WaypointQueue>(await GetFileName().ReadStringFromFile());
 
                     Clear(); //Remove everything from the queue
 
@@ -139,11 +137,14 @@ namespace Autonoceptor.Host
 
                     this.StartPoints = waypoints.StartPoints;
 
-                    await WriteToLcd($"Loaded {Count}", "waypoints...", true);
+                    await WriteToLcd($"Waypoint Set {WaypointSetNumber}", "Load Successful", true);
                 }
                 catch (Exception e)
                 {
-                    _logger.Log(LogLevel.Error, $"Could not load waypoints => {e.Message}");
+                    await WriteToLcd($"Waypoint Set {WaypointSetNumber}", "Load Failed New Set", true);
+
+                    Clear();
+                    StartPoints = new List<Waypoint>();
                 }
             }
         }
@@ -291,5 +292,31 @@ namespace Autonoceptor.Host
 
         #endregion
 
+        #region Saving and Loading
+
+        public int WaypointSetNumber { get; set; } = 0;
+
+        public string GetFileName()
+        {
+            return $"Waypoints{WaypointSetNumber}.json";
+        }
+        
+        public async Task IncreaseWaypointSetNumber()
+        {
+            WaypointSetNumber++;
+
+            await Load();
+        }
+
+        public async Task DecreaseWaypointSetNumber()
+        {
+            WaypointSetNumber--;
+
+            await Load();
+        }
+
+
+
+        #endregion
     }
 }
