@@ -250,6 +250,22 @@ namespace Autonoceptor.Host
                 _logger.Log(LogLevel.Info, "WPs Cleared");
                 await Lcd.WriteAsync($"WPs cleared");
             }
+
+            if (xboxData.FunctionButtons.Contains(FunctionButton.BumperLeft))
+            {
+                Waypoints.AddStartingPoint(await Gps.GetLatest);
+            }
+
+            if (xboxData.FunctionButtons.Contains(FunctionButton.BumperRight))
+            {
+                Waypoints.IterateStartingPoint();
+            }
+
+            if (xboxData.FunctionButtons.Contains(FunctionButton.Back))
+            {
+                Waypoints.SetStartingPoint(await Gps.GetLatest);
+            }
+
         }
     }
 }
