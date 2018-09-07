@@ -44,6 +44,8 @@ namespace Autonoceptor.Host
             _isDangerZone.Add(Zone.Right, false);
         }
 
+        private static DisplayGroup _displayGroup;
+
         //TODO: Implement servo sweep, query servo position, and associating servo position with lidar data as a sort of radar sweep. 
         protected new async Task InitializeAsync()
         {
@@ -55,7 +57,22 @@ namespace Autonoceptor.Host
                 GroupName = "LidarNav"
             };
 
-            await Lcd.AddDisplayGroup(displayGroup);
+            _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
+
+            _lidarLcdDisposable = Lidar.GetObservable()
+                .ObserveOnDispatcher()
+                .Sample(TimeSpan.FromMilliseconds(250))
+                .Subscribe(async data =>
+                {
+                    _displayGroup.DisplayItems = new Dictionary<int, string>
+                    {
+                        {1, $"D: {data.Distance}"},
+                        {2, $"R: {data.Reliability}"},
+                        {3, $"S: {data.Strength}"}
+                    };
+
+                    await Lcd.UpdateDisplayGroup(_displayGroup);
+                });
 
             return;
 
@@ -122,6 +139,7 @@ namespace Autonoceptor.Host
         }
 
         private readonly Dictionary<Zone,bool> _isDangerZone = new Dictionary<Zone, bool>();
+        private IDisposable _lidarLcdDisposable;
 
         public async Task<List<LidarData>> Sweep(Sweep sweep)
         {

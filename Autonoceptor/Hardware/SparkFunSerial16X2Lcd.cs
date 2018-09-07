@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
@@ -30,7 +31,7 @@ namespace Autonoceptor.Service.Hardware
 
         private SerialDevice _lcdSerialDevice;
 
-        private readonly Dictionary<int, DisplayGroup> _displayGroups = new Dictionary<int, DisplayGroup>();
+        private readonly ConcurrentDictionary<int, DisplayGroup> _displayGroups = new ConcurrentDictionary<int, DisplayGroup>();
 
         private readonly AsyncLock _asyncMutex = new AsyncLock();
 
@@ -46,7 +47,7 @@ namespace Autonoceptor.Service.Hardware
             _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
         }
 
-        private int _currentGroup;
+        private volatile int _currentGroup;
 
         public async Task NextGroup()
         {
@@ -131,7 +132,7 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task PreviousGroup()
         {
-            //using (await _asyncMutex.LockAsync())
+            using (await _asyncMutex.LockAsync())
             {
                 try
                 {
@@ -170,7 +171,7 @@ namespace Autonoceptor.Service.Hardware
                 {
                     displayGroup.GroupId = _displayGroups.Count + 1;
 
-                    _displayGroups.Add(displayGroup.GroupId, displayGroup);
+                    _displayGroups.TryAdd(displayGroup.GroupId, displayGroup);
 
                     if (!display)
                         return displayGroup;
@@ -204,7 +205,7 @@ namespace Autonoceptor.Service.Hardware
                     {
                         displayGroup.GroupId = _displayGroups.Count + 1;
 
-                        _displayGroups.Add(displayGroup.GroupId, displayGroup);
+                        _displayGroups.TryAdd(displayGroup.GroupId, displayGroup);
                     }
                     else
                     {

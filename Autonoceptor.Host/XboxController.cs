@@ -182,14 +182,16 @@ namespace Autonoceptor.Host
             switch (xboxData.Dpad)
             {
                 case Direction.Right:
-                case Direction.DownRight:
-                case Direction.UpRight:
                     await Lcd.NextGroup();
                     break;
                 case Direction.Left:
-                case Direction.DownLeft:
-                case Direction.UpLeft:
                     await Lcd.PreviousGroup();
+                    break;
+                case Direction.Up:
+                    await Lcd.NextLineGroup();
+                    break;
+                case Direction.Down:
+                    await Lcd.PreviousLineGroup();
                     break;
             }
         }
