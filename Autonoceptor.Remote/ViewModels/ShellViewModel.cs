@@ -214,7 +214,7 @@ namespace Autonoceptor.Remote.ViewModels
 
             _disposables = new List<IDisposable>();
 
-            if (_xboxController != null && _xboxController.IsConnected)
+            if (_xboxController != null)
             {
                 _disposables.Add(_xboxController.GetObservable()
                     .Sample(TimeSpan.FromMilliseconds(Convert.ToInt64(UpdateInterval)))

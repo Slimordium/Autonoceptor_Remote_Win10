@@ -107,7 +107,6 @@
     <Compile Include="Chassis.cs" />
     <Compile Include="Conductor.cs" />
     <Compile Include="FileExtensions.cs" />
-    <Compile Include="GpsNavParameters.cs" />
     <Compile Include="LidarNavOverride.cs" />
     <Compile Include="MoveRequest.cs" />
     <Compile Include="GpsNavigation.cs" />
@@ -118,7 +117,7 @@
       <DependentUpon>ShellView.xaml</DependentUpon>
     </Compile>
     <Compile Include="Waypoint.cs" />
-    <Compile Include="WaypointList.cs" />
+    <Compile Include="WaypointQueue.cs" />
     <Compile Include="XboxController.cs" />
   </ItemGroup>
   <ItemGroup>

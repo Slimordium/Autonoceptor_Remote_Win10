@@ -20,6 +20,7 @@ namespace Autonoceptor.Host
 
         private async void Current_Suspending(object sender, Windows.ApplicationModel.SuspendingEventArgs e)
         {
+            await Stop();
             await DisableServos();
 
             _logger.Log(LogLevel.Error, $"Suspending {e.SuspendingOperation.Deadline}");

@@ -5,6 +5,14 @@ using NLog;
 
 namespace Autonoceptor.Shared.Utilities
 {
+    public class DistanceAndHeading
+    {
+        public double DistanceInInches { get; set; }
+        public double DistanceInFeet => DistanceInInches / 12;
+        public double HeadingToWaypoint { get; set; }
+        public bool IsValid { get; set; } = true;
+    }
+
     public static class GpsExtensions
     {
         private static double _lat;
@@ -52,25 +60,26 @@ namespace Autonoceptor.Shared.Utilities
         /// <param name="destinationLat"></param>
         /// <param name="destinationLon"></param>
         /// <returns>distance to waypoint, and heading to waypoint</returns>
-        public static double[] GetDistanceAndHeadingToDestination(double currentLat, double currentLon,
-            double destinationLat, double destinationLon)
+        public static DistanceAndHeading GetDistanceAndHeadingToWaypoint(double currentLat, double currentLon, double destinationLat, double destinationLon)
         {
+            var distanceAndHeading = new DistanceAndHeading();
+
             try
             {
-                var diflat = (destinationLat - currentLat).ToRadians();
+                var differenceInLatitude = (destinationLat - currentLat).ToRadians();
 
                 currentLat = currentLat.ToRadians(); //convert current latitude to radians
                 destinationLat = destinationLat.ToRadians(); //convert waypoint latitude to radians
 
-                var diflon = (destinationLon - currentLon).ToRadians();
+                var differenceInLongitude = (destinationLon - currentLon).ToRadians();
                 //subtract and convert longitude to radians
 
-                var distCalc = Math.Sin(diflat / 2.0) * Math.Sin(diflat / 2.0);
+                var distCalc = Math.Sin(differenceInLatitude / 2.0) * Math.Sin(differenceInLatitude / 2.0);
                 var distCalc2 = Math.Cos(currentLat);
 
                 distCalc2 = distCalc2 * Math.Cos(destinationLat);
-                distCalc2 = distCalc2 * Math.Sin(diflon / 2.0);
-                distCalc2 = distCalc2 * Math.Sin(diflon / 2.0); //and again, why?
+                distCalc2 = distCalc2 * Math.Sin(differenceInLongitude / 2.0);
+                distCalc2 = distCalc2 * Math.Sin(differenceInLongitude / 2.0); //and again, why?
                 distCalc += distCalc2;
                 distCalc = 2 * Math.Atan2(Math.Sqrt(distCalc), Math.Sqrt(1.0 - distCalc));
                 distCalc = distCalc * 6371000.0;
@@ -89,14 +98,17 @@ namespace Autonoceptor.Shared.Utilities
                 if (heading < 0)
                     heading += 360;
 
-                return new[] { Math.Round(distCalc, 1), Math.Round(heading, 1) };
+                distanceAndHeading.DistanceInInches = Math.Round(distCalc, 1);
+                distanceAndHeading.HeadingToWaypoint = Math.Round(heading, 1);
             }
             catch (Exception e)
             {
                 _logger.Log(LogLevel.Error, e);
 
-                return new double[] { 0, 0 };
+                distanceAndHeading.IsValid = false;
             }
+
+            return distanceAndHeading;
         }
 
         public static double Latitude2Double(string lat, string ns)
@@ -117,7 +129,7 @@ namespace Autonoceptor.Shared.Utilities
             if (ns.StartsWith("S"))
                 med = -med;
 
-            return Math.Round(med, 7); //gives accuracy of 1.1132m or 3.65223097ft
+            return Math.Round(med, 8);
         }
 
         public static double Longitude2Double(this string lon, string we)
@@ -139,7 +151,7 @@ namespace Autonoceptor.Shared.Utilities
             if (we.StartsWith("W"))
                 med = -med;
 
-            return Math.Round(med, 7); //gives accuracy of 1.1132m or 3.65223097ft
+            return Math.Round(med, 8); 
         }
 
         public static GpsFixData ParseNmea(string data)

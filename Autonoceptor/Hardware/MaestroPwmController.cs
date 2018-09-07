@@ -108,9 +108,9 @@ namespace Autonoceptor.Service.Hardware
         }
 
        public async Task<uint> SetChannelValue(int value, ushort channel)
-        {
-            if (_outputStream == null)
-                throw new InvalidOperationException("Output stream is null?");
+       {
+           if (_outputStream == null)
+               return 0;
 
             using (await _mutex.LockAsync())
             {
@@ -127,7 +127,7 @@ namespace Autonoceptor.Service.Hardware
         public async Task<int> GetChannelValue(ushort channel)
         {
             if (_outputStream == null || _inputStream == null)
-                throw new InvalidOperationException("Output or Input stream is null?");
+                return 0;
 
             using (await _mutex.LockAsync())
             {
@@ -142,7 +142,7 @@ namespace Autonoceptor.Service.Hardware
             }
         }
 
-        //Get Position
+        //GetLatest Position
         //Compact protocol: 0x90, channel number
         //Pololu protocol: 0xAA, device number, 0x10, channel number
         //Response: position low 8 bits, position high 8 bits

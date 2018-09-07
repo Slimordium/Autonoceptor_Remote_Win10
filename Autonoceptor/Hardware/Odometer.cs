@@ -6,7 +6,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
-using Nito.AsyncEx;
 using NLog;
 
 namespace Autonoceptor.Service.Hardware
@@ -25,22 +24,30 @@ namespace Autonoceptor.Service.Hardware
 
         private readonly CancellationToken _cancellationToken;
 
-        private readonly AsyncLock _asyncLock = new AsyncLock();
-
-        private OdometerData _odometerData = new OdometerData();
-
-        public async Task<OdometerData> GetOdometerData()
+        public async Task<OdometerData> GetLatest()
         {
-            using (await _asyncLock.LockAsync())
-            {
-                return _odometerData;
-            }
+            return await _subject.ObserveOnDispatcher().Take(1);
         }
 
         public Odometer(CancellationToken cancellationToken)
         {
             _cancellationToken = cancellationToken;
         }
+
+        //This will add distance in IN to the imu data from the time it was set.
+        public async Task ZeroTripMeter()
+        {
+            var odoData = await GetLatest();
+            _odometerSet = odoData.InTraveled;
+        }
+
+        private volatile float _previousIn;
+
+        private volatile float _feetPerSecond;
+
+        private IDisposable _fpsDisposable;
+
+        private volatile float _odometerSet;
 
         public async Task InitializeAsync()
         {
@@ -53,6 +60,20 @@ namespace Autonoceptor.Service.Hardware
 
             _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
 
+            _fpsDisposable = Observable
+                .Interval(TimeSpan.FromSeconds(1))
+                .ObserveOnDispatcher()
+                .Subscribe(async _ =>
+                {
+                    var inTraveled = (await GetLatest()).InTraveled;
+
+                    var fps = (inTraveled - _previousIn) / 12;
+
+                    _feetPerSecond = fps;
+
+                    _previousIn = inTraveled;
+                });
+
             _readTask = new Task(async() =>
             {
                 var lastOdometer = new OdometerData();
@@ -62,24 +83,30 @@ namespace Autonoceptor.Service.Hardware
                 {
                     var byteCount = await _inputStream.LoadAsync(100);
 
+                    if (byteCount == 0)
+                        continue;
+
                     var readString = _inputStream.ReadString(byteCount);
+
+                    if (string.IsNullOrEmpty(readString))
+                        continue;
 
                     foreach (var ss in readString.Split('\n'))
                     {
-                        var split = ss.Split(',').ToList();
-
-                        if (split.Count < 3)
-                        {
-                            continue;
-                        }
-
-                        if (!readString.Contains("P=") && !readString.Contains("\r"))
-                        {
-                            continue;
-                        }
-
                         try
                         {
+                            var split = ss.Split(',').ToList();
+
+                            if (split.Count < 3)
+                            {
+                                continue;
+                            }
+
+                            if (!readString.Contains("P=") && !readString.Contains("\r"))
+                            {
+                                continue;
+                            }
+                        
                             var odometerDataNew = new OdometerData();
 
                             if (!float.TryParse(split[2].Replace("IN=", "").Replace("\r", "").Replace("\n", ""), out var inches))
@@ -112,18 +139,14 @@ namespace Autonoceptor.Service.Hardware
                                 lastOdometer.PulseCount = pulse;
                             }
 
-                            _subject.OnNext(odometerDataNew);
+                            odometerDataNew.FeetPerSecond = _feetPerSecond;
+                            odometerDataNew.DistanceSinceSet = inches - _odometerSet;
 
-                            using (await _asyncLock.LockAsync())
-                            {
-                                _odometerData = odometerDataNew;
-                            }
-                                
+                            _subject.OnNext(odometerDataNew);
                         }
                         catch (Exception e)
                         {
-                            _logger.Log(LogLevel.Error, $"{e.Message}");
-                            _logger.Log(LogLevel.Error, readString);
+                            _logger.Log(LogLevel.Error, $"Odometer: {e.Message}");
                         }
                     }
                 }
@@ -144,6 +167,10 @@ namespace Autonoceptor.Service.Hardware
         public float CmTraveled { get; set; }
 
         public float InTraveled { get; set; }
+
+        public float FeetPerSecond { get; set; }
+
+        public float DistanceSinceSet { get; set; }
 
     }
 }

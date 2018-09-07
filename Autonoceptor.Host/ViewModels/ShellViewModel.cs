@@ -8,6 +8,7 @@ using Windows.ApplicationModel.ExtendedExecution;
 using Windows.UI.Xaml;
 using Autonoceptor.Shared.Utilities;
 using Caliburn.Micro;
+using Newtonsoft.Json;
 using Nito.AsyncEx;
 using NLog.Targets.Rx;
 
@@ -20,13 +21,17 @@ namespace Autonoceptor.Host.ViewModels
         private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         private readonly Conductor _conductor;
 
+        private IDisposable _gpsDisposable;
+        private IDisposable _lidarDisposable;
+        private IDisposable _odometerDisposable;
+
         private ExtendedExecutionSession _session;
 
         private IDisposable _sessionDisposable;
 
-        public string Yaw { get; set; }
-
         private bool _started;
+
+        private IDisposable _yawDisposable;
 
         public ShellViewModel()
         {
@@ -39,12 +44,20 @@ namespace Autonoceptor.Host.ViewModels
                 .Subscribe(async _ => { await RequestExtendedSession(); });
 
             //Automatically start...
-            Observable.Timer(TimeSpan.FromSeconds(5))
+            Observable.Timer(TimeSpan.FromSeconds(2))
                 .ObserveOnDispatcher()
                 .Subscribe(async _ => { await StartConductor().ConfigureAwait(false); });
 
             RxTarget.LogObservable.ObserveOnDispatcher().Subscribe(async e => { await AddToLog(e); });
         }
+
+        public string Yaw { get; set; }
+
+        public string LatLon { get; set; }
+
+        public string Lidar { get; set; }
+
+        public string OdometerIn { get; set; }
 
         public BindableCollection<string> Log { get; set; } = new BindableCollection<string>();
 
@@ -54,9 +67,25 @@ namespace Autonoceptor.Host.ViewModels
 
         public string BrokerIp { get; set; } = "172.16.0.246";
 
-        public int GpsNavSpeed { get; set; } = 25;
+        public bool EnableNavSpeedControl
+        {
+            get
+            {
+                if (_conductor != null)
+                    return _conductor.SpeedControlEnabled;
 
-        public int WpBoundryIn { get; set; } = 32;
+                return true;
+            }
+            set
+            {
+                if (_conductor != null)
+                    _conductor.SpeedControlEnabled = value;
+            }
+        }
+
+        public double TurnMagnitudeInputModifier { get; set; } = 1; // LEAVE AT 1 NOT NEEDED
+
+        public int CruiseControl { get; set; } = 340;
 
         private async Task AddToLog(string entry)
         {
@@ -88,28 +117,91 @@ namespace Autonoceptor.Host.ViewModels
                 .ObserveOnDispatcher()
                 .Subscribe(data =>
                 {
-                    Yaw = Convert.ToInt32(data.Yaw).ToString(); 
-                    NotifyOfPropertyChange("Yaw");
+                    Yaw = $"Yaw: {Convert.ToInt32(data.Yaw)}";
+                    NotifyOfPropertyChange(nameof(Yaw));
+                });
+
+            _odometerDisposable = _conductor
+                .Odometer
+                .GetObservable()
+                .ObserveOnDispatcher()
+                .Subscribe(odoData =>
+                {
+                    OdometerIn =
+                        $"FPS: {odoData.FeetPerSecond}, Pulse: {odoData.PulseCount}, {odoData.InTraveled / 12} ft, {odoData.InTraveled}in";
+                    NotifyOfPropertyChange(nameof(OdometerIn));
+                });
+
+            _gpsDisposable = _conductor
+                .Gps
+                .GetObservable()
+                .ObserveOnDispatcher()
+                .Subscribe(data =>
+                {
+                    LatLon = data.ToString();
+                    NotifyOfPropertyChange(nameof(LatLon));
+                });
+
+            _lidarDisposable = _conductor
+                .Lidar
+                .GetObservable()
+                .Where(d => d != null)
+                .Sample(TimeSpan.FromMilliseconds(100))
+                .ObserveOnDispatcher()
+                .Subscribe(data =>
+                {
+                    if (!data.IsValid)
+                    {
+                        //Lidar = "Invalid signal";
+                    }
+                    else
+                    {
+                        Lidar = $"Distance: {data.Distance}, Strength: {data.Strength}";
+                    }
+
+                    NotifyOfPropertyChange(nameof(Lidar));
                 });
         }
 
-        private IDisposable _yawDisposable;
-
-        public async Task GetOdometerData()
+        private void SetNavParams()
         {
-            var odoData = await _conductor.Odometer.GetOdometerData();
+            _conductor.SetCruiseControl(CruiseControl);
+            _conductor.Waypoints.SetSteerMagnitudeModifier(TurnMagnitudeInputModifier);
+        }
 
-            await AddToLog($"Pulse per 250ms:{odoData.PulseCount} => {odoData.InTraveled / 12}ft, {odoData.InTraveled}in, {odoData.CmTraveled}cm");
+        public async Task SweepLeft()
+        {
+            var sweepData = await _conductor.Sweep(Sweep.Left);
+
+            foreach (var d in sweepData)
+            {
+                await AddToLog($"Angle: {d.Angle} Distance: {d.Distance} Strength: {d.Strength}");
+            }
+        }
+
+        public async Task SweepRight()
+        {
+            var sweepData = await _conductor.Sweep(Sweep.Right);
+
+            foreach (var d in sweepData)
+            {
+                await AddToLog($"Angle: {d.Angle} Distance: {d.Distance} Strength: {d.Strength}");
+            }
         }
 
         private void CurrentOnResuming(object sender, object o)
         {
             _sessionDisposable?.Dispose();
 
-            _sessionDisposable = Observable.Interval(TimeSpan.FromMinutes(4))
-                .Subscribe(async _ => { await RequestExtendedSession(); });
+            _sessionDisposable = Observable
+                .Interval(TimeSpan.FromMinutes(4))
+                .Subscribe(async _ =>
+                {
+                    await RequestExtendedSession(); 
+                });
 
-            Observable.Timer(TimeSpan.FromSeconds(5))
+            Observable.Timer(TimeSpan
+                .FromSeconds(3))
                 .ObserveOnDispatcher()
                 .Subscribe(async _ => { await StartConductor().ConfigureAwait(false); });
         }
@@ -118,6 +210,40 @@ namespace Autonoceptor.Host.ViewModels
         {
             _session?.Dispose();
             _session = null;
+        }
+
+        public async Task GetDistanceHeading()
+        {
+            try
+            {
+                if (!Waypoints.Any()) await ListWaypoints();
+
+                if (!Waypoints.Any())
+                    return;
+
+                var gpsFixData = await _conductor.Gps.GetLatest();
+
+                var wp = _conductor.Waypoints.CurrentWaypoint;
+
+                if (wp == null)
+                {
+                    await AddToLog($"No waypoints in queue");
+                    return;
+                }
+
+                var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsFixData.Lat, gpsFixData.Lon, wp.Lat, wp.Lon);
+
+                await AddToLog($"Distance: {distanceAndHeading.DistanceInFeet}ft, Heading: {distanceAndHeading.HeadingToWaypoint}");
+            }
+            catch (Exception e)
+            {
+                await AddToLog(e.Message);
+            }
+        }
+
+        public async Task InitMqtt()
+        {
+            await _conductor.InitializeMqtt(BrokerIp);
         }
 
         private async Task RequestExtendedSession()
@@ -141,21 +267,13 @@ namespace Autonoceptor.Host.ViewModels
             }
         }
 
-        public async Task SetGpsNavSpeed()
+        public async Task InitGps()
         {
-            //_conductor.GpsNavMoveMagnitude = GpsNavSpeed;
-
-            //await AddToLog($"Set GPS nav speed %{GpsNavSpeed}");
-
             await _conductor.Gps.InitializeAsync().ConfigureAwait(false);
         }
 
-        public async Task SetWpBoundry()
+        public async Task DisposeGps()
         {
-            //_conductor.WpTriggerDistance = WpBoundryIn;
-
-            //await AddToLog($"WP Trigger distance {WpBoundryIn}in");
-
             try
             {
                 _conductor.Gps.Dispose();
@@ -166,53 +284,20 @@ namespace Autonoceptor.Host.ViewModels
             }
         }
 
-        public async Task CalibrateImu()
-        {
-            await _conductor.SyncImuYaw();
-        }
-
-        public async Task GetCurrentPosition()
-        {
-            var currentLocation = await _conductor.Gps.Get();
-
-            await AddToLog($"At Lat: {currentLocation.Lat}, Lon: {currentLocation.Lon}, Heading: {currentLocation.Heading}");
-        }
-
-        public async Task GetYpr()
-        {
-            var currentImu = await _conductor.Imu.Get();
-
-            await AddToLog($"Yaw: {currentImu.Yaw} Pitch: {currentImu.Pitch} Roll: {currentImu.Roll}");
-        }
-
-        public async Task GetHeadingDistanceToSelected()
-        {
-            var currentLocation = await _conductor.Gps.Get();
-
-            var wp = _conductor.Waypoints[SelectedWaypoint];
-
-            var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToDestination(currentLocation.Lat,
-                currentLocation.Lon, wp.GpsFixData.Lat, wp.GpsFixData.Lon);
-
-            await AddToLog($"Distance: {distanceAndHeading[0] / 12} ft, Heading: {distanceAndHeading[1]} degrees");
-        }
-
         public async Task ListWaypoints()
         {
-            var wps = _conductor.Waypoints;
-
-            if (!wps.Any())
-                await AddToLog("No waypoints in list");
-
-            foreach (var waypoint in wps)
-                await AddToLog(
-                    $"Lat: {waypoint.GpsFixData.Lat} Lon: {waypoint.GpsFixData.Lon} - {waypoint.GpsFixData.Quality}");
-
             Waypoints = new BindableCollection<Waypoint>();
 
-            Waypoints.AddRange(_conductor.Waypoints);
+            if (_conductor.Waypoints.Count == 0)
+            {
+                await AddToLog("No waypoints in list");
+                NotifyOfPropertyChange(nameof(Waypoints));
+                return;
+            }
 
-            NotifyOfPropertyChange("Waypoints");
+            Waypoints.AddRange(_conductor.Waypoints.ToArray());
+
+            NotifyOfPropertyChange(nameof(Waypoints));
         }
 
         private async void CurrentOnSuspending(object sender, SuspendingEventArgs suspendingEventArgs)

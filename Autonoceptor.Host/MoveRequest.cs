@@ -9,6 +9,8 @@
             _moveRequestType = requestType;
         }
 
+        public MoveRequest() { }
+
         public MoveRequest(MoveRequest moveRequest)
         {
             MovementDirection = moveRequest.MovementDirection;

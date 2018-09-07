@@ -11,13 +11,40 @@ using Hardware.Xbox.Enums;
 
 namespace Hardware.Xbox
 {
-    public class XboxDevice
+    public class XboxDevice : IDisposable
     {
         private double _deadzoneTolerance = 5000; //Was 1000
 
         private HidDevice _deviceHandle;
 
-        private readonly Subject<XboxData> _subject = new Subject<XboxData>();
+        private Subject<XboxData> _subject = new Subject<XboxData>();
+
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+
+            try
+            {
+                if (_deviceHandle != null)
+                {
+                    _deviceHandle.InputReportReceived -= InputReportReceived;
+                    _deviceHandle?.Dispose();
+                    _deviceHandle = null;
+                }
+
+                _subject?.Dispose();
+                _subject = null;
+            }
+            catch (Exception)
+            {
+                //
+            }
+        }
 
         public async Task<bool> InitializeAsync(CancellationToken cancellationToken)
         {
@@ -85,7 +112,9 @@ namespace Hardware.Xbox
                 },
                 LeftTrigger = lt,
                 RightTrigger = rt,
-                //Dpad = ,
+                
+                Dpad = (Direction)dPad,
+
                 FunctionButtons = args.Report.ActivatedBooleanControls.Select(btn => (int)(btn.Id - 5)).Select(id => (FunctionButton)id)
             };
 
