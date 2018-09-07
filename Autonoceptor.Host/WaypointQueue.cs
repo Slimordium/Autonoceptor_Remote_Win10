@@ -275,7 +275,13 @@ namespace Autonoceptor.Host
 
         public async Task SetStartingPoint(Waypoint currentfix)
         {
-            Waypoint.LatOffset =  StartPoints[TargetStartPoint].Lon - currentfix.Lon;
+
+            if (StartPoints.Count == 0)
+            {
+                await WriteToLcd($"No Startpoints Set", "No Offset Applied", true);
+            }
+
+            Waypoint.LonOffset = StartPoints[TargetStartPoint].Lon - currentfix.Lon;
             Waypoint.LatOffset = StartPoints[TargetStartPoint].Lat - currentfix.Lat;
 
             await WriteToLcd($"Set Startpoint", TargetStartPoint.ToString(), true);
