@@ -124,7 +124,7 @@ namespace Autonoceptor.Host
                     return null;//Most likely we have already finished navigating
 
                 var moveReq = new MoveRequest();
-                
+
                 var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(yourLat, yourLon, CurrentWaypoint.Lat, CurrentWaypoint.Lon);
 
                 var radiusDistanceInCheck = 0d; //This is the GPS distance to WP, or the calculated distance from our current Lat/Lon
@@ -143,7 +143,7 @@ namespace Autonoceptor.Host
                     radiusDistanceInCheck = distanceAndHeading.DistanceInInches;
                     directionAndMagnitude = GetSteeringDirectionAndMagnitude(currentHeading, distanceAndHeading.HeadingToWaypoint, distanceAndHeading.DistanceInInches);
                 }
-                
+
                 moveReq.SteeringDirection = directionAndMagnitude.Item1;
                 moveReq.SteeringMagnitude = directionAndMagnitude.Item2;
 
@@ -214,5 +214,41 @@ namespace Autonoceptor.Host
 
             return steerDirection;
         }
+
+
+        #region Waypoint Offsets
+
+        // I will keep a list of the possible starting waypoints
+        public List<Waypoint> StartPoints { get; set; } = new List<Waypoint>();
+        public int TargetStartPoint = 0;
+
+        public async Task AddStartingPoint(Waypoint newStartPoint)
+        {
+            this.StartPoints.Add(newStartPoint);
+            await _lcd.WriteAsync($"New Startpoint {StartPoints.Count}", 1);
+        }
+
+        public async Task IterateStartingPoint()
+        {
+            if (TargetStartPoint == StartPoints.Count - 1)
+            {
+                TargetStartPoint = 0;
+            }
+            else
+            {
+                TargetStartPoint++;
+            }
+            await _lcd.WriteAsync($"Target Startpoint {TargetStartPoint}", 1);
+        }
+
+        public async Task SetStartingPoint(Waypoint currentfix)
+        {
+            Waypoint.LatOffset =  StartPoints[TargetStartPoint].Lon - currentfix.Lon;
+            Waypoint.LatOffset = StartPoints[TargetStartPoint].Lat - currentfix.Lat;
+            _lcd.WriteAsync($"Set Startpoint {TargetStartPoint}", 1);
+        }
+
+        #endregion
+
     }
 }
