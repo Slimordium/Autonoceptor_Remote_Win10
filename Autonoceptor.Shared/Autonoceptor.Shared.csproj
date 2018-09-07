@@ -10,6 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AppCenter.Analytics.Metrics" Version="1.1.0" />
+    <PackageReference Include="Microsoft.AppCenter.Analytics" Version="1.9.0" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
     <PackageReference Include="NLog" Version="4.5.0-rc07" />
     <PackageReference Include="NLog.Extensions.Logging" Version="1.0.0-rtm-rc7" />
