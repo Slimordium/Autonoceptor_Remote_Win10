@@ -318,9 +318,17 @@ namespace Autonoceptor.Host
 
         public async Task DecreaseWaypointSetNumber()
         {
-            WaypointSetNumber--;
-
-            await Load();
+            if (WaypointSetNumber <= 0)
+            {
+                WaypointSetNumber = 0; 
+                await Load();
+            }
+            else
+            {
+                WaypointSetNumber--;
+                await Load();
+            }
+            
         }
 
 
