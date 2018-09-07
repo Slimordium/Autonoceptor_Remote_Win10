@@ -34,7 +34,7 @@ namespace Autonoceptor.Host
         private int _maxStrength;
         private int _minStrength;
 
-        private int _dangerDistance = 400;
+        private int _dangerDistance = 160;
         //-------------------------------------------------------
 
         private readonly AsyncLock _asyncLock = new AsyncLock();
@@ -101,57 +101,65 @@ namespace Autonoceptor.Host
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
-                    var data = await Sweep(Host.Sweep.Center);
-
-                    if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
+                    try
                     {
-                        _isDangerZone[Zone.Center] = true;
+                        var data = await Sweep(Host.Sweep.Center);
+
+                        if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
+                        {
+                            _isDangerZone[Zone.Center] = true;
+                        }
+                        else
+                        {
+                            _isDangerZone[Zone.Center] = false;//Zone is safe
+                        }
+
+                        if (_isDangerZone[Zone.Center]) //Check next zone
+                        {
+                            data = await Sweep(Host.Sweep.Right);
+                        }
+                        else
+                        {
+                            //Center zone is safe, so no need to scan any other zone
+                            //reset other zones
+                            _isDangerZone[Zone.Left] = false;
+                            _isDangerZone[Zone.Right] = false;
+
+                            await SetChannelValue(_centerPwm, _lidarServoChannel);
+
+                            //TODO: Nothing to do here, proceed as we were
+
+                            return;
+                        }
+
+                        if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
+                        {
+                            _isDangerZone[Zone.Right] = true;
+                        }
+                        else
+                        {
+                            //TODO: Turn right, because it is safe eh! 
+
+                            return;
+                        }
+
+                        data = await Sweep(Host.Sweep.Left); //If We get here, the Center and Right zone are considered dangerous
+
+                        if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance)
+                        {
+                            _isDangerZone[Zone.Left] = true;
+
+                            //TODO: All zones are considered dangerous, maybe shoot one of the rockets and scan again?
+
+                            //TODO: Or enter ramming mode? Better yet, Kamikaze mode! 
+
+                        }
                     }
-                    else
+                    catch (Exception e)
                     {
-                        _isDangerZone[Zone.Center] = false;//Zone is safe
+                        _logger.Log(LogLevel.Info, e.Message);
                     }
-
-                    if (_isDangerZone[Zone.Center]) //Check next zone
-                    {
-                        data = await Sweep(Host.Sweep.Right);
-                    }
-                    else
-                    {
-                        //Center zone is safe, so no need to scan any other zone
-                        //reset other zones
-                        _isDangerZone[Zone.Left] = false;
-                        _isDangerZone[Zone.Right] = false;
-
-                        await SetChannelValue(_centerPwm, _lidarServoChannel);
-
-                        //TODO: Nothing to do here, proceed as we were
-
-                        return;
-                    }
-
-                    if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
-                    {
-                        _isDangerZone[Zone.Right] = true;
-                    }
-                    else
-                    {
-                        //TODO: Turn right, because it is safe eh! 
-
-                        return;
-                    }
-
-                    data = await Sweep(Host.Sweep.Left); //If We get here, the Center and Right zone are considered dangerous
-
-                    if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance)
-                    {
-                        _isDangerZone[Zone.Left] = true;
-
-                        //TODO: All zones are considered dangerous, maybe shoot one of the rockets and scan again?
-
-                        //TODO: Or enter ramming mode? Better yet, Kamikaze mode! 
-
-                    }
+                  
                     
                 });
         }
@@ -168,9 +176,18 @@ namespace Autonoceptor.Host
         {
             using (await _asyncLock.LockAsync())
             {
-                var data = await SweepInternal(sweep);
+                var data = new List<LidarData>();
 
-                await SetChannelValue(0, _lidarServoChannel); //Turn servo off
+                try
+                {
+                    data = await SweepInternal(sweep);
+
+                    await SetChannelValue(0, _lidarServoChannel); //Turn servo off
+                }
+                catch (Exception e)
+                {
+                    _logger.Log(LogLevel.Info, e.Message);
+                }
 
                 return await Task.FromResult(data);
             }
