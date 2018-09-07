@@ -253,17 +253,17 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.BumperLeft))
             {
-                Waypoints.AddStartingPoint(await Gps.GetLatest);
+                await Waypoints.AddStartingPoint(await Gps.GetLatest);
             }
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.BumperRight))
             {
-                Waypoints.IterateStartingPoint();
+                await Waypoints.IterateStartingPoint();
             }
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.Back))
             {
-                Waypoints.SetStartingPoint(await Gps.GetLatest);
+                await Waypoints.SetStartingPoint(await Gps.GetLatest);
             }
 
         }

@@ -222,13 +222,13 @@ namespace Autonoceptor.Host
         public List<Waypoint> StartPoints { get; set; } = new List<Waypoint>();
         public int TargetStartPoint = 0;
 
-        public void AddStartingPoint(Waypoint newStartPoint)
+        public async Task AddStartingPoint(Waypoint newStartPoint)
         {
             this.StartPoints.Add(newStartPoint);
             await _lcd.WriteAsync($"New Startpoint {StartPoints.Count}", 1);
         }
 
-        public void IterateStartingPoint()
+        public async Task IterateStartingPoint()
         {
             if (TargetStartPoint == StartPoints.Count - 1)
             {
@@ -241,7 +241,7 @@ namespace Autonoceptor.Host
             await _lcd.WriteAsync($"Target Startpoint {TargetStartPoint}", 1);
         }
 
-        public void SetStartingPoint(Waypoint currentfix)
+        public async Task SetStartingPoint(Waypoint currentfix)
         {
             Waypoint.LatOffset =  StartPoints[TargetStartPoint].Lon - currentfix.Lon;
             Waypoint.LatOffset = StartPoints[TargetStartPoint].Lat - currentfix.Lat;
