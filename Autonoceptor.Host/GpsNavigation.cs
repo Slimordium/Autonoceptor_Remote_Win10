@@ -262,24 +262,6 @@ namespace Autonoceptor.Host
             }
         }
 
-        private async Task SetVehicleHeading(SteeringDirection direction, double magnitude)
-        {
-            var steerValue = CenterPwm * 4;
-
-            if (magnitude > 100)
-                magnitude = 100;
-
-            switch (direction)
-            {
-                case SteeringDirection.Left:
-                    steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4;
-                    break;
-                case SteeringDirection.Right:
-                    steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, RightPwmMax)) * 4;
-                    break;
-            }
-
-            await SetChannelValue(steerValue, SteeringChannel);
-        }
+        
     }
 }
