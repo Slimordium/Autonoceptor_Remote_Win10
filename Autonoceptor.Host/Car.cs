@@ -73,16 +73,15 @@ namespace Autonoceptor.Host
 
             await Waypoints.InitializeAsync();
 
-
-
-            await ConfigureLcdWriters();
-
             await Stop();
             await DisableServos();
         }
 
         private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
         {
+            if (_displayGroup == null)
+                return;
+
             _displayGroup.DisplayItems = new Dictionary<int, string>
             {
                 {1, line1 },

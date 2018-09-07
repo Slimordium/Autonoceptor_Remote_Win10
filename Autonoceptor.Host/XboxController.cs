@@ -25,6 +25,7 @@ namespace Autonoceptor.Host
         private IDisposable _gpsNavSwitchDisposable;
 
         private const ushort _enableLcdDisopsable = 13;
+        private const ushort _enableLidarDisopsable = 14;
         private IDisposable _enableLcdDisposable;
 
         public XboxController(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
@@ -105,19 +106,54 @@ namespace Autonoceptor.Host
                 });
 
             _enableLcdDisposable = PwmObservable
-                .Where(channel => channel.ChannelId == _enableLcdDisopsable)
+                .Where(channel => channel.ChannelId == _enableLcdDisopsable || 
+                                  channel.ChannelId == _enableLidarDisopsable)
                 .Sample(TimeSpan.FromMilliseconds(500))
                 .ObserveOnDispatcher()
                 .Subscribe(
                     async channel =>
                     {
-                        if (channel.DigitalValue)
+                        if (channel.ChannelId == _enableLcdDisopsable)
                         {
-                            await ConfigureLcdWriters();
+                            if (channel.DigitalValue)
+                            {
+                                await ConfigureLcdWriters();
+
+                                await Lcd.WriteAsync("LCD Writers", 1);
+                                await Lcd.WriteAsync("Configured", 2);
+
+                                _logger.Log(LogLevel.Info, "LCD Writers Configured");
+
+                                return;
+                            }
+
+                            await Lcd.WriteAsync("LCD Writers", 1);
+                            await Lcd.WriteAsync("Disposed", 2);
+
+                            _logger.Log(LogLevel.Info, "LCD Writers Disposed");
+
+                            DisposeLcdWriters();
                             return;
                         }
 
-                        DisposeLcdWriters();
+                        if (channel.DigitalValue)
+                        {
+                            EnableLidarSweep();
+
+                            await Lcd.WriteAsync("LIDAR Sweep", 1);
+                            await Lcd.WriteAsync("Enabled", 2);
+
+                            _logger.Log(LogLevel.Info, "LIDAR Sweep Enabled");
+
+                            return;
+                        }
+
+                        await Lcd.WriteAsync("LIDAR Sweep", 1);
+                        await Lcd.WriteAsync("Disposed", 2);
+
+                        _logger.Log(LogLevel.Info, "LIDAR Sweep Disposed");
+
+                        DisposeLidarSweep();
                     });
 
             _xboxConnectedCheckDisposable = Observable

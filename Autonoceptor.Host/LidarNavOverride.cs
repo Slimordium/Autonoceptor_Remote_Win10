@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
@@ -22,9 +23,9 @@ namespace Autonoceptor.Host
         private const ushort _lidarServoChannel = 17;
 
         private const int _rightPwm = 1056;
-        private const int _rightMidPwm = 1322;
+        private const int _rightMidPwm = 1371;
         private const int _centerPwm = 1472;
-        private const int _leftMidPwm = 1622;
+        private const int _leftMidPwm = 1572;
         private const int _leftPwm = 1880;
 
         //These values are going to have to be environment based. Perhaps have a way for it to discover these values? 
@@ -72,6 +73,9 @@ namespace Autonoceptor.Host
                 .Sample(TimeSpan.FromMilliseconds(250))
                 .Subscribe(async data =>
                 {
+                    if (_displayGroup == null)
+                        return;
+
                     _displayGroup.DisplayItems = new Dictionary<int, string>
                     {
                         {1, $"D: {data.Distance}"},
@@ -82,17 +86,16 @@ namespace Autonoceptor.Host
                 });
         }
 
-        //TODO: Implement servo sweep, query servo position, and associating servo position with lidar data as a sort of radar sweep. 
-        protected new async Task InitializeAsync()
+        protected void DisposeLidarSweep()
         {
-            await base.InitializeAsync();
+            _lidarDataDisposable?.Dispose();
+            _lidarDataDisposable = null;
+        }
 
-
-
-            return;
-
+        protected void EnableLidarSweep()
+        {
             _lidarDataDisposable = Observable
-                .Interval(TimeSpan.FromSeconds(2)) //At 2+ feet per second, this scans the center zone every 4 feet.
+                .Interval(TimeSpan.FromSeconds(4)) //At 2+ feet per second, this scans the center zone every 4 feet.
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
@@ -148,9 +151,14 @@ namespace Autonoceptor.Host
                     //    _isDangerZone[Zone.Left] = false;//Zone is safe
                     //}
 
-                    await SetChannelValue(_centerPwm, _lidarServoChannel);
+                    await SetChannelValue(0, _lidarServoChannel);
                     //If we get here, we are screwed because all zones are dangerous. 
                 });
+        }
+
+        protected new async Task InitializeAsync()
+        {
+            await base.InitializeAsync();
         }
 
         private readonly Dictionary<Zone,bool> _isDangerZone = new Dictionary<Zone, bool>();
@@ -224,6 +232,8 @@ namespace Autonoceptor.Host
                         data.Add(lidarData);
                     }
 
+                    await Task.Delay(250);
+
                     // sweep right 30 degrees
                     for (var pwm = _leftMidPwm; pwm > _rightMidPwm; pwm -= 10)
                     {
@@ -259,7 +269,7 @@ namespace Autonoceptor.Host
 
             await SetChannelValue(_centerPwm * 4, _lidarServoChannel);
 
-            await Task.Delay(250);
+            await Task.Delay(500);
 
             return await Task.FromResult(data);
         }

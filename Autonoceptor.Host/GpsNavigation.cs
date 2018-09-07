@@ -108,8 +108,6 @@ namespace Autonoceptor.Host
                 {
                     await SyncImuYaw();
                 });
-
-            await ConfigureLcdWriters();
         }
 
         private DisplayGroup _displayGroup;
@@ -119,6 +117,9 @@ namespace Autonoceptor.Host
 
         private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
         {
+            if (_displayGroup == null)
+                return;
+
             _displayGroup.DisplayItems = new Dictionary<int, string>
             {
                 {1, line1 },
@@ -130,13 +131,16 @@ namespace Autonoceptor.Host
 
         private async Task WriteToImuLcd(string line1, string line2, bool refreshDisplay = false)
         {
+            if (_displayGroupImu == null)
+                return;
+
             _displayGroupImu.DisplayItems = new Dictionary<int, string>
             {
                 {1, line1 },
                 {2, line2 }
             };
 
-            await Lcd.UpdateDisplayGroup(_displayGroup, refreshDisplay);
+            await Lcd.UpdateDisplayGroup(_displayGroupImu, refreshDisplay);
         }
 
         public async Task WaypointFollowEnable(bool enabled)
