@@ -5,8 +5,8 @@ namespace Autonoceptor.Host
     {
         public double DistanceToWaypoint { get; set; }
 
-        public double Lat { get { return _lat + LatOffset; } set { _lat = value; } }
-        public double Lon { get { return _lon + LonOffset; } set { _lon = value; } }
+        public double Lat { get => _lat + LatOffset; set => _lat = value; }
+        public double Lon { get => _lon + LonOffset; set => _lon = value; }
 
         public static double LatOffset { get; set; }
         public static double LonOffset { get; set; }

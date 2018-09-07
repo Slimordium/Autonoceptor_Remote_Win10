@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Autonoceptor.Service.Hardware;
 using Autonoceptor.Shared.Utilities;
 using Newtonsoft.Json;
 using Nito.AsyncEx;
@@ -40,6 +41,7 @@ namespace Autonoceptor.Host
         //http://navspark.mybigcommerce.com/content/S1722DR8_v0.4.pdf
 
         private readonly double _minWaypointDistance;
+        private SparkFunSerial16X2Lcd _lcd;
 
         /// <summary>
         ///The third decimal place is worth up to 110 m: it can identify a large agricultural field or institutional campus.
@@ -50,9 +52,10 @@ namespace Autonoceptor.Host
         ///The eighth decimal place is worth up to 1.1 mm: this is good for charting motions of tectonic plates and movements of volcanoes. Permanent, corrected, constantly-running GPS base stations might be able to achieve this level of accuracy.
         /// </summary>
         /// <param name="minWaypointDistance"></param>
-        public WaypointQueue(double minWaypointDistance = .0000001)
+        public WaypointQueue(double minWaypointDistance, SparkFunSerial16X2Lcd lcd) // = .0000001
         {
             _minWaypointDistance = minWaypointDistance;
+            _lcd = lcd;
         }
 
         public new async Task Enqueue(Waypoint waypoint)
@@ -224,7 +227,7 @@ namespace Autonoceptor.Host
 
         public async Task AddStartingPoint(Waypoint newStartPoint)
         {
-            this.StartPoints.Add(newStartPoint);
+            StartPoints.Add(newStartPoint);
             await _lcd.WriteAsync($"New Startpoint {StartPoints.Count}", 1);
         }
 
@@ -245,7 +248,8 @@ namespace Autonoceptor.Host
         {
             Waypoint.LatOffset =  StartPoints[TargetStartPoint].Lon - currentfix.Lon;
             Waypoint.LatOffset = StartPoints[TargetStartPoint].Lat - currentfix.Lat;
-            _lcd.WriteAsync($"Set Startpoint {TargetStartPoint}", 1);
+
+            await _lcd.WriteAsync($"Set Startpoint {TargetStartPoint}", 1);
         }
 
         #endregion

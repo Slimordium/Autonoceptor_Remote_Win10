@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
@@ -30,7 +31,7 @@ namespace Autonoceptor.Service.Hardware
 
         private SerialDevice _lcdSerialDevice;
 
-        private readonly Dictionary<int, DisplayGroup> _displayGroups = new Dictionary<int, DisplayGroup>();
+        private readonly ConcurrentDictionary<int, DisplayGroup> _displayGroups = new ConcurrentDictionary<int, DisplayGroup>();
 
         private readonly AsyncLock _asyncMutex = new AsyncLock();
 
@@ -46,11 +47,11 @@ namespace Autonoceptor.Service.Hardware
             _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
         }
 
-        private int _currentGroup;
+        private volatile int _currentGroup;
 
         public async Task NextGroup()
         {
-            //using (await _asyncMutex.LockAsync())
+            using (await _asyncMutex.LockAsync())
             {
                 try
                 {
@@ -83,55 +84,61 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task NextLineGroup()
         {
-            var displayGroup = _displayGroups[_currentGroup];
+            using (await _asyncMutex.LockAsync())
+            {
+                var displayGroup = _displayGroups[_currentGroup];
 
-            if (displayGroup.TopLine + 2 >= displayGroup.DisplayItems.Count)
-            {
-                _displayGroups[_currentGroup].TopLine += 2;
-            }
-            else
-            {
-                return;
-            }
+                if (displayGroup.TopLine + 2 >= displayGroup.DisplayItems.Count)
+                {
+                    _displayGroups[_currentGroup].TopLine += 2;
+                }
+                else
+                {
+                    return;
+                }
 
-            if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))
-            {
-                await WriteAsync(displayGroup.DisplayItems[1], displayGroup.TopLine);
-            }
+                if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))
+                {
+                    await WriteToFirstLineAsync(displayGroup.DisplayItems[1]);
+                }
 
-            if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
-            {
-                await WriteAsync(displayGroup.DisplayItems[2], displayGroup.TopLine + 1);
+                if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
+                {
+                    await WriteToSecondLineAsync(displayGroup.DisplayItems[2]);
+                }
             }
         }
 
         public async Task PreviousLineGroup()
         {
-            var displayGroup = _displayGroups[_currentGroup];
+            using (await _asyncMutex.LockAsync())
+            {
+                var displayGroup = _displayGroups[_currentGroup];
 
-            if (displayGroup.TopLine - 2 >= 1)
-            {
-                _displayGroups[_currentGroup].TopLine -= 2;
-            }
-            else
-            {
-                return;
-            }
+                if (displayGroup.TopLine - 2 >= 1)
+                {
+                    _displayGroups[_currentGroup].TopLine -= 2;
+                }
+                else
+                {
+                    return;
+                }
 
-            if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))
-            {
-                await WriteAsync(displayGroup.DisplayItems[1], displayGroup.TopLine);
-            }
+                if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))
+                {
+                    await WriteToFirstLineAsync(displayGroup.DisplayItems[1]);
+                }
 
-            if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
-            {
-                await WriteAsync(displayGroup.DisplayItems[2], displayGroup.TopLine + 1);
+                if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
+                {
+                    await WriteToSecondLineAsync(displayGroup.DisplayItems[2]);
+                }
             }
         }
 
         public async Task PreviousGroup()
         {
-            //using (await _asyncMutex.LockAsync())
+            using (await _asyncMutex.LockAsync())
             {
                 try
                 {
@@ -147,12 +154,12 @@ namespace Autonoceptor.Service.Hardware
 
                     if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))
                     {
-                        await WriteAsync(displayGroup.DisplayItems[1], displayGroup.TopLine);
+                        await WriteToFirstLineAsync(displayGroup.DisplayItems[1]);
                     }
 
                     if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
                     {
-                        await WriteAsync(displayGroup.DisplayItems[2], displayGroup.TopLine + 1);
+                        await WriteToSecondLineAsync(displayGroup.DisplayItems[2]);
                     }
                 }
                 catch (Exception e)
@@ -164,25 +171,25 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task<DisplayGroup> AddDisplayGroup(DisplayGroup displayGroup, bool display = false)
         {
-            //using (await _asyncMutex.LockAsync())
+            using (await _asyncMutex.LockAsync())
             {
                 try
                 {
                     displayGroup.GroupId = _displayGroups.Count + 1;
 
-                    _displayGroups.Add(displayGroup.GroupId, displayGroup);
+                    _displayGroups.TryAdd(displayGroup.GroupId, displayGroup);
 
                     if (!display)
                         return displayGroup;
 
                     if (displayGroup.DisplayItems.ContainsKey(1))
                     {
-                        await WriteAsync(displayGroup.DisplayItems[1], 1);
+                        await WriteToFirstLineAsync(displayGroup.DisplayItems[1]);
                     }
 
                     if (displayGroup.DisplayItems.ContainsKey(2))
                     {
-                        await WriteAsync(displayGroup.DisplayItems[2], 2);
+                        await WriteToSecondLineAsync(displayGroup.DisplayItems[2]);
                     }
                 }
                 catch (Exception e)
@@ -196,7 +203,7 @@ namespace Autonoceptor.Service.Hardware
 
         public async Task UpdateDisplayGroup(DisplayGroup displayGroup, bool display = false)
         {
-            //using (await _asyncMutex.LockAsync())
+            using (await _asyncMutex.LockAsync())
             {
                 try
                 {
@@ -204,7 +211,7 @@ namespace Autonoceptor.Service.Hardware
                     {
                         displayGroup.GroupId = _displayGroups.Count + 1;
 
-                        _displayGroups.Add(displayGroup.GroupId, displayGroup);
+                        _displayGroups.TryAdd(displayGroup.GroupId, displayGroup);
                     }
                     else
                     {
@@ -216,7 +223,7 @@ namespace Autonoceptor.Service.Hardware
 
                     if (displayGroup.DisplayItems.ContainsKey(1))
                     {
-                        await WriteAsync(displayGroup.DisplayItems[1], 1);
+                        await WriteToFirstLineAsync(displayGroup.DisplayItems[1]);
                     }
 
                     if (displayGroup.DisplayItems.ContainsKey(2))
@@ -301,10 +308,7 @@ namespace Autonoceptor.Service.Hardware
             if (string.IsNullOrEmpty(text))
                 return;
 
-            using (await _asyncMutex.LockAsync())
-            {
-                await WriteAsync(text, _startOfFirstLine, true);
-            }
+            await WriteAsync(text, _startOfFirstLine, true);
         }
 
         /// <summary>
@@ -315,14 +319,11 @@ namespace Autonoceptor.Service.Hardware
         /// <returns></returns>
         public async Task WriteAsync(string text, int line)
         {
-            using (await _asyncMutex.LockAsync())
-            {
-                if (line == 1)
-                    await WriteToFirstLineAsync(text);
+            if (line == 1)
+                await WriteToFirstLineAsync(text);
 
-                if (line == 2)
-                    await WriteToSecondLineAsync(text);
-            }
+            if (line == 2)
+                await WriteToSecondLineAsync(text);
         }
     }
 }
