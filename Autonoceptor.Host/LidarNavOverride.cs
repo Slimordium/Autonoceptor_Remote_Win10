@@ -210,7 +210,22 @@ namespace Autonoceptor.Host
                 }
                 case Host.Sweep.Center:
                 {
-                    for (var pwm = _leftMidPwm; pwm > _rightMidPwm; pwm += 10)
+                    // sweep left 15 degrees
+                    for (var pwm = _centerPwm; pwm < _leftMidPwm; pwm += 10)
+                    {
+                        await SetChannelValue(pwm * 4, _lidarServoChannel);
+
+                        var lidarData = await Lidar.GetLatest();
+
+                        if (!lidarData.IsValid)
+                            continue;
+
+                        lidarData.Angle = Math.Round(pwm.Map(_centerPwm, _leftMidPwm, 0, -15));
+                        data.Add(lidarData);
+                    }
+
+                    // sweep right 30 degrees
+                    for (var pwm = _leftMidPwm; pwm > _rightMidPwm; pwm -= 10)
                     {
                         await SetChannelValue(pwm * 4, _lidarServoChannel);
 
@@ -223,7 +238,18 @@ namespace Autonoceptor.Host
                         data.Add(lidarData);
                     }
 
-                    //var validDataPoints = data.Where(d => d.Distance < )
+                    //for (var pwm = _leftMidPwm; pwm > _rightMidPwm; pwm += 10)
+                    //{
+                    //    await SetChannelValue(pwm * 4, _lidarServoChannel);
+
+                    //    var lidarData = await Lidar.GetLatest();
+
+                    //    if (!lidarData.IsValid)
+                    //        continue;
+
+                    //    lidarData.Angle = Math.Round(pwm.Map(_leftMidPwm, _rightMidPwm, -15, 15));
+                    //    data.Add(lidarData);
+                    //}
 
                     break;
                 }
@@ -251,11 +277,17 @@ namespace Autonoceptor.Host
             //This is where you would override to steer us out of danger
             if (channel == SteeringChannel && _isDangerZone.Any(z => z.Value))
             {
-                var dangerZone = _isDangerZone.Where(zone => zone.Value);
-
                 foreach (var z in _isDangerZone)
                 {
                     _logger.Log(LogLevel.Info, $"Zone {z.Key} danger: {z.Value}");
+                }
+
+                var dangerZones = _isDangerZone.Where(zone => zone.Value);
+                var safeZones = _isDangerZone.Where(zone => !zone.Value);
+
+                if (safeZones.Count() == 1)
+                {
+                    _logger.Log(LogLevel.Info, $"Turn {safeZones.First().Key} now!");
                 }
 
                 //await base.SetChannelValue(value, channel); //steer towards safe zone
