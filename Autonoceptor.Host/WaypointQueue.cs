@@ -102,8 +102,11 @@ namespace Autonoceptor.Host
             {
                 try
                 {
-                    string filename = GetFileName();
+                    string filename = GetWaypointsFileName();
                     await FileExtensions.SaveStringToFile(filename, JsonConvert.SerializeObject(this));
+
+                    string startpointsfilename = GetStartPointsFileName();
+                    await FileExtensions.SaveStringToFile(startpointsfilename, JsonConvert.SerializeObject(this.StartPoints));
 
                     await WriteToLcd($"Saved {Count}", "waypoints...", true);
 
@@ -127,7 +130,7 @@ namespace Autonoceptor.Host
             {
                 try
                 {
-                    string filename = GetFileName();
+                    string filename = GetWaypointsFileName();
                     WaypointQueue waypoints = JsonConvert.DeserializeObject<WaypointQueue>(await filename.ReadStringFromFile());
 
                     Clear(); //Remove everything from the queue
@@ -137,7 +140,8 @@ namespace Autonoceptor.Host
                         base.Enqueue(wp);
                     }
 
-                    this.StartPoints = waypoints.StartPoints;
+                    string startpointsfilename = GetStartPointsFileName();
+                    this.StartPoints = JsonConvert.DeserializeObject<List<Waypoint>>(await startpointsfilename.ReadStringFromFile());
 
                     await WriteToLcd($"#Set {WaypointSetNumber}", "Load Successful", true);
                 }
@@ -306,9 +310,14 @@ namespace Autonoceptor.Host
 
         public int WaypointSetNumber { get; set; } = 0;
 
-        public string GetFileName()
+        public string GetWaypointsFileName()
         {
             return $"Waypoints{WaypointSetNumber}.json";
+        }
+
+        public string GetStartPointsFileName()
+        {
+            return $"StartPoints{WaypointSetNumber}.json";
         }
         
         public async Task IncreaseWaypointSetNumber()
