@@ -4,6 +4,8 @@ using System.ComponentModel;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Reflection.Metadata.Ecma335;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Autonoceptor.Service.Hardware;
@@ -95,7 +97,7 @@ namespace Autonoceptor.Host
         protected void EnableLidarSweep()
         {
             _lidarDataDisposable = Observable
-                .Interval(TimeSpan.FromSeconds(4)) //At 2+ feet per second, this scans the center zone every 4 feet.
+                .Interval(TimeSpan.FromSeconds(3)) //At 2+ feet per second, this scans the center zone every 6 feet.
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
@@ -110,49 +112,47 @@ namespace Autonoceptor.Host
                         _isDangerZone[Zone.Center] = false;//Zone is safe
                     }
 
-                    //if (_isDangerZone[Zone.Center]) //Check next zone
-                    //{
-                    //    data = await Sweep(Host.Sweep.Right);
-                    //}
-                    //else
-                    //{
-                    //    //Center zone is safe, so no need to scan any other zone
-                    //    //reset other zones
-                    //    _isDangerZone[Zone.Left] = false;
-                    //    _isDangerZone[Zone.Right] = false;
+                    if (_isDangerZone[Zone.Center]) //Check next zone
+                    {
+                        data = await Sweep(Host.Sweep.Right);
+                    }
+                    else
+                    {
+                        //Center zone is safe, so no need to scan any other zone
+                        //reset other zones
+                        _isDangerZone[Zone.Left] = false;
+                        _isDangerZone[Zone.Right] = false;
 
-                    //    await SetChannelValue(_centerPwm, _lidarServoChannel);
+                        await SetChannelValue(_centerPwm, _lidarServoChannel);
 
-                    //    return; 
-                    //}
+                        //TODO: Nothing to do here, proceed as we were
 
-                    //if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
-                    //{
-                    //    _isDangerZone[Zone.Right] = true;
-                    //}
+                        return;
+                    }
 
-                    //if (_isDangerZone[Zone.Right]) //Check next zone
-                    //{
-                    //    data = await Sweep(Host.Sweep.Left);
-                    //}
-                    //else
-                    //{
-                    //    await SetChannelValue(_centerPwm, _lidarServoChannel);
-                    //    _isDangerZone[Zone.Left] = false; //Reset to default
-                    //    return; //Center zone is not safe, right zone is safe
-                    //}
+                    if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
+                    {
+                        _isDangerZone[Zone.Right] = true;
+                    }
+                    else
+                    {
+                        //TODO: Turn right, because it is safe eh! 
 
-                    //if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance) //is the zone considered dangerous?
-                    //{
-                    //    _isDangerZone[Zone.Left] = true;
-                    //}
-                    //else
-                    //{
-                    //    _isDangerZone[Zone.Left] = false;//Zone is safe
-                    //}
+                        return;
+                    }
 
-                    await SetChannelValue(0, _lidarServoChannel);
-                    //If we get here, we are screwed because all zones are dangerous. 
+                    data = await Sweep(Host.Sweep.Left); //If We get here, the Center and Right zone are considered dangerous
+
+                    if (data.Where(d => d.IsValid).Average(d => d.Distance) < _dangerDistance)
+                    {
+                        _isDangerZone[Zone.Left] = true;
+
+                        //TODO: All zones are considered dangerous, maybe shoot one of the rockets and scan again?
+
+                        //TODO: Or enter ramming mode? Better yet, Kamikaze mode! 
+
+                    }
+                    
                 });
         }
 
@@ -184,7 +184,7 @@ namespace Autonoceptor.Host
             {
                 case Host.Sweep.Left:
                 {
-                    for (var pwm = _centerPwm; pwm < _leftPwm; pwm += 10)
+                    for (var pwm = _leftMidPwm; pwm < _leftPwm; pwm += 10)
                     {
                         await SetChannelValue(pwm * 4, _lidarServoChannel);
 
@@ -193,7 +193,7 @@ namespace Autonoceptor.Host
                         if (!lidarData.IsValid)
                             continue;
 
-                        lidarData.Angle = Math.Round(pwm.Map(_centerPwm, _leftPwm, 0, -45));
+                        lidarData.Angle = Math.Round(pwm.Map(_leftMidPwm, _leftPwm, 0, -45));
                         data.Add(lidarData);
                     }
 
@@ -201,7 +201,7 @@ namespace Autonoceptor.Host
                 }
                 case Host.Sweep.Right:
                 {
-                    for (var pwm = _centerPwm; pwm > _rightPwm; pwm -= 10)
+                    for (var pwm = _rightMidPwm; pwm > _rightPwm; pwm -= 10)
                     {
                         await SetChannelValue(pwm * 4, _lidarServoChannel);
 
@@ -210,7 +210,7 @@ namespace Autonoceptor.Host
                         if (!lidarData.IsValid)
                             continue;
 
-                        lidarData.Angle = Math.Round(pwm.Map(_centerPwm, _rightPwm, 0, 45)); ;
+                        lidarData.Angle = Math.Round(pwm.Map(_rightMidPwm, _rightPwm, 0, 45)); ;
                         data.Add(lidarData);
                     }
 
@@ -274,41 +274,80 @@ namespace Autonoceptor.Host
             return await Task.FromResult(data);
         }
 
-        protected new async Task SetChannelValue(int value, ushort channel)
+        protected async Task SetVehicleHeading(SteeringDirection direction, double magnitude)
         {
-            if (Stopped && (channel == MovementChannel || channel == SteeringChannel))
+            if (Stopped)
             {
-                await base.SetChannelValue(StoppedPwm * 4, MovementChannel);
-                await base.SetChannelValue(0, SteeringChannel);
+                await SetChannelValue(StoppedPwm * 4, MovementChannel);
+                await SetChannelValue(0, SteeringChannel);
                 return;
             }
 
+            var steerValue = CenterPwm * 4;
+
+            if (magnitude > 100)
+                magnitude = 100;
+
+            var correction = CheckDangerZone(direction, magnitude);
+
+            if (correction.Item1 != direction)
+            {
+                direction = correction.Item1;
+                magnitude = correction.Item2;
+            }
+
+            switch (direction)
+            {
+                case SteeringDirection.Left:
+                    steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4;
+                    break;
+                case SteeringDirection.Right:
+                    steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, RightPwmMax)) * 4;
+                    break;
+            }
+
+            await SetChannelValue(steerValue, SteeringChannel);
+        }
+
+        protected Tuple<SteeringDirection, double> CheckDangerZone(SteeringDirection direction, double magnitude)
+        {
+            Tuple<SteeringDirection, double> newDirectionMagnitude = null;
+
             //TODO: Finish this, just logging for now
             //This is where you would override to steer us out of danger
-            if (channel == SteeringChannel && _isDangerZone.Any(z => z.Value))
+            if (_isDangerZone.Any(z => z.Value))
             {
-                foreach (var z in _isDangerZone)
+                foreach (var zone in _isDangerZone)
                 {
-                    _logger.Log(LogLevel.Info, $"Zone {z.Key} danger: {z.Value}");
+                    _logger.Log(LogLevel.Info, $"Zone {zone.Key} danger: {zone.Value}");
                 }
 
-                var dangerZones = _isDangerZone.Where(zone => zone.Value);
-                var safeZones = _isDangerZone.Where(zone => !zone.Value);
+                var safeZone = _isDangerZone.FirstOrDefault(zone => !zone.Value);
 
-                if (safeZones.Count() == 1)
+                switch (safeZone.Key)
                 {
-                    _logger.Log(LogLevel.Info, $"Turn {safeZones.First().Key} now!");
+                    case Zone.Center:
+                        newDirectionMagnitude = new Tuple<SteeringDirection, double>(SteeringDirection.Center, 100);
+
+                        break;
+                    case Zone.Left:
+                        newDirectionMagnitude = new Tuple<SteeringDirection, double>(SteeringDirection.Left, 100);
+
+                        break;
+                    case Zone.Right:
+                        newDirectionMagnitude = new Tuple<SteeringDirection, double>(SteeringDirection.Right, 100);
+
+                        break;
                 }
 
                 //await base.SetChannelValue(value, channel); //steer towards safe zone
                 //await base.SetChannelValue(value, MovementChannel); //Maybe slow down as well?
             }
-            
-            //else
-            //{
-            await base.SetChannelValue(value, channel);
-            //}
+
+            return newDirectionMagnitude;
         }
+
+        
     }
 
     public enum Sweep
