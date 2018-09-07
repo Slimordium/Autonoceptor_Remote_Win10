@@ -23,11 +23,17 @@ namespace Autonoceptor.Host
             await Stop();
             await DisableServos();
 
+            await Lcd.WriteAsync("Suspending...", 1);
+            await Lcd.WriteAsync("Disposed...", 2);
+
             _logger.Log(LogLevel.Error, $"Suspending {e.SuspendingOperation.Deadline}");
         }
 
-        private void Current_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        private async void Current_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
+            await Lcd.WriteAsync($"Unhandled Exc", 1);
+            await Lcd.WriteAsync(e.Message, 2);
+
             _logger.Log(LogLevel.Error, e);
         }
     }

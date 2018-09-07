@@ -79,7 +79,7 @@ namespace Autonoceptor.Host
                 .Subscribe(
                     async odoData =>
                     {
-                        await WriteToLcd($"Fps {Math.Round(odoData.FeetPerSecond, 1)}", $"Ft {Math.Round(odoData.InTraveled / 12, 1)}");
+                        await WriteToLcd($"FPS: {Math.Round(odoData.FeetPerSecond, 1)},PC: {odoData.PulseCount}", $"Trv: {Math.Round(odoData.InTraveled / 12, 1)}ft");
                     });
 
             await Stop();
