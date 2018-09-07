@@ -41,6 +41,14 @@ namespace Autonoceptor.Host
         {
             await base.InitializeAsync();
 
+            var displayGroup = new DisplayGroup
+            {
+                DisplayItems = new Dictionary<int, string> { { 1, "Init Car" }, { 2, "Complete" } },
+                GroupName = "Car"
+            };
+
+            await Lcd.AddDisplayGroup(displayGroup);
+
             _enableMqttDisposable = PwmObservable
                 .Where(channel => channel.ChannelId == _enableMqttChannel)
                 .ObserveOnDispatcher()

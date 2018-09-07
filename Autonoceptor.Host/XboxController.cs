@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.Enumeration;
 using Windows.Devices.HumanInterfaceDevice;
+using Autonoceptor.Service.Hardware;
 using Autonoceptor.Shared.Utilities;
 using Hardware.Xbox;
 using Hardware.Xbox.Enums;
@@ -72,6 +74,14 @@ namespace Autonoceptor.Host
         public new async Task InitializeAsync()
         {
             await base.InitializeAsync();
+
+            var displayGroup = new DisplayGroup
+            {
+                DisplayItems = new Dictionary<int, string> { { 1, "Init XBox" }, { 2, "Complete" } },
+                GroupName = "Xbox"
+            };
+
+            await Lcd.AddDisplayGroup(displayGroup);
 
             _xboxConnectedCheckDisposable = Observable
                 .Interval(TimeSpan.FromMilliseconds(1000))
@@ -169,7 +179,19 @@ namespace Autonoceptor.Host
 
         private async Task OnNextXboxDpadData(XboxData xboxData)
         {
-            _logger.Log(LogLevel.Info, xboxData.Dpad);
+            switch (xboxData.Dpad)
+            {
+                case Direction.Right:
+                case Direction.DownRight:
+                case Direction.UpRight:
+                    await Lcd.NextGroup();
+                    break;
+                case Direction.Left:
+                case Direction.DownLeft:
+                case Direction.UpLeft:
+                    await Lcd.PreviousGroup();
+                    break;
+            }
         }
 
         private async Task OnNextXboxButtonData(XboxData xboxData)

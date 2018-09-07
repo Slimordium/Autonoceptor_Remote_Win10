@@ -150,6 +150,9 @@ namespace Autonoceptor.Service.Hardware
 
                     try
                     {
+                        if (!imuReadings.Any())
+                            continue;
+
                         var avgYaw = imuReadings.Average(r => r.Yaw) - YawCorrection;
                         var avgPitch = imuReadings.Average(r => r.Pitch);
                         var avgRoll = imuReadings.Average(r => r.Roll);

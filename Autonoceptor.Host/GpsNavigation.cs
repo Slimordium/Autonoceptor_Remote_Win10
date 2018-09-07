@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Autonoceptor.Service.Hardware;
 using Autonoceptor.Shared.Utilities;
 using Nito.AsyncEx;
 using NLog;
@@ -63,6 +65,14 @@ namespace Autonoceptor.Host
                 {
                     await SyncImuYaw();
                 });
+
+            var displayGroup = new DisplayGroup
+            {
+                DisplayItems = new Dictionary<int, string> { { 1, "Init GPS nav" }, { 2, "Complete" } },
+                GroupName = "GPSNav"
+            };
+
+            await Lcd.AddDisplayGroup(displayGroup);
         }
 
         public async Task WaypointFollowEnable(bool enabled)
@@ -184,6 +194,7 @@ namespace Autonoceptor.Host
 
         private async Task SetVehicleHeading(SteeringDirection direction, double magnitude)
         {
+
             var steerValue = CenterPwm * 4;
 
             if (magnitude > 100)
