@@ -128,7 +128,7 @@ namespace Autonoceptor.Host
             {
                 try
                 {
-                    var waypoints = JsonConvert.DeserializeObject<Queue<Waypoint>>(await _filename.ReadStringFromFile());
+                    WaypointQueue waypoints = JsonConvert.DeserializeObject<WaypointQueue>(await _filename.ReadStringFromFile());
 
                     Clear(); //Remove everything from the queue
 
@@ -136,6 +136,8 @@ namespace Autonoceptor.Host
                     {
                         base.Enqueue(wp);
                     }
+
+                    this.StartPoints = waypoints.StartPoints;
 
                     await WriteToLcd($"Loaded {Count}", "waypoints...", true);
                 }
@@ -256,12 +258,12 @@ namespace Autonoceptor.Host
         {
             StartPoints.Add(newStartPoint);
 
-            await WriteToLcd($"New Startpoint", $"{StartPoints.Count}", true);
+            await WriteToLcd($"New Startpoint", $"{StartPoints.Count - 1}", true);
         }
 
         public async Task IterateStartingPoint()
         {
-            if (TargetStartPoint == StartPoints.Count - 1)
+            if (TargetStartPoint >= StartPoints.Count - 1)
             {
                 TargetStartPoint = 0;
             }
