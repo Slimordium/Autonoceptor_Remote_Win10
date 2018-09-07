@@ -103,7 +103,7 @@ namespace Autonoceptor.Host
                 try
                 {
                     string filename = GetFileName();
-                    await FileExtensions.SaveStringToFile(filename, JsonConvert.SerializeObject(this));
+                    await FileExtensions.SaveStringToFile(filename, JsonConvert.SerializeObject(ToArray()));
 
                     await WriteToLcd($"Saved {Count}", "waypoints...", true);
 
@@ -128,7 +128,7 @@ namespace Autonoceptor.Host
                 try
                 {
                     string filename = GetFileName();
-                    WaypointQueue waypoints = JsonConvert.DeserializeObject<WaypointQueue>(await filename.ReadStringFromFile());
+                    var waypoints = JsonConvert.DeserializeObject<List<Waypoint>>(await filename.ReadStringFromFile());
 
                     Clear(); //Remove everything from the queue
 
@@ -137,13 +137,13 @@ namespace Autonoceptor.Host
                         base.Enqueue(wp);
                     }
 
-                    this.StartPoints = waypoints.StartPoints;
+                    //this.StartPoints = waypoints.StartPoints;
 
-                    await WriteToLcd($"#Set {WaypointSetNumber}", "Load Successful", true);
+                    await WriteToLcd($"#Set {_waypointSetNumber}", "Load Successful", true);
                 }
                 catch (Exception e)
                 {
-                    await WriteToLcd($"Set #{WaypointSetNumber}", "Create New Set", true);
+                    await WriteToLcd($"Set #{_waypointSetNumber}", "Create New Set", true);
 
                     Clear();
                     StartPoints = new List<Waypoint>();
@@ -304,30 +304,30 @@ namespace Autonoceptor.Host
 
         #region Saving and Loading
 
-        public int WaypointSetNumber { get; set; } = 0;
+        private volatile int _waypointSetNumber;
 
         public string GetFileName()
         {
-            return $"Waypoints{WaypointSetNumber}.json";
+            return $"Waypoints{_waypointSetNumber}.json";
         }
         
         public async Task IncreaseWaypointSetNumber()
         {
-            WaypointSetNumber++;
+            _waypointSetNumber++;
 
             await Load();
         }
 
         public async Task DecreaseWaypointSetNumber()
         {
-            if (WaypointSetNumber <= 0)
+            if (_waypointSetNumber <= 0)
             {
-                WaypointSetNumber = 0; 
+                _waypointSetNumber = 0; 
                 await Load();
             }
             else
             {
-                WaypointSetNumber--;
+                _waypointSetNumber--;
                 await Load();
             }
             
