@@ -248,19 +248,6 @@ namespace Autonoceptor.Host
                         data.Add(lidarData);
                     }
 
-                    //for (var pwm = _leftMidPwm; pwm > _rightMidPwm; pwm += 10)
-                    //{
-                    //    await SetChannelValue(pwm * 4, _lidarServoChannel);
-
-                    //    var lidarData = await Lidar.GetLatest();
-
-                    //    if (!lidarData.IsValid)
-                    //        continue;
-
-                    //    lidarData.Angle = Math.Round(pwm.Map(_leftMidPwm, _rightMidPwm, -15, 15));
-                    //    data.Add(lidarData);
-                    //}
-
                     break;
                 }
             }
