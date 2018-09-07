@@ -12,6 +12,9 @@ using Autonoceptor.Host.Views;
 using Caliburn.Micro;
 using Autonoceptor.Service;
 
+using Microsoft.AppCenter;
+using Microsoft.AppCenter.Analytics;
+
 namespace Autonoceptor.Host
 {
     /// <summary>
@@ -25,6 +28,9 @@ namespace Autonoceptor.Host
         {
             Initialize();
             InitializeComponent();
+
+            Microsoft.AppCenter.AppCenter.Start("c3c72dd4-8851-4340-943b-05c0a1797857", typeof(Analytics));
+            
         }
 
         protected override void Configure()
