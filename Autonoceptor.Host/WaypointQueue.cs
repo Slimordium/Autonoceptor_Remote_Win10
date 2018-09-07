@@ -103,7 +103,7 @@ namespace Autonoceptor.Host
                 try
                 {
                     string filename = GetWaypointsFileName();
-                    await FileExtensions.SaveStringToFile(filename, JsonConvert.SerializeObject(this));
+                    await FileExtensions.SaveStringToFile(filename, JsonConvert.SerializeObject(ToArray()));
 
                     string startpointsfilename = GetStartPointsFileName();
                     await FileExtensions.SaveStringToFile(startpointsfilename, JsonConvert.SerializeObject(this.StartPoints));
@@ -131,7 +131,10 @@ namespace Autonoceptor.Host
                 try
                 {
                     string filename = GetWaypointsFileName();
-                    WaypointQueue waypoints = JsonConvert.DeserializeObject<WaypointQueue>(await filename.ReadStringFromFile());
+
+                    var fileString = await filename.ReadStringFromFile();
+
+                    var waypoints = JsonConvert.DeserializeObject<List<Waypoint>>(fileString);
 
                     Clear(); //Remove everything from the queue
 
@@ -143,11 +146,11 @@ namespace Autonoceptor.Host
                     string startpointsfilename = GetStartPointsFileName();
                     this.StartPoints = JsonConvert.DeserializeObject<List<Waypoint>>(await startpointsfilename.ReadStringFromFile());
 
-                    await WriteToLcd($"#Set {WaypointSetNumber}", "Load Successful", true);
+                    await WriteToLcd($"#Set {_waypointSetNumber}", "Load Successful", true);
                 }
                 catch (Exception e)
                 {
-                    await WriteToLcd($"Set #{WaypointSetNumber}", "Create New Set", true);
+                    await WriteToLcd($"Set #{_waypointSetNumber}", "Create New Set", true);
 
                     Clear();
                     StartPoints = new List<Waypoint>();
@@ -308,11 +311,11 @@ namespace Autonoceptor.Host
 
         #region Saving and Loading
 
-        public int WaypointSetNumber { get; set; } = 0;
+        private volatile int _waypointSetNumber;
 
         public string GetWaypointsFileName()
         {
-            return $"Waypoints{WaypointSetNumber}.json";
+            return $"Waypoints{_waypointSetNumber}.json";
         }
 
         public string GetStartPointsFileName()
@@ -322,21 +325,21 @@ namespace Autonoceptor.Host
         
         public async Task IncreaseWaypointSetNumber()
         {
-            WaypointSetNumber++;
+            _waypointSetNumber++;
 
             await Load();
         }
 
         public async Task DecreaseWaypointSetNumber()
         {
-            if (WaypointSetNumber <= 0)
+            if (_waypointSetNumber <= 0)
             {
-                WaypointSetNumber = 0; 
+                _waypointSetNumber = 0; 
                 await Load();
             }
             else
             {
-                WaypointSetNumber--;
+                _waypointSetNumber--;
                 await Load();
             }
             
