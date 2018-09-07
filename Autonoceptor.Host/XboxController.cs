@@ -261,10 +261,10 @@ namespace Autonoceptor.Host
                     await Lcd.PreviousGroup();
                     break;
                 case Direction.Up:
-                    //await Lcd.NextLineGroup();
+                    await Waypoints.IncreaseWaypointSetNumber();
                     break;
                 case Direction.Down:
-                    //await Lcd.PreviousLineGroup();
+                    await Waypoints.DecreaseWaypointSetNumber();
                     break;
             }
         }

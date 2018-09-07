@@ -14,6 +14,8 @@ namespace Autonoceptor.Host
         private double _lat;
         private double _lon;
 
+        public double WaypointSpeed { get; set; } = 10;
+
         public WaypointType Behaviour { get; set; } = WaypointType.Continue;
 
         /// <summary>
