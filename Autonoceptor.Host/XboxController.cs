@@ -255,7 +255,7 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.BumperLeft))
             {
-                await Waypoints.AddStartingPoint(await Gps.GetLatest);
+                //await Waypoints.AddStartingPoint(await Gps.GetLatest());
             }
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.BumperRight))
@@ -265,7 +265,7 @@ namespace Autonoceptor.Host
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.Back))
             {
-                await Waypoints.SetStartingPoint(await Gps.GetLatest);
+                //await Waypoints.SetStartingPoint(await Gps.GetLatest);
             }
 
         }
