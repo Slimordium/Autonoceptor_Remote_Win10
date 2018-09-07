@@ -166,7 +166,6 @@ namespace Autonoceptor.Host.ViewModels
         private void SetNavParams()
         {
             _conductor.SetCruiseControl(CruiseControl);
-            _conductor.Waypoints.SetSteerMagnitudeModifier(TurnMagnitudeInputModifier);
         }
 
         public async Task SweepLeft()

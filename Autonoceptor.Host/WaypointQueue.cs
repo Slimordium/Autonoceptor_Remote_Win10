@@ -34,28 +34,53 @@ namespace Autonoceptor.Host
             set => _currentWaypoint = value;
         }
 
-        private static double _steerMagModifier = 1.5;
-
         //.000001 should only record waypoint every 1.1132m or 3.65223097ft
         //https://en.wikipedia.org/wiki/Decimal_degrees
         //http://navspark.mybigcommerce.com/content/S1722DR8_v0.4.pdf
 
         private readonly double _minWaypointDistance;
-        private SparkFunSerial16X2Lcd _lcd;
+        private readonly SparkFunSerial16X2Lcd _lcd;
 
-        /// <summary>
-        ///The third decimal place is worth up to 110 m: it can identify a large agricultural field or institutional campus.
-        ///The fourth decimal place is worth up to 11 m: it can identify a parcel of land.It is comparable to the typical accuracy of an uncorrected GPS unit with no interference.
-        ///The fifth decimal place is worth up to 1.1 m: it distinguish trees from each other. Accuracy to this level with commercial GPS units can only be achieved with differential correction.            //Write GPS fix data to file, if switch is closed. Gps publishes fix data once a second
-        ///The sixth decimal place is worth up to 0.11 m: you can use this for laying out structures in detail, for designing landscapes, building roads. It should be more than good enough for tracking movements of glaciers and rivers. This can be achieved by taking painstaking measures with GPS, such as differentially corrected GPS.
-        ///The seventh decimal place is worth up to 11 mm: this is good for much surveying and is near the limit of what GPS-based techniques can achieve.
-        ///The eighth decimal place is worth up to 1.1 mm: this is good for charting motions of tectonic plates and movements of volcanoes. Permanent, corrected, constantly-running GPS base stations might be able to achieve this level of accuracy.
-        /// </summary>
-        /// <param name="minWaypointDistance"></param>
+        ///  <summary>
+        /// The third decimal place is worth up to 110 m: it can identify a large agricultural field or institutional campus.
+        /// The fourth decimal place is worth up to 11 m: it can identify a parcel of land.It is comparable to the typical accuracy of an uncorrected GPS unit with no interference.
+        /// The fifth decimal place is worth up to 1.1 m: it distinguish trees from each other. Accuracy to this level with commercial GPS units can only be achieved with differential correction.            //Write GPS fix data to file, if switch is closed. Gps publishes fix data once a second
+        /// The sixth decimal place is worth up to 0.11 m: you can use this for laying out structures in detail, for designing landscapes, building roads. It should be more than good enough for tracking movements of glaciers and rivers. This can be achieved by taking painstaking measures with GPS, such as differentially corrected GPS.
+        /// The seventh decimal place is worth up to 11 mm: this is good for much surveying and is near the limit of what GPS-based techniques can achieve.
+        /// The eighth decimal place is worth up to 1.1 mm: this is good for charting motions of tectonic plates and movements of volcanoes. Permanent, corrected, constantly-running GPS base stations might be able to achieve this level of accuracy.
+        ///  </summary>
+        ///  <param name="minWaypointDistance"></param>
+        /// <param name="lcd"></param>
         public WaypointQueue(double minWaypointDistance, SparkFunSerial16X2Lcd lcd) // = .0000001
         {
             _minWaypointDistance = minWaypointDistance;
             _lcd = lcd;
+        }
+
+        private DisplayGroup _displayGroup;
+
+        public async Task InitializeAsync()
+        {
+            var displayGroup = new DisplayGroup
+            {
+                DisplayItems = new Dictionary<int, string> { { 1, "WP Q init" }, { 2, "Complete" } },
+                GroupName = "WaypointQueue"
+            };
+
+            _displayGroup = await _lcd.AddDisplayGroup(displayGroup);
+        }
+
+        private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
+        {
+            _logger.Log(LogLevel.Info, $"{line1} / {line2}");
+
+            _displayGroup.DisplayItems = new Dictionary<int, string>
+            {
+                {1, line1 },
+                {2, line2 }
+            };
+
+            await _lcd.UpdateDisplayGroup(_displayGroup, refreshDisplay);
         }
 
         public new async Task Enqueue(Waypoint waypoint)
@@ -66,6 +91,8 @@ namespace Autonoceptor.Host
                     Math.Abs(fixData.Lat - waypoint.Lat) < _minWaypointDistance ||
                     Math.Abs(fixData.Lon - waypoint.Lon) < _minWaypointDistance))
                 {
+                    await WriteToLcd($"({Count}) {waypoint.Lat}", $"{waypoint.Lon}");
+
                     base.Enqueue(waypoint);
                 }
             }
@@ -79,7 +106,7 @@ namespace Autonoceptor.Host
                 {
                     await FileExtensions.SaveStringToFile(_filename, JsonConvert.SerializeObject(this));
 
-                    _logger.Log(LogLevel.Info, $"Saved {Count} waypoints");
+                    await WriteToLcd($"Saved {Count}", "waypoints...", true);
 
                     return true;
                 }
@@ -105,12 +132,12 @@ namespace Autonoceptor.Host
 
                     Clear(); //Remove everything from the queue
 
-                    _logger.Log(LogLevel.Info, $"Loaded {waypoints.Count} waypoints");
-
                     foreach (var wp in waypoints)
                     {
                         base.Enqueue(wp);
                     }
+
+                    await WriteToLcd($"Loaded {Count}", "waypoints...", true);
                 }
                 catch (Exception e)
                 {
@@ -150,6 +177,9 @@ namespace Autonoceptor.Host
                 moveReq.SteeringDirection = directionAndMagnitude.Item1;
                 moveReq.SteeringMagnitude = directionAndMagnitude.Item2;
 
+                moveReq.HeadingToTargetWp = Math.Round(distanceAndHeading.HeadingToWaypoint);
+                moveReq.DistanceToTargetWp = Math.Round(distanceAndHeading.DistanceInFeet);
+
                 if (radiusDistanceInCheck <= CurrentWaypoint.Radius)
                 {
                     Dequeue(); //Remove waypoint from queue, as we have arrived, move on to next one if available
@@ -176,6 +206,9 @@ namespace Autonoceptor.Host
                 moveReq.SteeringDirection = directionAndMagnitude.Item1;
                 moveReq.SteeringMagnitude = directionAndMagnitude.Item2;
 
+                moveReq.HeadingToTargetWp = Math.Round(distanceAndHeading.HeadingToWaypoint);
+                moveReq.DistanceToTargetWp = Math.Round(distanceAndHeading.DistanceInFeet);
+
                 return moveReq;
             }
         }
@@ -188,19 +221,14 @@ namespace Autonoceptor.Host
             return new Tuple<SteeringDirection, double>(steeringDirection, steeringMagnitude);
         }
 
-        public void SetSteerMagnitudeModifier(double mod)
-        {
-            Volatile.Write(ref _steerMagModifier, mod);
-        }
-
-        public static double GetSteeringMagnitude(double currentHeading, double targetHeading, double distanceToWaypoint)
+        private static double GetSteeringMagnitude(double currentHeading, double targetHeading, double distanceToWaypoint)
         {
             var differenceInDegrees = Math.Abs(currentHeading - targetHeading);
 
             return differenceInDegrees;
         }
 
-        public static SteeringDirection GetSteeringDirection(double currentHeading, double targetHeading)
+        private static SteeringDirection GetSteeringDirection(double currentHeading, double targetHeading)
         {
             SteeringDirection steerDirection;
 
@@ -218,17 +246,17 @@ namespace Autonoceptor.Host
             return steerDirection;
         }
 
-
         #region Waypoint Offsets
 
         // I will keep a list of the possible starting waypoints
         public List<Waypoint> StartPoints { get; set; } = new List<Waypoint>();
-        public int TargetStartPoint = 0;
+        public int TargetStartPoint { get; set; } = 0;
 
         public async Task AddStartingPoint(Waypoint newStartPoint)
         {
             StartPoints.Add(newStartPoint);
-            await _lcd.WriteAsync($"New Startpoint {StartPoints.Count}", 1);
+
+            await WriteToLcd($"New Startpoint", $"{StartPoints.Count}", true);
         }
 
         public async Task IterateStartingPoint()
@@ -241,7 +269,8 @@ namespace Autonoceptor.Host
             {
                 TargetStartPoint++;
             }
-            await _lcd.WriteAsync($"Target Startpoint {TargetStartPoint}", 1);
+
+            await WriteToLcd($"Target Startpoint", TargetStartPoint.ToString(), true);
         }
 
         public async Task SetStartingPoint(Waypoint currentfix)
@@ -249,7 +278,7 @@ namespace Autonoceptor.Host
             Waypoint.LatOffset =  StartPoints[TargetStartPoint].Lon - currentfix.Lon;
             Waypoint.LatOffset = StartPoints[TargetStartPoint].Lat - currentfix.Lat;
 
-            await _lcd.WriteAsync($"Set Startpoint {TargetStartPoint}", 1);
+            await WriteToLcd($"Set Startpoint", TargetStartPoint.ToString(), true);
         }
 
         #endregion

@@ -61,14 +61,14 @@ namespace Autonoceptor.Host
 
             _lidarLcdDisposable = Lidar.GetObservable()
                 .ObserveOnDispatcher()
+                .Where(d => d.IsValid)
                 .Sample(TimeSpan.FromMilliseconds(250))
                 .Subscribe(async data =>
                 {
                     _displayGroup.DisplayItems = new Dictionary<int, string>
                     {
                         {1, $"D: {data.Distance}"},
-                        {2, $"R: {data.Reliability}"},
-                        {3, $"S: {data.Strength}"}
+                        {2, $"S: {data.Strength}"},
                     };
 
                     await Lcd.UpdateDisplayGroup(_displayGroup);

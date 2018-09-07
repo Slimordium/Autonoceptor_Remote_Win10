@@ -4,6 +4,10 @@
     {
         private MoveRequestType _moveRequestType;
 
+        public double HeadingToTargetWp { get; set; }
+
+        public double DistanceToTargetWp { get; set; }
+
         public MoveRequest(MoveRequestType requestType)
         {
             _moveRequestType = requestType;

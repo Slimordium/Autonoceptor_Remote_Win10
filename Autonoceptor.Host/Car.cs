@@ -37,11 +37,15 @@ namespace Autonoceptor.Host
             cancellationTokenSource.Token.Register(async () => { await Stop(); });
         }
 
+        private DisplayGroup _displayGroup;
+
         protected new async Task InitializeAsync()
         {
             await base.InitializeAsync();
 
             Waypoints = new WaypointQueue(.0000001, Lcd);
+
+            await Waypoints.InitializeAsync();
 
             var displayGroup = new DisplayGroup
             {
@@ -49,7 +53,7 @@ namespace Autonoceptor.Host
                 GroupName = "Car"
             };
 
-            await Lcd.AddDisplayGroup(displayGroup);
+            _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
 
             _enableMqttDisposable = PwmObservable
                 .Where(channel => channel.ChannelId == _enableMqttChannel)
@@ -73,6 +77,19 @@ namespace Autonoceptor.Host
 
             await Stop();
             await DisableServos();
+        }
+
+        private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
+        {
+            _logger.Log(LogLevel.Info, $"{line1} / {line2}");
+
+            _displayGroup.DisplayItems = new Dictionary<int, string>
+            {
+                {1, line1 },
+                {2, line2 }
+            };
+
+            await Lcd.UpdateDisplayGroup(_displayGroup, refreshDisplay);
         }
 
         protected void ConfigureSensorPublish()
@@ -233,9 +250,7 @@ namespace Autonoceptor.Host
             {
                 Stopped = false;
 
-                await Lcd.WriteAsync("Started");
-
-                _logger.Log(LogLevel.Info, "Started");
+                await WriteToLcd("Started", "", true);
 
                 return;
             }
@@ -248,18 +263,13 @@ namespace Autonoceptor.Host
 
             Stopped = true;
 
-            await Lcd.WriteAsync("Stopped");
-            _logger.Log(LogLevel.Info, "Stopped");
+            await WriteToLcd("Stopped", "", true);
         }
 
         public async Task DisableServos()
         {
             await SetChannelValue(0, MovementChannel);
             await SetChannelValue(0, SteeringChannel);
-
-            await Task.Delay(100);
-
-            _logger.Log(LogLevel.Info, "PWM Off");
         }
     }
 }

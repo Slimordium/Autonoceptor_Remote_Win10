@@ -67,9 +67,9 @@ namespace Autonoceptor.Host
                 {
                     await OnNextXboxDpadData(xboxData);
                 });
-
-            await Lcd.WriteAsync("Initialized Xbox");
         }
+
+        private DisplayGroup _displayGroup;
 
         public new async Task InitializeAsync()
         {
@@ -81,7 +81,7 @@ namespace Autonoceptor.Host
                 GroupName = "Xbox"
             };
 
-            await Lcd.AddDisplayGroup(displayGroup);
+            _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
 
             _xboxConnectedCheckDisposable = Observable
                 .Interval(TimeSpan.FromMilliseconds(1000))
@@ -188,10 +188,10 @@ namespace Autonoceptor.Host
                     await Lcd.PreviousGroup();
                     break;
                 case Direction.Up:
-                    await Lcd.NextLineGroup();
+                    //await Lcd.NextLineGroup();
                     break;
                 case Direction.Down:
-                    await Lcd.PreviousLineGroup();
+                    //await Lcd.PreviousLineGroup();
                     break;
             }
         }
@@ -226,8 +226,6 @@ namespace Autonoceptor.Host
                     Lon = gpsFix.Lon,
                 });
 
-                await Lcd.WriteAsync($"WP {Waypoints.Count} added");
-
                 _logger.Log(LogLevel.Info, $"WP Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}, {gpsFix.Quality}");
 
                 await Waypoints.Save();
@@ -250,7 +248,6 @@ namespace Autonoceptor.Host
                 await Waypoints.Save();
 
                 _logger.Log(LogLevel.Info, "WPs Cleared");
-                await Lcd.WriteAsync($"WPs cleared");
             }
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.BumperLeft))

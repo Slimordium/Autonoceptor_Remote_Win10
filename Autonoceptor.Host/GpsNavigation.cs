@@ -59,12 +59,32 @@ namespace Autonoceptor.Host
                 });
 
             _syncImuDisposable = Observable
-                .Interval(TimeSpan.FromSeconds(4))
+                .Interval(TimeSpan.FromSeconds(4)) //sync every 8-12ft when moving
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
                     await SyncImuYaw();
                 });
+
+            _imuLcdLoggerDisposable = Imu
+                .GetReadObservable()
+                .Sample(TimeSpan.FromMilliseconds(250))
+                .ObserveOnDispatcher()
+                .Subscribe(
+                    async imuData =>
+                    {
+                        await WriteToImuLcd($"Yaw: {imuData.Yaw}", $"UYaw: {imuData.UncorrectedYaw}");
+                    });
+
+            _gpsLcdLoggerDisposable = Gps
+                .GetObservable()
+                .Sample(TimeSpan.FromMilliseconds(500))
+                .ObserveOnDispatcher()
+                .Subscribe(
+                    async gpsFixData =>
+                    {
+                        await WriteToLcd($"{gpsFixData.Lat}, {gpsFixData.SatellitesInView}", $"{gpsFixData.Lon}, {gpsFixData.Quality}");
+                    });
 
             var displayGroup = new DisplayGroup
             {
@@ -72,7 +92,43 @@ namespace Autonoceptor.Host
                 GroupName = "GPSNav"
             };
 
-            await Lcd.AddDisplayGroup(displayGroup);
+            var displayGroupImu = new DisplayGroup
+            {
+                DisplayItems = new Dictionary<int, string> { { 1, "IMU" }, { 2, "" } },
+                GroupName = "Imu"
+            };
+
+            _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
+            _displayGroupImu = await Lcd.AddDisplayGroup(displayGroupImu);
+        }
+
+        private DisplayGroup _displayGroup;
+        private DisplayGroup _displayGroupImu;
+        private IDisposable _imuLcdLoggerDisposable;
+        private IDisposable _gpsLcdLoggerDisposable;
+
+        private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
+        {
+            _logger.Log(LogLevel.Info, $"{line1} / {line2}");
+
+            _displayGroup.DisplayItems = new Dictionary<int, string>
+            {
+                {1, line1 },
+                {2, line2 }
+            };
+
+            await Lcd.UpdateDisplayGroup(_displayGroup, refreshDisplay);
+        }
+
+        private async Task WriteToImuLcd(string line1, string line2, bool refreshDisplay = false)
+        {
+            _displayGroupImu.DisplayItems = new Dictionary<int, string>
+            {
+                {1, line1 },
+                {2, line2 }
+            };
+
+            await Lcd.UpdateDisplayGroup(_displayGroup, refreshDisplay);
         }
 
         public async Task WaypointFollowEnable(bool enabled)
@@ -89,8 +145,8 @@ namespace Autonoceptor.Host
                 if (!Waypoints.Any())
                 {
                     FollowingWaypoints = false;
-                    _logger.Log(LogLevel.Info, "No waypoints found?");
-                    await Lcd.WriteAsync("No WP!");
+
+                    await WriteToLcd("No waypoints", "...found!", true);
                     return;
                 }
 
@@ -108,9 +164,11 @@ namespace Autonoceptor.Host
                             return;
                         }
 
-                        await Odometer.ZeroTripMeter();//0 the trip meter
+                        //await Odometer.ZeroTripMeter();//0 the trip meter - dont think this is needed? We will see.
 
                         await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
+
+                        await WriteToLcd($"Hdg {mr.HeadingToTargetWp}", $"D: {mr.DistanceToTargetWp}ft");
                     });
 
                 _imuHeadingUpdateDisposable = Imu
@@ -147,13 +205,14 @@ namespace Autonoceptor.Host
                 if (moveRequest == null)
                 {
                     _logger.Log(LogLevel.Info, "Either no waypoints, or there was only one and we were already at it.");
+                    await WriteToLcd($"Already at wp?", "", true);
+
                     return;
                 }
 
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
-                await Lcd.WriteAsync("Started Nav to", 1);
-                await Lcd.WriteAsync($"{Waypoints.Count} WPs", 2);
+                await WriteToLcd("Started Nav to", $"{Waypoints.Count} WPs", true);
 
                 if (SpeedControlEnabled)
                 {
@@ -165,8 +224,7 @@ namespace Autonoceptor.Host
 
             DisableCruiseControl();
 
-            await Lcd.WriteAsync("WP Follow finished");
-            _logger.Log(LogLevel.Info, "WP Follow finished");
+            await WriteToLcd("Nav finished to", $"{Waypoints.Count} WPs", true);
 
             await Stop();
 
@@ -194,7 +252,6 @@ namespace Autonoceptor.Host
 
         private async Task SetVehicleHeading(SteeringDirection direction, double magnitude)
         {
-
             var steerValue = CenterPwm * 4;
 
             if (magnitude > 100)

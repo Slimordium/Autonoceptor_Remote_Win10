@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Reactive.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
@@ -42,12 +43,35 @@ namespace Autonoceptor.Service.Hardware
             if (_lcdSerialDevice == null)
                 return;
 
+            _updateObservable = Observable
+                .Interval(TimeSpan.FromMilliseconds(250))
+                .ObserveOnDispatcher()
+                .Subscribe(
+                async _ =>
+                {
+                    _displayGroups.TryGetValue(_currentGroup, out var displayGroup);
+
+                    if (displayGroup == null)
+                        return;
+
+                    if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))
+                    {
+                        await WriteAsync(displayGroup.DisplayItems[1], displayGroup.TopLine);
+                    }
+
+                    if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
+                    {
+                        await WriteAsync(displayGroup.DisplayItems[2], displayGroup.TopLine + 1);
+                    }
+                });
+
             _logger.Log(LogLevel.Info, "Lcd Opened");
 
             _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
         }
 
         private volatile int _currentGroup;
+        private IDisposable _updateObservable;
 
         public async Task NextGroup()
         {
@@ -72,7 +96,14 @@ namespace Autonoceptor.Service.Hardware
 
                     if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine + 1))
                     {
-                        await WriteAsync(displayGroup.DisplayItems[2], displayGroup.TopLine + 1);
+                        if (!string.IsNullOrEmpty(displayGroup.DisplayItems[2]))
+                        {
+                            await WriteToSecondLineAsync(displayGroup.DisplayItems[2]);
+                        }
+                        else
+                        {
+                            await WriteToSecondLineAsync("                ");
+                        }
                     }
                 }
                 catch (Exception e)
@@ -161,6 +192,10 @@ namespace Autonoceptor.Service.Hardware
                     {
                         await WriteToSecondLineAsync(displayGroup.DisplayItems[2]);
                     }
+                    else
+                    {
+                        await WriteToSecondLineAsync("                ");
+                    }
                 }
                 catch (Exception e)
                 {
@@ -189,7 +224,18 @@ namespace Autonoceptor.Service.Hardware
 
                     if (displayGroup.DisplayItems.ContainsKey(2))
                     {
-                        await WriteToSecondLineAsync(displayGroup.DisplayItems[2]);
+                        if (!string.IsNullOrEmpty(displayGroup.DisplayItems[2]))
+                        {
+                            await WriteToSecondLineAsync(displayGroup.DisplayItems[2]);
+                        }
+                        else
+                        {
+                            await WriteToSecondLineAsync("                ");
+                        }
+                    }
+                    else
+                    {
+                        await WriteToSecondLineAsync("                ");
                     }
                 }
                 catch (Exception e)
@@ -228,7 +274,14 @@ namespace Autonoceptor.Service.Hardware
 
                     if (displayGroup.DisplayItems.ContainsKey(2))
                     {
-                        await WriteAsync(displayGroup.DisplayItems[2], 2);
+                        if (!string.IsNullOrEmpty(displayGroup.DisplayItems[2]))
+                        {
+                            await WriteToSecondLineAsync(displayGroup.DisplayItems[2]);
+                        }
+                        else
+                        {
+                            await WriteToSecondLineAsync("                ");
+                        }
                     }
                 }
                 catch (Exception e)
