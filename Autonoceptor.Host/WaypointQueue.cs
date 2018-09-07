@@ -277,8 +277,9 @@ namespace Autonoceptor.Host
 
         public void SetStartingPoint(Waypoint currentfix)
         {
-            Waypoint.LatOffset = currentfix.Lon - StartPoints[TargetStartPoint].Lon;
-            Waypoint.LatOffset = currentfix.Lat - StartPoints[TargetStartPoint].Lat;
+            Waypoint.LatOffset =  StartPoints[TargetStartPoint].Lon - currentfix.Lon;
+            Waypoint.LatOffset = StartPoints[TargetStartPoint].Lat - currentfix.Lat;
+            _lcd.WriteAsync($"Set Startpoint {TargetStartPoint}", 1);
         }
 
         #endregion
