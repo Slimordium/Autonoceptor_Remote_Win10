@@ -197,13 +197,16 @@ namespace Autonoceptor.Host
             {
                 _gettingUnstuck = true;
 
+                // shoot a nerf dart
+                await SetChannelValue(1500 * 4, 15);
+
                 // turn wheels slightly to the left
                 var turnMagnitude = 15;
                 await SetChannelValue(Convert.ToUInt16(turnMagnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4, SteeringChannel);
 
-                // reverse with wheels turned for 300 milliseconds
+                // reverse with wheels turned for 1 second
                 await SetVehicleTorque(MovementDirection.Reverse, 35);
-                await Task.Delay(300);
+                await Task.Delay(1000);
 
                 // now continue trying to get to next waypoint
                 await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
