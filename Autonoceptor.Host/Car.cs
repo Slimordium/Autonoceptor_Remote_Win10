@@ -197,9 +197,9 @@ namespace Autonoceptor.Host
             {
                 _gettingUnstuck = true;
 
-                // turn wheels slightly to the right
+                // turn wheels slightly to the left
                 var turnMagnitude = 15;
-                await SetChannelValue(Convert.ToUInt16(turnMagnitude.Map(0, 100, CenterPwm, RightPwmMax)) * 4, SteeringChannel);
+                await SetChannelValue(Convert.ToUInt16(turnMagnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4, SteeringChannel);
 
                 // reverse with wheels turned for 300 milliseconds
                 await SetVehicleTorque(MovementDirection.Reverse, 35);
