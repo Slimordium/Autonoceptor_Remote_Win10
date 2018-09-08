@@ -202,7 +202,7 @@ namespace Autonoceptor.Host
                 await SetChannelValue(Convert.ToUInt16(turnMagnitude.Map(0, 100, CenterPwm, RightPwmMax)) * 4, SteeringChannel);
 
                 // reverse with wheels turned for 300 milliseconds
-                await SetVehicleTorque(MovementDirection.Reverse, 15);
+                await SetVehicleTorque(MovementDirection.Reverse, 35);
                 await Task.Delay(300);
 
                 // now continue trying to get to next waypoint
