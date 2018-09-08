@@ -157,7 +157,8 @@ namespace Autonoceptor.Host
                     }
                     catch (Exception err)
                     {
-                        _logger.Log(LogLevel.Error, err);
+                        _logger.Log(LogLevel.Error, "Error in EnableLidarSweep");
+                        _logger.Log(LogLevel.Error, err.Message);
                     }
 
                 });
@@ -186,7 +187,8 @@ namespace Autonoceptor.Host
             }
             catch (Exception err)
             {
-                _logger.Log(LogLevel.Error, err);
+                _logger.Log(LogLevel.Error, "Error in Sweep");
+                _logger.Log(LogLevel.Error, err.Message);
                 return await Task.FromResult(new List<LidarData>(null));
             }
         }
@@ -279,7 +281,8 @@ namespace Autonoceptor.Host
             }
             catch (Exception err)
             {
-                _logger.Log(LogLevel.Error, err);
+                _logger.Log(LogLevel.Error, "Error in SweepInternal");
+                _logger.Log(LogLevel.Error, err.Message);
                 return await Task.FromResult(new List<LidarData>(null));
             }
         }
@@ -322,6 +325,7 @@ namespace Autonoceptor.Host
             }
             catch (Exception err)
             {
+                _logger.Log(LogLevel.Error, "Error in SetVehicleHeading");
                 _logger.Log(LogLevel.Error, err); 
             }
 }
@@ -367,6 +371,7 @@ namespace Autonoceptor.Host
             }
             catch (Exception err)
             {
+                _logger.Log(LogLevel.Error, "Error in CheckDangerZone");
                 _logger.Log(LogLevel.Error, err);
                 return new Tuple<SteeringDirection, double>(SteeringDirection.Left, 100);
             }

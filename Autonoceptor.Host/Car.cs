@@ -141,6 +141,8 @@ namespace Autonoceptor.Host
         private double _moveMagnitude;
         private IDisposable _odoLcdDisposable;
 
+        private bool _gettingUnstuck = false;
+
         private async Task UpdateMoveMagnitude()
         {
             var moveMagnitude = Volatile.Read(ref _moveMagnitude);
@@ -152,6 +154,8 @@ namespace Autonoceptor.Host
             var odometer = await Odometer.GetLatest();
 
             var pulseCount = odometer.PulseCount;
+
+            bool isStuck = pulseCount == 0;
 
             //Give it some wiggle room
             if (pulseCount < pulseCountPerUpdate + 30 && pulseCount > pulseCountPerUpdate - 50)
@@ -187,7 +191,25 @@ namespace Autonoceptor.Host
             if (Stopped)
                 return;
 
-            await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
+            if (!isStuck && !_gettingUnstuck)
+                await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
+            else
+            {
+                _gettingUnstuck = true;
+
+                // turn wheels slightly to the left
+                var turnMagnitude = 15;
+                await SetChannelValue(Convert.ToUInt16(turnMagnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4, SteeringChannel);
+
+                // reverse with wheels turned for 300 milliseconds
+                await SetVehicleTorque(MovementDirection.Reverse, 35);
+                await Task.Delay(300);
+
+                // now continue trying to get to next waypoint
+                await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
+
+                _gettingUnstuck = false;
+            }
 
             Volatile.Write(ref _moveMagnitude, moveMagnitude);
         }

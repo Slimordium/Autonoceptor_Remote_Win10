@@ -228,7 +228,7 @@ namespace Autonoceptor.Host
 
                 if (SpeedControlEnabled)
                 {
-                    EnableCruiseControl(560);
+                    EnableCruiseControl(300);
                 }
 
                 return;
