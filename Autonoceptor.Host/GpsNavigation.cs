@@ -222,7 +222,7 @@ namespace Autonoceptor.Host
 
                 await WriteToLcd("Started Nav to", $"{Waypoints.Count} WPs", true);
 
-                await Task.Delay(500); //So it starts rolling before it thinks it crashed...
+                await Task.Delay(700); //So it starts rolling before it thinks it crashed...
 
                 Thread.Sleep(1);
 

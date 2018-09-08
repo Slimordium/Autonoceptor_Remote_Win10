@@ -162,12 +162,11 @@ namespace Autonoceptor.Host
 
         private async Task UpdateMoveMagnitude()
         {
-            Thread.Sleep(1);
             var moveMagnitude = Volatile.Read(ref _moveMagnitude);
             var pulseCountPerUpdate = Volatile.Read(ref _pulseCountPerUpdate);
 
             if (pulseCountPerUpdate < 1) //Probably stopped...
-                return; 
+                return;
 
             var odometer = await Odometer.GetLatest();
 
@@ -188,15 +187,15 @@ namespace Autonoceptor.Host
             {
                 if (moveMagnitude > 50)
                 {
-                    moveMagnitude = moveMagnitude - 1;
+                    moveMagnitude = moveMagnitude - 5;
                 }
                 else if (moveMagnitude > 40)
                 {
-                    moveMagnitude = moveMagnitude - .5;
+                    moveMagnitude = moveMagnitude - 2;
                 }
                 else
                 {
-                    moveMagnitude = moveMagnitude - .4;
+                    moveMagnitude = moveMagnitude - .7;
                 }
             }
 
@@ -209,89 +208,33 @@ namespace Autonoceptor.Host
             if (Stopped)
                 return;
 
-            if (!isStuck) //Moved "GettingUnstuck" check to the calling method
-            {
+            if (!isStuck && !_gettingUnstuck)
                 await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
-            }
             else
             {
-                Thread.Sleep(1);
-                Volatile.Write(ref _gettingUnstuck, true);
-                Thread.Sleep(1);
-                await GetUnstuck(moveMagnitude);
+                _gettingUnstuck = true;
 
-                Volatile.Write(ref _gettingUnstuck, false);
-                Thread.Sleep(1);
+                // shoot a nerf dart
+                //await SetChannelValue(1500 * 4, 15);
+
+                // turn wheels slightly to the left
+                var turnMagnitude = 15;
+                await SetChannelValue(Convert.ToUInt16(turnMagnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4, SteeringChannel);
+
+                // reverse with wheels turned for 1 second
+                await SetVehicleTorque(MovementDirection.Reverse, 35);
+                await Task.Delay(1500);
+
+                // now continue trying to get to next waypoint
+                await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
+
+                _gettingUnstuck = false;
             }
-            Thread.Sleep(1);
+
             Volatile.Write(ref _moveMagnitude, moveMagnitude);
         }
 
-        private async Task GetUnstuck(double moveMagnitude)
-        {
-            // shoot a nerf dart
-            await SetChannelValue(1500 * 4, 15);
-
-            await Task.Delay(250);
-
-            // reverse for 1 second
-            await SetVehicleTorque(MovementDirection.Reverse, 65);
-            await Task.Delay(1500);
-            Thread.Sleep(1);
-
-            await SetVehicleTorque(MovementDirection.Stopped, 0);
-            await Task.Delay(350);
-
-            Thread.Sleep(1);
-
-            await SetChannelValue(0, 15); //Turn off darts...
-            Thread.Sleep(1);
-            await Task.Delay(250);
-
-            var leftLidarData = await Sweep(Host.Sweep.Left);
-            var leftAvailableHeadings = leftLidarData.Where(d => d.Distance > SafeDistance).ToList();
-            Thread.Sleep(1);
-            var rightLidarData = await Sweep(Host.Sweep.Right);
-            var rightAvailableHeadings = rightLidarData.Where(d => d.Distance > SafeDistance).ToList();
-
-            var targetHeading = 0d;
-            var steerValue = 0;
-
-            //If this is true, it is safer to go left
-            if (leftAvailableHeadings.Count > rightAvailableHeadings.Count)
-            {
-                targetHeading = Math.Round(leftAvailableHeadings.Average(h => h.Angle));
-                steerValue = Convert.ToUInt16(targetHeading.Map(0, 40, CenterPwm, LeftPwmMax)) * 4;
-                
-            }
-            //Maybe safer to go right! Yes, that's the ticket! 
-            else
-            {
-                targetHeading = Math.Round(rightAvailableHeadings.Average(h => h.Angle));
-                steerValue = Convert.ToUInt16(targetHeading.Map(0, 40, CenterPwm, RightPwmMax)) * 4;
-            }
-
-            Thread.Sleep(1);
-
-            await Task.Delay(500);
-
-            Thread.Sleep(1);
-
-            //Steer towards area with greatest chance of success
-            await SetChannelValue(steerValue, SteeringChannel);
-            Thread.Sleep(1);
-            await Task.Delay(500);
-            Thread.Sleep(1);
-            // now continue trying to get to next waypoint
-            await SetVehicleTorque(MovementDirection.Forward, 40);
-            Thread.Sleep(1);
-            await Task.Delay(1600);
-            Thread.Sleep(1);
-            //Release control to GPS nav!!!!
-
-
-
-        }
+   
 
         protected async Task SetVehicleTorque(MovementDirection direction, double magnitude)
         {
