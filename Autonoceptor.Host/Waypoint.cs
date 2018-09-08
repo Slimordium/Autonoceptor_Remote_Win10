@@ -8,8 +8,8 @@ namespace Autonoceptor.Host
         public double Lat { get => _lat + LatOffset; set => _lat = value; }
         public double Lon { get => _lon + LonOffset; set => _lon = value; }
 
-        public static double LatOffset { get; set; }
-        public static double LonOffset { get; set; }
+        public static double LatOffset { get; set; } = 0;
+        public static double LonOffset { get; set; } = 0;
 
         private double _lat;
         private double _lon;
