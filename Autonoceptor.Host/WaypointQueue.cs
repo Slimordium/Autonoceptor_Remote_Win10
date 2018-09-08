@@ -105,9 +105,6 @@ namespace Autonoceptor.Host
                     string filename = GetWaypointsFileName();
                     await FileExtensions.SaveStringToFile(filename, JsonConvert.SerializeObject(ToArray()));
 
-                    string startpointsfilename = GetStartPointsFileName();
-                    await FileExtensions.SaveStringToFile(startpointsfilename, JsonConvert.SerializeObject(this.StartPoints));
-
                     await WriteToLcd($"Saved {Count}", "waypoints...", true);
 
                     return true;
@@ -143,18 +140,11 @@ namespace Autonoceptor.Host
                         base.Enqueue(wp);
                     }
 
-                    string startpointsfilename = GetStartPointsFileName();
-                    var startpointsstring = await startpointsfilename.ReadStringFromFile();
-                    StartPoints = JsonConvert.DeserializeObject<List<Waypoint>>(startpointsstring);
-
                     await WriteToLcd($"#Set {_waypointSetNumber}", "Load Successful", true);
                 }
                 catch (Exception e)
                 {
-                    await WriteToLcd($"Set #{_waypointSetNumber}", "Create New Set", true);
-
-                    Clear();
-                    StartPoints = new List<Waypoint>();
+                    await WriteToLcd(e.Message, "Load failed", true);
                 }
             }
         }
@@ -193,12 +183,14 @@ namespace Autonoceptor.Host
                 moveReq.HeadingToTargetWp = Math.Round(distanceAndHeading.HeadingToWaypoint);
                 moveReq.DistanceToTargetWp = Math.Round(distanceAndHeading.DistanceInFeet);
 
-                if (radiusDistanceInCheck <= CurrentWaypoint.Radius || moveReq.SteeringMagnitude > 85)
+                if (radiusDistanceInCheck <= CurrentWaypoint.Radius || moveReq.SteeringMagnitude > 95) //Was 85
                 {
                     Dequeue(); //Remove waypoint from queue, as we have arrived, move on to next one if available
 
                     if (!this.Any())
+                    {
                         return null; //At last waypoint
+                    }
 
                     CurrentWaypoint = Peek();
                 }
@@ -266,49 +258,6 @@ namespace Autonoceptor.Host
 
             return steerDirection;
         }
-
-        #region Waypoint Offsets
-
-        // I will keep a list of the possible starting waypoints
-        public List<Waypoint> StartPoints { get; set; } = new List<Waypoint>();
-        public int TargetStartPoint { get; set; } = 0;
-
-        public async Task AddStartingPoint(Waypoint newStartPoint)
-        {
-            StartPoints.Add(newStartPoint);
-
-            await WriteToLcd($"New Startpoint", $"{StartPoints.Count - 1}", true);
-        }
-
-        public async Task IterateStartingPoint()
-        {
-            if (TargetStartPoint >= StartPoints.Count - 1)
-            {
-                TargetStartPoint = 0;
-            }
-            else
-            {
-                TargetStartPoint++;
-            }
-
-            await WriteToLcd($"Target Startpoint", TargetStartPoint.ToString(), true);
-        }
-
-        public async Task SetStartingPoint(Waypoint currentfix)
-        {
-
-            if (StartPoints.Count == 0)
-            {
-                await WriteToLcd($"No Startpoints Set", "No Offset Applied", true);
-            }
-
-            Waypoint.LonOffset = StartPoints[TargetStartPoint].Lon - currentfix.Lon;
-            Waypoint.LatOffset = StartPoints[TargetStartPoint].Lat - currentfix.Lat;
-
-            await WriteToLcd($"Set Startpoint", TargetStartPoint.ToString(), true);
-        }
-
-        #endregion
 
         #region Saving and Loading
 

@@ -135,25 +135,6 @@ namespace Autonoceptor.Host
                             DisposeLcdWriters();
                             return;
                         }
-
-                        if (channel.DigitalValue)
-                        {
-                            EnableLidarSweep();
-
-                            await Lcd.WriteAsync("LIDAR Sweep", 1);
-                            await Lcd.WriteAsync("Enabled", 2);
-
-                            _logger.Log(LogLevel.Info, "LIDAR Sweep Enabled");
-
-                            return;
-                        }
-
-                        await Lcd.WriteAsync("LIDAR Sweep", 1);
-                        await Lcd.WriteAsync("Disposed", 2);
-
-                        _logger.Log(LogLevel.Info, "LIDAR Sweep Disposed");
-
-                        DisposeLidarSweep();
                     });
 
             _xboxConnectedCheckDisposable = Observable
@@ -261,21 +242,50 @@ namespace Autonoceptor.Host
                     await Lcd.PreviousGroup();
                     break;
                 case Direction.Up:
-                    await Waypoints.IncreaseWaypointSetNumber();
+
+                    //Because it is volatile 
+                    var sdu = SafeDistance;
+                    sdu = sdu + 2;
+
+                    if (sdu > 200)
+                        sdu = 200;
+
+                    SafeDistance = sdu;
+
+                    await Lcd.WriteAsync($"Safe distance", 1);
+                    await Lcd.WriteAsync($"    {sdu}", 2);
+
                     break;
                 case Direction.Down:
-                    await Waypoints.DecreaseWaypointSetNumber();
+
+                    //Because it is volatile 
+                    var sdd = SafeDistance;
+                    sdd = sdd - 2;
+
+                    if (sdd < 20)
+                        sdd = 20;
+
+                    SafeDistance = sdd;
+
+                    await Lcd.WriteAsync($"Safe distance", 1);
+                    await Lcd.WriteAsync($"    {sdd}", 2);
+
                     break;
             }
         }
 
         private async Task OnNextXboxButtonData(XboxData xboxData)
         {
+            if (xboxData.FunctionButtons.Contains(FunctionButton.Back))
+            {
+                await Waypoints.Save();
+
+                return;
+            }
+
             if (xboxData.FunctionButtons.Contains(FunctionButton.X))
             {
                 await Stop();
-
-                await WaypointFollowEnable(false);
 
                 return;
             }
@@ -283,6 +293,23 @@ namespace Autonoceptor.Host
             if (xboxData.FunctionButtons.Contains(FunctionButton.A))
             {
                 await Stop(true);
+
+                return;
+            }
+
+            if (xboxData.FunctionButtons.Contains(FunctionButton.Start))
+            {
+                if (FollowingWaypoints)
+                {
+                    _logger.Log(LogLevel.Info, $"Stopping WP follow {Waypoints.Count} WPs");
+                    await WaypointFollowEnable(false);
+                }
+                else
+                {
+                    _logger.Log(LogLevel.Info, $"Starting WP follow {Waypoints.Count} WPs");
+                    await WaypointFollowEnable(true);
+                }
+
                 return;
             }
 
@@ -301,14 +328,6 @@ namespace Autonoceptor.Host
 
                 _logger.Log(LogLevel.Info, $"WP Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}, {gpsFix.Quality}");
 
-                await Waypoints.Save();
-                return;
-            }
-
-            if (xboxData.FunctionButtons.Contains(FunctionButton.Start))
-            {
-                _logger.Log(LogLevel.Info, $"Starting WP follow {Waypoints.Count} WPs");
-                await WaypointFollowEnable(true);
                 return;
             }
 
@@ -322,35 +341,6 @@ namespace Autonoceptor.Host
 
                 _logger.Log(LogLevel.Info, "WPs Cleared");
             }
-
-            if (xboxData.FunctionButtons.Contains(FunctionButton.BumperLeft))
-            {
-                var gpsFix = await Gps.GetLatest();
-
-                await Waypoints.AddStartingPoint(new Waypoint
-                {
-                    Lat = gpsFix.Lat,
-                    Lon = gpsFix.Lon,
-                });
-            }
-
-            if (xboxData.FunctionButtons.Contains(FunctionButton.BumperRight))
-            {
-
-                await Waypoints.IterateStartingPoint();
-            }
-
-            if (xboxData.FunctionButtons.Contains(FunctionButton.Back))
-            {
-                var gpsFix = await Gps.GetLatest();
-
-                await Waypoints.SetStartingPoint(new Waypoint
-                {
-                    Lat = gpsFix.Lat,
-                    Lon = gpsFix.Lon,
-                });
-            }
-
         }
     }
 }

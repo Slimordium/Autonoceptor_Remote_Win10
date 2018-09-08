@@ -5,22 +5,22 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Autonoceptor.Service.Hardware;
-using Autonoceptor.Shared.Utilities;
-using Nito.AsyncEx;
 using NLog;
 
 namespace Autonoceptor.Host
 {
-    public class GpsNavigation : LidarNavOverride
+    public class GpsNavigation : Car
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         private IDisposable _syncImuDisposable;
-        
         private IDisposable _imuHeadingUpdateDisposable;
         private IDisposable _gpsDisposable;
+        private IDisposable _imuLcdLoggerDisposable;
+        private IDisposable _gpsLcdLoggerDisposable;
 
-
+        private DisplayGroup _displayGroup;
+        private DisplayGroup _displayGroupImu;
 
         public bool SpeedControlEnabled { get; set; } = true;
 
@@ -33,9 +33,6 @@ namespace Autonoceptor.Host
                 await WaypointFollowEnable(false); 
 
             });
-            
-            //Somewhere in my driveway...
-            //Waypoints.Enqueue(new Waypoint{Lat = 40.147721, Lon = -105.110756 });//40.147721, -105.110756
         }
 
         private bool _followingWaypoints;
@@ -110,11 +107,6 @@ namespace Autonoceptor.Host
                 });
         }
 
-        private DisplayGroup _displayGroup;
-        private DisplayGroup _displayGroupImu;
-        private IDisposable _imuLcdLoggerDisposable;
-        private IDisposable _gpsLcdLoggerDisposable;
-
         private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
         {
             if (_displayGroup == null)
@@ -158,7 +150,7 @@ namespace Autonoceptor.Host
                 {
                     FollowingWaypoints = false;
 
-                    await WriteToLcd("No waypoints", "...found!", true);
+                    await WriteToLcd("No waypoints...", "...found!", true);
                     return;
                 }
 
@@ -224,11 +216,13 @@ namespace Autonoceptor.Host
 
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
+                await SetVehicleTorque(MovementDirection.Forward, 50);
+
                 await WriteToLcd("Started Nav to", $"{Waypoints.Count} WPs", true);
 
                 if (SpeedControlEnabled)
                 {
-                    EnableCruiseControl(300);
+                    EnableCruiseControl(300); //UGH, Justin ... I really want to increase this maybe just a smidge? :)
                 }
 
                 return;

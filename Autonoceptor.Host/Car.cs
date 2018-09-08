@@ -5,6 +5,7 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Autonoceptor.Service.Hardware;
+using Autonoceptor.Shared;
 using Autonoceptor.Shared.Utilities;
 using Newtonsoft.Json;
 using NLog;
@@ -16,9 +17,25 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-
         protected const ushort _extraInputChannel = 14;
 
+        private const ushort _lidarServoChannel = 17;
+
+        private const int _rightLidarPwm = 1056;
+        private const int _rightMidLidarPwm = 1371;
+        private const int _centerLidarPwm = 1472;
+        private const int _leftMidLidarPwm = 1572;
+        private const int _leftLidarPwm = 1880;
+
+        private const int _nerfDartChannel = 15;
+
+        private int _safeDistance = 50;
+
+        public int SafeDistance
+        {
+            get => Volatile.Read(ref _safeDistance);
+            set => Volatile.Write(ref _safeDistance, value);
+        } 
 
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
         private IDisposable _speedControllerDisposable;
@@ -191,30 +208,64 @@ namespace Autonoceptor.Host
             if (Stopped)
                 return;
 
-            if (!isStuck && !_gettingUnstuck)
+            if (!isStuck) //Moved "GettingUnstuck" check to the calling method
+            {
                 await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
+            }
             else
             {
-                _gettingUnstuck = true;
+                Volatile.Write(ref _gettingUnstuck, true);
 
-                // shoot a nerf dart
-                await SetChannelValue(1500 * 4, 15);
-
-                // turn wheels slightly to the left
-                var turnMagnitude = 15;
-                await SetChannelValue(Convert.ToUInt16(turnMagnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4, SteeringChannel);
-
-                // reverse with wheels turned for 1 second
-                await SetVehicleTorque(MovementDirection.Reverse, 35);
-                await Task.Delay(1000);
-
-                // now continue trying to get to next waypoint
-                await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
-
-                _gettingUnstuck = false;
+                await GetUnstuck(moveMagnitude);
             }
 
             Volatile.Write(ref _moveMagnitude, moveMagnitude);
+        }
+
+        private async Task GetUnstuck(double moveMagnitude)
+        {
+            // shoot a nerf dart
+            await SetChannelValue(1500 * 4, 15);
+
+            // reverse for 1 second
+            await SetVehicleTorque(MovementDirection.Reverse, 55);
+            await Task.Delay(1000);
+            await SetVehicleTorque(MovementDirection.Stopped, 0);
+
+            var leftLidarData = await Sweep(Host.Sweep.Left);
+            var leftAvailableHeadings = leftLidarData.Where(d => d.Distance > SafeDistance).ToList();
+
+            var rightLidarData = await Sweep(Host.Sweep.Right);
+            var rightAvailableHeadings = rightLidarData.Where(d => d.Distance > SafeDistance).ToList();
+
+            var targetHeading = 0d;
+            var steerValue = 0;
+
+            //If this is true, it is safer to go left
+            if (leftAvailableHeadings.Count > rightAvailableHeadings.Count)
+            {
+                targetHeading = Math.Round(leftAvailableHeadings.Average(h => h.Angle));
+                steerValue = Convert.ToUInt16(targetHeading.Map(0, 100, CenterPwm, LeftPwmMax)) * 4;
+                
+            }
+            //Maybe safer to go right! Yes, that's the ticket! 
+            else
+            {
+                targetHeading = Math.Round(rightAvailableHeadings.Average(h => h.Angle));
+                steerValue = Convert.ToUInt16(targetHeading.Map(0, 100, CenterPwm, RightPwmMax)) * 4;
+            }
+
+            //Steer towards area with greatest chance of success
+            await SetChannelValue(steerValue, SteeringChannel);
+
+            // now continue trying to get to next waypoint
+            await SetVehicleTorque(MovementDirection.Forward, 55);
+
+            await Task.Delay(1000);
+
+            //Release control to GPS nav!!!!
+
+            Volatile.Write(ref _gettingUnstuck, false);
         }
 
         protected async Task SetVehicleTorque(MovementDirection direction, double magnitude)
@@ -250,6 +301,9 @@ namespace Autonoceptor.Host
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
+                    if (Volatile.Read(ref _gettingUnstuck))
+                        return;
+
                     await UpdateMoveMagnitude();
                 });
         }
@@ -295,6 +349,138 @@ namespace Autonoceptor.Host
         {
             await SetChannelValue(0, MovementChannel);
             await SetChannelValue(0, SteeringChannel);
+        }
+
+        private async Task<List<LidarData>> Sweep(Sweep sweep)
+        {
+            try
+            {
+                var data = new List<LidarData>();
+
+                switch (sweep)
+                {
+                    case Host.Sweep.Left:
+                        {
+                            for (var pwm = _centerLidarPwm; pwm < _leftLidarPwm; pwm += 10)
+                            {
+                                await SetChannelValue(pwm * 4, _lidarServoChannel);
+
+                                var lidarData = await Lidar.GetLatest();
+
+                                if (!lidarData.IsValid)
+                                    continue;
+
+                                lidarData.Angle = Math.Round(pwm.Map(_leftMidLidarPwm, _leftLidarPwm, 0, -45));
+                                data.Add(lidarData);
+                            }
+
+                            break;
+                        }
+                    case Host.Sweep.Right:
+                        {
+                            for (var pwm = _centerLidarPwm; pwm > _rightLidarPwm; pwm -= 10)
+                            {
+                                await SetChannelValue(pwm * 4, _lidarServoChannel);
+
+                                var lidarData = await Lidar.GetLatest();
+
+                                if (!lidarData.IsValid)
+                                    continue;
+
+                                lidarData.Angle = Math.Round(pwm.Map(_rightMidLidarPwm, _rightLidarPwm, 0, 45)); ;
+                                data.Add(lidarData);
+                            }
+
+                            break;
+                        }
+                    case Host.Sweep.Center:
+                        {
+                            // sweep left 15 degrees
+                            for (var pwm = _centerLidarPwm; pwm < _leftMidLidarPwm; pwm += 10)
+                            {
+                                await SetChannelValue(pwm * 4, _lidarServoChannel);
+
+                                var lidarData = await Lidar.GetLatest();
+
+                                if (!lidarData.IsValid)
+                                    continue;
+
+                                lidarData.Angle = Math.Round(pwm.Map(_centerLidarPwm, _leftMidLidarPwm, 0, -15));
+                                data.Add(lidarData);
+                            }
+
+                            await Task.Delay(250);
+
+                            // sweep right 30 degrees
+                            for (var pwm = _leftMidLidarPwm; pwm > _rightMidLidarPwm; pwm -= 10)
+                            {
+                                await SetChannelValue(pwm * 4, _lidarServoChannel);
+
+                                var lidarData = await Lidar.GetLatest();
+
+                                if (!lidarData.IsValid)
+                                    continue;
+
+                                lidarData.Angle = Math.Round(pwm.Map(_leftMidLidarPwm, _rightMidLidarPwm, -15, 15));
+                                data.Add(lidarData);
+                            }
+
+                            break;
+                        }
+                }
+
+                await Task.Delay(500);
+
+                await SetChannelValue(_centerLidarPwm * 4, _lidarServoChannel);
+
+                await Task.Delay(500);
+
+                return await Task.FromResult(data);
+            }
+            catch (Exception err)
+            {
+                _logger.Log(LogLevel.Error, "Error in SweepInternal");
+                _logger.Log(LogLevel.Error, err.Message);
+                return await Task.FromResult(new List<LidarData>(null));
+            }
+        }
+
+        protected async Task SetVehicleHeading(SteeringDirection direction, double magnitude)
+        {
+            try
+            {
+                if (Stopped)
+                {
+                    await SetChannelValue(StoppedPwm * 4, MovementChannel);
+                    await SetChannelValue(0, SteeringChannel);
+                    return;
+                }
+
+                if (Volatile.Read(ref _gettingUnstuck)) //We are letting the "GetUnstuck" method handle ... getting ... unstuck!
+                    return;
+
+                var steerValue = CenterPwm * 4;
+
+                if (magnitude > 100)
+                    magnitude = 100;
+
+                switch (direction)
+                {
+                    case SteeringDirection.Left:
+                        steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4;
+                        break;
+                    case SteeringDirection.Right:
+                        steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, RightPwmMax)) * 4;
+                        break;
+                }
+
+                await SetChannelValue(steerValue, SteeringChannel);
+            }
+            catch (Exception err)
+            {
+                _logger.Log(LogLevel.Error, "Error in SetVehicleHeading");
+                _logger.Log(LogLevel.Error, err);
+            }
         }
     }
 }
