@@ -276,12 +276,12 @@ namespace Autonoceptor.Host
 
         private async Task OnNextXboxButtonData(XboxData xboxData)
         {
-            if (xboxData.FunctionButtons.Contains(FunctionButton.Back))
-            {
-                await Waypoints.Save();
+            //if (xboxData.FunctionButtons.Contains(FunctionButton.Back))
+            //{
+            //    await Waypoints.Save();
 
-                return;
-            }
+            //    return;
+            //}
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.X))
             {
@@ -331,16 +331,16 @@ namespace Autonoceptor.Host
                 return;
             }
 
-            if (xboxData.FunctionButtons.Contains(FunctionButton.Y))
-            {
-                Waypoints.Clear();
+            //if (xboxData.FunctionButtons.Contains(FunctionButton.Y))
+            //{
+            //    Waypoints.Clear();
 
-                Waypoints.CurrentWaypoint = null;
+            //    Waypoints.CurrentWaypoint = null;
 
-                await Waypoints.Save();
+            //    await Waypoints.Save();
 
-                _logger.Log(LogLevel.Info, "WPs Cleared");
-            }
+            //    _logger.Log(LogLevel.Info, "WPs Cleared");
+            //}
         }
     }
 }

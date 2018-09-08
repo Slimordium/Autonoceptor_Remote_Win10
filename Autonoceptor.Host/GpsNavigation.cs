@@ -228,7 +228,7 @@ namespace Autonoceptor.Host
 
                 if (SpeedControlEnabled)
                 {
-                    EnableCruiseControl(300); //UGH, Justin ... I really want to increase this maybe just a smidge? :)
+                    EnableCruiseControl(380); //UGH, Justin ... I really want to increase this maybe just a smidge? :)
                 }
 
                 return;
