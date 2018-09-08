@@ -195,11 +195,19 @@ namespace Autonoceptor.Host
                 await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
             else
             {
-                // may need to turn and move forward a bit before returning to waypoint logic
                 _gettingUnstuck = true;
+
+                // turn wheels slightly to the right
+                var turnMagnitude = 15;
+                await SetChannelValue(Convert.ToUInt16(turnMagnitude.Map(0, 100, CenterPwm, RightPwmMax)) * 4, SteeringChannel);
+
+                // reverse with wheels turned for 300 milliseconds
                 await SetVehicleTorque(MovementDirection.Reverse, 15);
                 await Task.Delay(300);
+
+                // now continue trying to get to next waypoint
                 await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
+
                 _gettingUnstuck = false;
             }
 
