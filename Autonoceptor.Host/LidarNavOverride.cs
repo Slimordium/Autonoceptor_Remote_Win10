@@ -34,7 +34,7 @@ namespace Autonoceptor.Host
         private int _maxStrength;
         private int _minStrength;
 
-        private int _dangerDistance = 160;
+        private int _dangerDistance = 400;
         //-------------------------------------------------------
 
         private readonly AsyncLock _asyncLock = new AsyncLock();
@@ -155,12 +155,11 @@ namespace Autonoceptor.Host
 
                         }
                     }
-                    catch (Exception e)
+                    catch (Exception err)
                     {
-                        _logger.Log(LogLevel.Info, e.Message);
+                        _logger.Log(LogLevel.Error, err);
                     }
-                  
-                    
+
                 });
         }
 
@@ -174,181 +173,203 @@ namespace Autonoceptor.Host
 
         public async Task<List<LidarData>> Sweep(Sweep sweep)
         {
-            using (await _asyncLock.LockAsync())
+            try
             {
-                var data = new List<LidarData>();
-
-                try
+                using (await _asyncLock.LockAsync())
                 {
-                    data = await SweepInternal(sweep);
+                    var data = await SweepInternal(sweep);
 
                     await SetChannelValue(0, _lidarServoChannel); //Turn servo off
-                }
-                catch (Exception e)
-                {
-                    _logger.Log(LogLevel.Info, e.Message);
-                }
 
-                return await Task.FromResult(data);
+                    return await Task.FromResult(data);
+                }
+            }
+            catch (Exception err)
+            {
+                _logger.Log(LogLevel.Error, err);
+                return await Task.FromResult(new List<LidarData>(null));
             }
         }
 
         private async Task<List<LidarData>> SweepInternal(Sweep sweep)
         {
-            var data = new List<LidarData>();
-            
-            switch (sweep)
+            try
             {
-                case Host.Sweep.Left:
+                var data = new List<LidarData>();
+            
+                switch (sweep)
                 {
-                    for (var pwm = _leftMidPwm; pwm < _leftPwm; pwm += 10)
+                    case Host.Sweep.Left:
                     {
-                        await SetChannelValue(pwm * 4, _lidarServoChannel);
+                        for (var pwm = _leftMidPwm; pwm < _leftPwm; pwm += 10)
+                        {
+                            await SetChannelValue(pwm * 4, _lidarServoChannel);
 
-                        var lidarData = await Lidar.GetLatest();
+                            var lidarData = await Lidar.GetLatest();
 
-                        if (!lidarData.IsValid)
-                            continue;
+                            if (!lidarData.IsValid)
+                                continue;
 
-                        lidarData.Angle = Math.Round(pwm.Map(_leftMidPwm, _leftPwm, 0, -45));
-                        data.Add(lidarData);
+                            lidarData.Angle = Math.Round(pwm.Map(_leftMidPwm, _leftPwm, 0, -45));
+                            data.Add(lidarData);
+                        }
+
+                        break;
                     }
+                    case Host.Sweep.Right:
+                    {
+                        for (var pwm = _rightMidPwm; pwm > _rightPwm; pwm -= 10)
+                        {
+                            await SetChannelValue(pwm * 4, _lidarServoChannel);
 
-                    break;
+                            var lidarData = await Lidar.GetLatest();
+
+                            if (!lidarData.IsValid)
+                                continue;
+
+                            lidarData.Angle = Math.Round(pwm.Map(_rightMidPwm, _rightPwm, 0, 45)); ;
+                            data.Add(lidarData);
+                        }
+
+                        break;
+                    }
+                    case Host.Sweep.Center:
+                    {
+                        // sweep left 15 degrees
+                        for (var pwm = _centerPwm; pwm < _leftMidPwm; pwm += 10)
+                        {
+                            await SetChannelValue(pwm * 4, _lidarServoChannel);
+
+                            var lidarData = await Lidar.GetLatest();
+
+                            if (!lidarData.IsValid)
+                                continue;
+
+                            lidarData.Angle = Math.Round(pwm.Map(_centerPwm, _leftMidPwm, 0, -15));
+                            data.Add(lidarData);
+                        }
+
+                        await Task.Delay(250);
+
+                        // sweep right 30 degrees
+                        for (var pwm = _leftMidPwm; pwm > _rightMidPwm; pwm -= 10)
+                        {
+                            await SetChannelValue(pwm * 4, _lidarServoChannel);
+
+                            var lidarData = await Lidar.GetLatest();
+
+                            if (!lidarData.IsValid)
+                                continue;
+
+                            lidarData.Angle = Math.Round(pwm.Map(_leftMidPwm, _rightMidPwm, -15, 15));
+                            data.Add(lidarData);
+                        }
+
+                        break;
+                    }
                 }
-                case Host.Sweep.Right:
-                {
-                    for (var pwm = _rightMidPwm; pwm > _rightPwm; pwm -= 10)
-                    {
-                        await SetChannelValue(pwm * 4, _lidarServoChannel);
 
-                        var lidarData = await Lidar.GetLatest();
+                await Task.Delay(500);
 
-                        if (!lidarData.IsValid)
-                            continue;
+                await SetChannelValue(_centerPwm * 4, _lidarServoChannel);
 
-                        lidarData.Angle = Math.Round(pwm.Map(_rightMidPwm, _rightPwm, 0, 45)); ;
-                        data.Add(lidarData);
-                    }
+                await Task.Delay(500);
 
-                    break;
-                }
-                case Host.Sweep.Center:
-                {
-                    // sweep left 15 degrees
-                    for (var pwm = _centerPwm; pwm < _leftMidPwm; pwm += 10)
-                    {
-                        await SetChannelValue(pwm * 4, _lidarServoChannel);
-
-                        var lidarData = await Lidar.GetLatest();
-
-                        if (!lidarData.IsValid)
-                            continue;
-
-                        lidarData.Angle = Math.Round(pwm.Map(_centerPwm, _leftMidPwm, 0, -15));
-                        data.Add(lidarData);
-                    }
-
-                    await Task.Delay(250);
-
-                    // sweep right 30 degrees
-                    for (var pwm = _leftMidPwm; pwm > _rightMidPwm; pwm -= 10)
-                    {
-                        await SetChannelValue(pwm * 4, _lidarServoChannel);
-
-                        var lidarData = await Lidar.GetLatest();
-
-                        if (!lidarData.IsValid)
-                            continue;
-
-                        lidarData.Angle = Math.Round(pwm.Map(_leftMidPwm, _rightMidPwm, -15, 15));
-                        data.Add(lidarData);
-                    }
-
-                    break;
-                }
+                return await Task.FromResult(data);
             }
-
-            await Task.Delay(500);
-
-            await SetChannelValue(_centerPwm * 4, _lidarServoChannel);
-
-            await Task.Delay(500);
-
-            return await Task.FromResult(data);
+            catch (Exception err)
+            {
+                _logger.Log(LogLevel.Error, err);
+                return await Task.FromResult(new List<LidarData>(null));
+            }
         }
 
         protected async Task SetVehicleHeading(SteeringDirection direction, double magnitude)
         {
-            if (Stopped)
+            try
             {
-                await SetChannelValue(StoppedPwm * 4, MovementChannel);
-                await SetChannelValue(0, SteeringChannel);
-                return;
+                if (Stopped)
+                {
+                    await SetChannelValue(StoppedPwm * 4, MovementChannel);
+                    await SetChannelValue(0, SteeringChannel);
+                    return;
+                }
+
+                var steerValue = CenterPwm * 4;
+
+                if (magnitude > 100)
+                    magnitude = 100;
+
+                //var correction = CheckDangerZone(direction, magnitude);
+
+                //if (correction.Item1 != direction)
+                //{
+                //    direction = correction.Item1;
+                //    magnitude = correction.Item2;
+                //}
+
+                switch (direction)
+                {
+                    case SteeringDirection.Left:
+                        steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4;
+                        break;
+                    case SteeringDirection.Right:
+                        steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, RightPwmMax)) * 4;
+                        break;
+                }
+
+                await SetChannelValue(steerValue, SteeringChannel);
             }
-
-            var steerValue = CenterPwm * 4;
-
-            if (magnitude > 100)
-                magnitude = 100;
-
-            //var correction = CheckDangerZone(direction, magnitude);
-
-            //if (correction.Item1 != direction)
-            //{
-            //    direction = correction.Item1;
-            //    magnitude = correction.Item2;
-            //}
-
-            switch (direction)
+            catch (Exception err)
             {
-                case SteeringDirection.Left:
-                    steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4;
-                    break;
-                case SteeringDirection.Right:
-                    steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, RightPwmMax)) * 4;
-                    break;
+                _logger.Log(LogLevel.Error, err); 
             }
-
-            await SetChannelValue(steerValue, SteeringChannel);
-        }
+}
 
         protected Tuple<SteeringDirection, double> CheckDangerZone(SteeringDirection direction, double magnitude)
         {
-            Tuple<SteeringDirection, double> newDirectionMagnitude = null;
-
-            //TODO: Finish this, just logging for now
-            //This is where you would override to steer us out of danger
-            if (_isDangerZone.Any(z => z.Value))
+            try
             {
-                foreach (var zone in _isDangerZone)
+                Tuple<SteeringDirection, double> newDirectionMagnitude = null;
+
+                //TODO: Finish this, just logging for now
+                //This is where you would override to steer us out of danger
+                if (_isDangerZone.Any(z => z.Value))
                 {
-                    _logger.Log(LogLevel.Info, $"Zone {zone.Key} danger: {zone.Value}");
+                    foreach (var zone in _isDangerZone)
+                    {
+                        _logger.Log(LogLevel.Info, $"Zone {zone.Key} danger: {zone.Value}");
+                    }
+
+                    var safeZone = _isDangerZone.FirstOrDefault(zone => !zone.Value);
+
+                    switch (safeZone.Key)
+                    {
+                        case Zone.Center:
+                            newDirectionMagnitude = new Tuple<SteeringDirection, double>(SteeringDirection.Center, 100);
+
+                            break;
+                        case Zone.Left:
+                            newDirectionMagnitude = new Tuple<SteeringDirection, double>(SteeringDirection.Left, 100);
+
+                            break;
+                        case Zone.Right:
+                            newDirectionMagnitude = new Tuple<SteeringDirection, double>(SteeringDirection.Right, 100);
+
+                            break;
+                    }
+
+                    //await base.SetChannelValue(value, channel); //steer towards safe zone
+                    //await base.SetChannelValue(value, MovementChannel); //Maybe slow down as well?
                 }
 
-                var safeZone = _isDangerZone.FirstOrDefault(zone => !zone.Value);
-
-                switch (safeZone.Key)
-                {
-                    case Zone.Center:
-                        newDirectionMagnitude = new Tuple<SteeringDirection, double>(SteeringDirection.Center, 100);
-
-                        break;
-                    case Zone.Left:
-                        newDirectionMagnitude = new Tuple<SteeringDirection, double>(SteeringDirection.Left, 100);
-
-                        break;
-                    case Zone.Right:
-                        newDirectionMagnitude = new Tuple<SteeringDirection, double>(SteeringDirection.Right, 100);
-
-                        break;
-                }
-
-                //await base.SetChannelValue(value, channel); //steer towards safe zone
-                //await base.SetChannelValue(value, MovementChannel); //Maybe slow down as well?
+                return newDirectionMagnitude;
             }
-
-            return newDirectionMagnitude;
+            catch (Exception err)
+            {
+                _logger.Log(LogLevel.Error, err);
+                return new Tuple<SteeringDirection, double>(SteeringDirection.Left, 100);
+            }
         }
 
         
