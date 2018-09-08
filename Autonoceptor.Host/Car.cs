@@ -197,6 +197,9 @@ namespace Autonoceptor.Host
             {
                 _gettingUnstuck = true;
 
+                // shoot a nerf dart
+                await SetChannelValue(1500 * 4, 15);
+
                 // turn wheels slightly to the left
                 var turnMagnitude = 15;
                 await SetChannelValue(Convert.ToUInt16(turnMagnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4, SteeringChannel);
