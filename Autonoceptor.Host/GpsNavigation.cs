@@ -216,9 +216,15 @@ namespace Autonoceptor.Host
 
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
-                await SetVehicleTorque(MovementDirection.Forward, 50);
+                await SetVehicleTorque(MovementDirection.Forward, 70);
+
+                Thread.Sleep(1);
 
                 await WriteToLcd("Started Nav to", $"{Waypoints.Count} WPs", true);
+
+                await Task.Delay(500); //So it starts rolling before it thinks it crashed...
+
+                Thread.Sleep(1);
 
                 if (SpeedControlEnabled)
                 {

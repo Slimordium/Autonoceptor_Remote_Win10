@@ -26,7 +26,7 @@ namespace Autonoceptor.Host
         /// However, there is a delay between getting a GPS updated, and when we turn, which means it adds about 1-1.5 of decision making
         /// time per update, or in short, you will need to be 12+ feet away. 
         /// </summary>
-        public int Radius { get; set; } = 65;
+        public int Radius { get; set; } = 30;
 
         public override string ToString()
         {

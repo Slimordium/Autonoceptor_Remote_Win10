@@ -14,7 +14,7 @@ namespace Autonoceptor.Host
         private readonly ILogger _logger = LogManager.GetLogger("Autonoceptor");
 
         protected const int RightPwmMax = 1800;
-        protected const int CenterPwm = 1490; //was 1408
+        protected const int CenterPwm = 1465; //was 1408
         protected const int LeftPwmMax = 1015;
 
         protected const int ReversePwmMax = 1072;
