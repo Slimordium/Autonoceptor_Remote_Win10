@@ -193,7 +193,7 @@ namespace Autonoceptor.Host
                 moveReq.HeadingToTargetWp = Math.Round(distanceAndHeading.HeadingToWaypoint);
                 moveReq.DistanceToTargetWp = Math.Round(distanceAndHeading.DistanceInFeet);
 
-                if (radiusDistanceInCheck <= CurrentWaypoint.Radius)
+                if (radiusDistanceInCheck <= CurrentWaypoint.Radius || moveReq.SteeringMagnitude > 70)
                 {
                     Dequeue(); //Remove waypoint from queue, as we have arrived, move on to next one if available
 
