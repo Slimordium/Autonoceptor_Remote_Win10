@@ -34,7 +34,7 @@ namespace Autonoceptor.Host
         private int _maxStrength;
         private int _minStrength;
 
-        private int _dangerDistance = 400;
+        private int _dangerDistance = 140;
         //-------------------------------------------------------
 
         private readonly AsyncLock _asyncLock = new AsyncLock();
