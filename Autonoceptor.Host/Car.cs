@@ -218,12 +218,12 @@ namespace Autonoceptor.Host
                 //await SetChannelValue(1500 * 4, 15);
 
                 // turn wheels slightly to the left
-                var turnMagnitude = 15;
+                var turnMagnitude = 35;
                 await SetChannelValue(Convert.ToUInt16(turnMagnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4, SteeringChannel);
 
-                // reverse with wheels turned for 1 second
+                // reverse
                 await SetVehicleTorque(MovementDirection.Reverse, 35);
-                await Task.Delay(1500);
+                await Task.Delay(1800);
 
                 // now continue trying to get to next waypoint
                 await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
