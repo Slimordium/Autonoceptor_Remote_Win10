@@ -24,6 +24,8 @@ namespace Autonoceptor.Host
 
         public bool SpeedControlEnabled { get; set; } = true;
 
+        private CancellationTokenSource _cruiseControlCancellationTokenSource;
+
         protected GpsNavigation(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp)
             : base(cancellationTokenSource, brokerHostnameOrIp)
         {
@@ -144,6 +146,14 @@ namespace Autonoceptor.Host
 
             if (enabled)
             {
+                if (_cruiseControlCancellationTokenSource != null && !_cruiseControlCancellationTokenSource.IsCancellationRequested)
+                {
+                    _cruiseControlCancellationTokenSource.Cancel();
+                    _cruiseControlCancellationTokenSource = null;
+                }
+
+                _cruiseControlCancellationTokenSource = new CancellationTokenSource();
+
                 await Waypoints.Load(); //Load waypoint file from disk
 
                 if (!Waypoints.Any())
@@ -216,25 +226,17 @@ namespace Autonoceptor.Host
 
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
-                await SetVehicleTorque(MovementDirection.Forward, 70);
-
-                Thread.Sleep(1);
-
                 await WriteToLcd("Started Nav to", $"{Waypoints.Count} WPs", true);
-
-                await Task.Delay(700); //So it starts rolling before it thinks it crashed...
-
-                Thread.Sleep(1);
 
                 if (SpeedControlEnabled)
                 {
-                    EnableCruiseControl(380); //UGH, Justin ... I really want to increase this maybe just a smidge? :)
+                    await SetCruiseControl(480, _cruiseControlCancellationTokenSource.Token); //UGH, Justin ... I really want to increase this maybe just a smidge? :)
                 }
 
                 return;
             }
 
-            DisableCruiseControl();
+            _cruiseControlCancellationTokenSource?.Cancel();
 
             await WriteToLcd("Nav finished to", $"{Waypoints.Count} WPs", true);
 
@@ -261,7 +263,5 @@ namespace Autonoceptor.Host
                 _logger.Log(LogLevel.Error, $"Sync failed {e.Message}");
             }
         }
-
-        
     }
 }

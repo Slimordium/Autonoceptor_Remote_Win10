@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.UI.Xaml.Media;
 using Autonoceptor.Service.Hardware;
 using Autonoceptor.Shared;
 using Autonoceptor.Shared.Utilities;
@@ -29,7 +30,7 @@ namespace Autonoceptor.Host
 
         private const int _nerfDartChannel = 15;
 
-        private int _safeDistance = 50;
+        private int _safeDistance = 100;
 
         public int SafeDistance
         {
@@ -38,7 +39,13 @@ namespace Autonoceptor.Host
         } 
 
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
-        private IDisposable _speedControllerDisposable;
+
+        private IDisposable _odoLcdDisposable;
+
+        private Task _lidarTask;
+        private Task _speedControlTask;
+
+        private DisplayGroup _displayGroup;
 
         public WaypointQueue Waypoints { get; set; }
 
@@ -52,8 +59,6 @@ namespace Autonoceptor.Host
             cancellationTokenSource.Token.Register(async () => { await Stop(); });
         }
 
-        private DisplayGroup _displayGroup;
-
         protected new void DisposeLcdWriters()
         {
             _odoLcdDisposable?.Dispose();
@@ -66,7 +71,10 @@ namespace Autonoceptor.Host
         {
             base.ConfigureLcdWriters();
 
-            _odoLcdDisposable = Odometer.GetObservable().Sample(TimeSpan.FromMilliseconds(250)).ObserveOnDispatcher()
+            _odoLcdDisposable = Odometer
+                .GetObservable()
+                .Sample(TimeSpan.FromMilliseconds(250))
+                .ObserveOnDispatcher()
                 .Subscribe(
                     async odoData =>
                     {
@@ -82,6 +90,8 @@ namespace Autonoceptor.Host
             _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
         }
 
+        public CancellationTokenSource LidarCancellationTokenSource { get; set; } = new CancellationTokenSource();
+
         protected new async Task InitializeAsync()
         {
             await base.InitializeAsync();
@@ -92,6 +102,53 @@ namespace Autonoceptor.Host
 
             await Stop();
             await DisableServos();
+
+            StartLidarTask();
+        }
+
+        public void StartLidarTask()
+        {
+            if (!LidarCancellationTokenSource.IsCancellationRequested)
+            {
+                LidarCancellationTokenSource.Cancel();
+                LidarCancellationTokenSource = new CancellationTokenSource();
+            }
+
+            _lidarTask = new Task(async () =>
+            {
+                var safeDistance = SafeDistance;
+
+                while (!LidarCancellationTokenSource.IsCancellationRequested)
+                {
+                    try
+                    {
+                        var sweepData = await Sweep(Host.Sweep.Center);
+
+                        var dangerAngles = sweepData.Where(d => d.Distance < safeDistance).ToList();
+
+                        if (!dangerAngles.Any())
+                        {
+                            continue;
+                        }
+
+                        var dangerAngle = dangerAngles.Average(d => d.Angle);
+
+                        if (dangerAngle < 0)
+                        {
+                            await SetVehicleHeading(SteeringDirection.Right, dangerAngle);
+                        }
+                        else
+                        {
+                            await SetVehicleHeading(SteeringDirection.Left, dangerAngle);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Log(LogLevel.Error, $"Sweep: {e.Message}");
+                    }
+                }
+            });
+            _lidarTask.Start();
         }
 
         private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
@@ -154,145 +211,112 @@ namespace Autonoceptor.Host
                     }));
         }
 
-        private double _pulseCountPerUpdate;
-        private double _moveMagnitude;
-        private IDisposable _odoLcdDisposable;
-
-        private bool _gettingUnstuck = false;
-
-        private async Task UpdateMoveMagnitude()
+        private async Task UpdateMoveMagnitude(double pulseCountPerUpdate, CancellationToken token)
         {
-            var moveMagnitude = Volatile.Read(ref _moveMagnitude);
-            var pulseCountPerUpdate = Volatile.Read(ref _pulseCountPerUpdate);
+            var moveMagnitude = 0d;
+            var starting = true;
+            var isStuck = false;
 
-            if (pulseCountPerUpdate < 1) //Probably stopped...
-                return;
-
-            var odometer = await Odometer.GetLatest();
-
-            var pulseCount = odometer.PulseCount;
-
-            bool isStuck = pulseCount == 0;
-
-            //Give it some wiggle room
-            if (pulseCount < pulseCountPerUpdate + 30 && pulseCount > pulseCountPerUpdate - 50)
+            while (!token.IsCancellationRequested)
             {
-                return;
-            }
+                var odometer = await Odometer.GetLatest();
 
-            if (pulseCount < pulseCountPerUpdate)
-                moveMagnitude = moveMagnitude + 40;
+                var pulseCount = odometer.PulseCount;
 
-            if (pulseCount > pulseCountPerUpdate)
-            {
-                if (moveMagnitude > 50)
+                if (pulseCount < 100 && !starting)
                 {
-                    moveMagnitude = moveMagnitude - 5;
+                    isStuck = true;
                 }
-                else if (moveMagnitude > 40)
+
+                //Give it some wiggle room
+                if (pulseCount < pulseCountPerUpdate + 30 && pulseCount > pulseCountPerUpdate - 50)
                 {
-                    moveMagnitude = moveMagnitude - 2;
+                    return;
+                }
+
+                if (pulseCount < pulseCountPerUpdate)
+                    moveMagnitude = moveMagnitude + 30;
+
+                if (pulseCount > pulseCountPerUpdate)
+                {
+                    starting = false;
+
+                    if (moveMagnitude > 50)
+                    {
+                        moveMagnitude = moveMagnitude - 5;
+                    }
+                    else if (moveMagnitude > 40)
+                    {
+                        moveMagnitude = moveMagnitude - 2;
+                    }
+                    else
+                    {
+                        moveMagnitude = moveMagnitude - .7;
+                    }
+                }
+
+                if (moveMagnitude > 55)
+                    moveMagnitude = 55;
+
+                if (moveMagnitude < 0)
+                    moveMagnitude = 0;
+
+                if (Stopped)
+                    return;
+
+                if (!isStuck)
+                {
+                    await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
                 }
                 else
                 {
-                    moveMagnitude = moveMagnitude - .7;
+                    // shoot a nerf dart
+                    //await SetChannelValue(1500 * 4, 15);
+
+                    // turn wheels slightly to the left
+                    await SetVehicleHeading(SteeringDirection.Left, 70);
+
+                    // reverse
+                    await SetVehicleTorque(MovementDirection.Reverse, 60);
+                    await Task.Delay(1800, token);
+
+                    // now continue trying to get to next waypoint
+                    await SetVehicleTorque(MovementDirection.Forward, 60);
+
+                    isStuck = false;
                 }
             }
-
-            if (moveMagnitude > 55)
-                moveMagnitude = 55;
-
-            if (moveMagnitude < 0)
-                moveMagnitude = 0;
-
-            if (Stopped)
-                return;
-
-            if (!isStuck && !_gettingUnstuck)
-                await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
-            else
-            {
-                _gettingUnstuck = true;
-
-                // shoot a nerf dart
-                //await SetChannelValue(1500 * 4, 15);
-
-                // turn wheels slightly to the left
-                var turnMagnitude = 35;
-                await SetChannelValue(Convert.ToUInt16(turnMagnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4, SteeringChannel);
-
-                // reverse
-                await SetVehicleTorque(MovementDirection.Reverse, 35);
-                await Task.Delay(1800);
-
-                // now continue trying to get to next waypoint
-                await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
-
-                _gettingUnstuck = false;
-            }
-
-            Volatile.Write(ref _moveMagnitude, moveMagnitude);
         }
-
-   
 
         protected async Task SetVehicleTorque(MovementDirection direction, double magnitude)
         {
             var moveValue = StoppedPwm * 4;
 
-            if (magnitude > 80)
-                magnitude = 80;
+            if (magnitude > 100)
+                magnitude = 100;
 
             switch (direction)
             {
                 case MovementDirection.Forward:
-                    moveValue = Convert.ToUInt16(magnitude.Map(0, 80, StoppedPwm, ForwardPwmMax)) * 4;
+                    moveValue = Convert.ToUInt16(magnitude.Map(0, 100, StoppedPwm, ForwardPwmMax)) * 4;
                     break;
                 case MovementDirection.Reverse:
-                    moveValue = Convert.ToUInt16(magnitude.Map(0, 80, StoppedPwm, ReversePwmMax)) * 4;
+                    moveValue = Convert.ToUInt16(magnitude.Map(0, 100, StoppedPwm, ReversePwmMax)) * 4;
                     break;
             }
 
             await SetChannelValue(moveValue, MovementChannel);
         }
 
-        public void EnableCruiseControl(int pulseCountPerUpdateInterval)
+        public async Task SetCruiseControl(int pulseCountPerUpdateInterval, CancellationToken token)
         {
-            _speedControllerDisposable?.Dispose();
-            _speedControllerDisposable = null;
+            _speedControlTask?.Dispose();
+            _speedControlTask = null;
 
-            Volatile.Write(ref _moveMagnitude, 30);
-            Volatile.Write(ref _pulseCountPerUpdate, pulseCountPerUpdateInterval);
+            await SetVehicleTorque(MovementDirection.Forward, 100);
 
-            _speedControllerDisposable = Observable
-                .Interval(TimeSpan.FromMilliseconds(100))
-                .ObserveOnDispatcher()
-                .Subscribe(async _ =>
-                {
-                    Thread.Sleep(1);
-                    if (Volatile.Read(ref _gettingUnstuck))
-                    {
-                        Thread.Sleep(1);
-                        return;
-                    }
-
-                    await UpdateMoveMagnitude();
-                });
-        }
-
-        public void DisableCruiseControl()
-        {
-            Volatile.Write(ref _moveMagnitude, 0);
-            Volatile.Write(ref _pulseCountPerUpdate, 0);
-
-            _speedControllerDisposable?.Dispose();
-            _speedControllerDisposable = null;
-        }
-
-        public void SetCruiseControl(int pulseCountPerUpdateInterval)
-        {
-            Volatile.Write(ref _moveMagnitude, 0);
-            Volatile.Write(ref _pulseCountPerUpdate, pulseCountPerUpdateInterval);
+            _speedControlTask = UpdateMoveMagnitude(pulseCountPerUpdateInterval, token);
+            _speedControlTask.Start();
         }
 
         public async Task Stop(bool isCanceled = false)
@@ -338,7 +362,7 @@ namespace Autonoceptor.Host
                                 await SetChannelValue(pwm * 4, _lidarServoChannel);
 
                                 var lidarData = await Lidar.GetLatest();
-                                Thread.Sleep(1);
+                                
                                 if (!lidarData.IsValid)
                                     continue;
 
@@ -355,7 +379,7 @@ namespace Autonoceptor.Host
                                 await SetChannelValue(pwm * 4, _lidarServoChannel);
 
                                 var lidarData = await Lidar.GetLatest();
-                                Thread.Sleep(1);
+                                
                                 if (!lidarData.IsValid)
                                     continue;
 
@@ -400,14 +424,11 @@ namespace Autonoceptor.Host
                             break;
                         }
                 }
-                Thread.Sleep(1);
+
                 await Task.Delay(500);
-                Thread.Sleep(1);
                 await SetChannelValue(_centerLidarPwm * 4, _lidarServoChannel);
-                Thread.Sleep(1);
-                await Task.Delay(500);
-                Thread.Sleep(1);
-                return data;
+
+                return await Task.FromResult(data);
             }
             catch (Exception err)
             {
@@ -425,12 +446,6 @@ namespace Autonoceptor.Host
                 {
                     await SetChannelValue(StoppedPwm * 4, MovementChannel);
                     await SetChannelValue(0, SteeringChannel);
-                    return;
-                }
-
-                if (Volatile.Read(ref _gettingUnstuck)) //We are letting the "GetUnstuck" method handle ... getting ... unstuck!
-                {
-                    Thread.Sleep(1);
                     return;
                 }
 
