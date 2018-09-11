@@ -256,7 +256,7 @@ namespace Autonoceptor.Host
 
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
-                await WriteToLcd("Started Nav to", $"{Waypoints.Count} WPs", true);
+                await WriteToLcd("Started Nav", string.Empty, true);
 
                 if (SpeedControlEnabled)
                 {

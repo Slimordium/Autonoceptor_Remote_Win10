@@ -329,13 +329,12 @@ namespace Autonoceptor.Host
             {
                 if (FollowingWaypoints)
                 {
-                    _logger.Log(LogLevel.Info, $"Stopping WP follow {Waypoints.Count} WPs");
-
+                    await WriteToLcd("Stopped WP...", "...following");
                     await WaypointFollowEnable(false);
                 }
                 else
                 {
-                    _logger.Log(LogLevel.Info, $"Starting WP follow {Waypoints.Count} WPs");
+                    await WriteToLcd("Started WP...", "...following");
                     await WaypointFollowEnable(true);
                 }
 
@@ -357,7 +356,7 @@ namespace Autonoceptor.Host
 
                 _logger.Log(LogLevel.Info, $"WP Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}, {gpsFix.Quality}");
 
-                await WriteToLcd($"WP {Waypoints.Count}...", "...queued", true);
+                await WriteToLcd($"WP {Waypoints.Count}...", "...queued");
 
                 return;
             }

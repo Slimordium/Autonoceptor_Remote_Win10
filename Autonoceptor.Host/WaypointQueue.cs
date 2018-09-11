@@ -140,7 +140,7 @@ namespace Autonoceptor.Host
                         base.Enqueue(wp);
                     }
 
-                    await WriteToLcd($"#Set {_waypointSetNumber}", "Load Successful", true);
+                    await WriteToLcd($"#Set {_waypointSetNumber}, {Count} WPs", "Load Successful", true);
                 }
                 catch (Exception e)
                 {
