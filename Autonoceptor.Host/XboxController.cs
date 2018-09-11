@@ -24,9 +24,11 @@ namespace Autonoceptor.Host
         private IDisposable _xboxDpadDisposable;
         private IDisposable _gpsNavSwitchDisposable;
 
-        private const ushort _enableLcdDisopsable = 13;
-        private const ushort _enableLidarDisopsable = 14;
+        private const ushort _enableLcdChannel = 13;
+        private const ushort _enableLidarChannel = 14;
         private IDisposable _enableLcdDisposable;
+
+        private DisplayGroup _displayGroup;
 
         public XboxController(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
             : base(cancellationTokenSource, brokerHostnameOrIp)
@@ -74,8 +76,6 @@ namespace Autonoceptor.Host
                 });
         }
 
-        private DisplayGroup _displayGroup;
-
         protected new async Task ConfigureLcdWriters()
         {
             await base.ConfigureLcdWriters();
@@ -87,6 +87,20 @@ namespace Autonoceptor.Host
             };
 
             _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
+        }
+
+        private async Task WriteToLcd(string line1, string line2, bool display = false)
+        {
+            if (_displayGroup == null)
+                return;
+
+            _displayGroup.DisplayItems = new Dictionary<int, string>
+            {
+                {1, line1 },
+                {2, line2 }
+            };
+
+            await Lcd.UpdateDisplayGroup(_displayGroup, display);
         }
 
         public new async Task InitializeAsync()
@@ -106,14 +120,28 @@ namespace Autonoceptor.Host
                 });
 
             _enableLcdDisposable = PwmObservable
-                .Where(channel => channel.ChannelId == _enableLcdDisopsable || 
-                                  channel.ChannelId == _enableLidarDisopsable)
+                .Where(channel => channel.ChannelId == _enableLcdChannel || 
+                                  channel.ChannelId == _enableLidarChannel)
                 .Sample(TimeSpan.FromMilliseconds(500))
                 .ObserveOnDispatcher()
                 .Subscribe(
                     async channel =>
                     {
-                        if (channel.ChannelId == _enableLcdDisopsable)
+                        if (channel.ChannelId == _enableLidarChannel)
+                        {
+                            if (!channel.DigitalValue)
+                            {
+                                LidarCancellationTokenSource?.Cancel(false);
+                                LidarCancellationTokenSource?.Dispose();
+                                return;
+                            }
+
+                            StartLidarTask();
+
+                            return;
+                        }
+
+                        if (channel.ChannelId == _enableLcdChannel)
                         {
                             if (channel.DigitalValue)
                             {
@@ -252,8 +280,7 @@ namespace Autonoceptor.Host
 
                     SafeDistance = sdu;
 
-                    await Lcd.WriteAsync($"Safe distance", 1);
-                    await Lcd.WriteAsync($"    {sdu}", 2);
+                    await WriteToLcd($"Safe distance", $"    {sdu}", true);
 
                     break;
                 case Direction.Down:
@@ -267,8 +294,7 @@ namespace Autonoceptor.Host
 
                     SafeDistance = sdd;
 
-                    await Lcd.WriteAsync($"Safe distance", 1);
-                    await Lcd.WriteAsync($"    {sdd}", 2);
+                    await WriteToLcd($"Safe distance", $"    {sdd}", true);
 
                     break;
             }
@@ -276,12 +302,14 @@ namespace Autonoceptor.Host
 
         private async Task OnNextXboxButtonData(XboxData xboxData)
         {
-            //if (xboxData.FunctionButtons.Contains(FunctionButton.Back))
-            //{
-            //    await Waypoints.Save();
+            if (xboxData.FunctionButtons.Contains(FunctionButton.Back))
+            {
+                await Waypoints.Save();
 
-            //    return;
-            //}
+                await WriteToLcd($"{Waypoints.Count} WPs...", "...saved", true);
+
+                return;
+            }
 
             if (xboxData.FunctionButtons.Contains(FunctionButton.X))
             {
@@ -302,6 +330,7 @@ namespace Autonoceptor.Host
                 if (FollowingWaypoints)
                 {
                     _logger.Log(LogLevel.Info, $"Stopping WP follow {Waypoints.Count} WPs");
+
                     await WaypointFollowEnable(false);
                 }
                 else
@@ -328,19 +357,21 @@ namespace Autonoceptor.Host
 
                 _logger.Log(LogLevel.Info, $"WP Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}, {gpsFix.Quality}");
 
+                await WriteToLcd($"WP {Waypoints.Count}...", "...queued", true);
+
                 return;
             }
 
-            //if (xboxData.FunctionButtons.Contains(FunctionButton.Y))
-            //{
-            //    Waypoints.Clear();
+            if (xboxData.FunctionButtons.Contains(FunctionButton.Y))
+            {
+                Waypoints.Clear();
 
-            //    Waypoints.CurrentWaypoint = null;
+                Waypoints.CurrentWaypoint = null;
 
-            //    await Waypoints.Save();
+                await Waypoints.Save();
 
-            //    _logger.Log(LogLevel.Info, "WPs Cleared");
-            //}
+                _logger.Log(LogLevel.Info, "WPs Cleared");
+            }
         }
     }
 }

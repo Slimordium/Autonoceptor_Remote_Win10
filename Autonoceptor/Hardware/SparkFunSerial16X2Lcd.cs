@@ -205,6 +205,9 @@ namespace Autonoceptor.Service.Hardware
                     if (_currentGroup < 1)
                         _currentGroup = _displayGroups.Count - 1;
 
+                    if (!_displayGroups.ContainsKey(_currentGroup))
+                        return;
+
                     var displayGroup = _displayGroups[_currentGroup];
 
                     if (displayGroup.DisplayItems.ContainsKey(displayGroup.TopLine))

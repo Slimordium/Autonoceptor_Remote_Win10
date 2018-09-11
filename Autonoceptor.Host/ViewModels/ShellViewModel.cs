@@ -163,31 +163,6 @@ namespace Autonoceptor.Host.ViewModels
                 });
         }
 
-        private void SetNavParams()
-        {
-            _conductor.SetCruiseControl(CruiseControl);
-        }
-
-        //public async Task SweepLeft()
-        //{
-        //    var sweepData = await _conductor.Sweep(Sweep.Left);
-
-        //    foreach (var d in sweepData)
-        //    {
-        //        await AddToLog($"Angle: {d.Angle} Distance: {d.Distance} Strength: {d.Strength}");
-        //    }
-        //}
-
-        //public async Task SweepRight()
-        //{
-        //    var sweepData = await _conductor.Sweep(Sweep.Right);
-
-        //    foreach (var d in sweepData)
-        //    {
-        //        await AddToLog($"Angle: {d.Angle} Distance: {d.Distance} Strength: {d.Strength}");
-        //    }
-        //}
-
         private void CurrentOnResuming(object sender, object o)
         {
             _sessionDisposable?.Dispose();

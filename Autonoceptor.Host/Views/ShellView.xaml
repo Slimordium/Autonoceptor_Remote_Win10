@@ -40,10 +40,7 @@
             <TextBlock Name="Lidar" Width="220" HorizontalAlignment="Left"  VerticalAlignment="Center"></TextBlock>
         </StackPanel>
 
-        <StackPanel Grid.Column="2" Grid.Row="1" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
-            <Button Name="SweepLeft" Content="Lidar Sweep Left" ></Button>
-            <Button Name="SweepRight" Content="Lidar Sweep Right"></Button>
-        </StackPanel>
+        <StackPanel Grid.Column="2" Grid.Row="1" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center"/>
 
         <TextBlock Text="GPS" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
         <TextBlock Name="LatLon" Width="640" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center"></TextBlock>

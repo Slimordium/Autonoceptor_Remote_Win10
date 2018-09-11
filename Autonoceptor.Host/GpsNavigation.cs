@@ -38,7 +38,8 @@ namespace Autonoceptor.Host
         }
 
         private bool _followingWaypoints;
-    
+        private DisplayGroup _displayGroupNav;
+
         protected bool FollowingWaypoints
         {
             get => Volatile.Read(ref _followingWaypoints);
@@ -92,8 +93,15 @@ namespace Autonoceptor.Host
                 GroupName = "Imu"
             };
 
+            var displayGroupNav = new DisplayGroup
+            {
+                DisplayItems = new Dictionary<int, string> { { 1, "Nav" }, { 2, "" } },
+                GroupName = "Nav"
+            };
+
             _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
             _displayGroupImu = await Lcd.AddDisplayGroup(displayGroupImu);
+            _displayGroupNav = await Lcd.AddDisplayGroup(displayGroupNav);
         }
 
         protected new async Task InitializeAsync()
@@ -137,11 +145,22 @@ namespace Autonoceptor.Host
             await Lcd.UpdateDisplayGroup(_displayGroupImu, refreshDisplay);
         }
 
-        public async Task WaypointFollowEnable(bool enabled)
+        private async Task WriteToLcdNav(string line1, string line2, bool refreshDisplay = false)
         {
-            if (FollowingWaypoints == enabled)
+            if (_displayGroupNav == null)
                 return;
 
+            _displayGroupNav.DisplayItems = new Dictionary<int, string>
+            {
+                {1, line1 },
+                {2, line2 }
+            };
+
+            await Lcd.UpdateDisplayGroup(_displayGroupNav, refreshDisplay);
+        }
+
+        public async Task WaypointFollowEnable(bool enabled)
+        {
             FollowingWaypoints = enabled;
 
             if (enabled)
@@ -174,15 +193,19 @@ namespace Autonoceptor.Host
 
                         if (mr == null)
                         {
+                            if (!FollowingWaypoints)
+                                return;
+
                             await WaypointFollowEnable(false);
                             return;
                         }
 
-                        //await Odometer.ZeroTripMeter();//0 the trip meter - dont think this is needed? We will see.
+                        if (mr.Distance < 60)
+                            UpdateCruiseControl(310);
 
                         await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
 
-                        await WriteToLcd($"Hdg {mr.HeadingToTargetWp}", $"D: {mr.DistanceToTargetWp}ft");
+                        await WriteToLcd($"Heading: {mr.HeadingToTargetWp}", $"Distance: {mr.DistanceToTargetWp}ft");
                     });
 
                 _imuHeadingUpdateDisposable = Imu
@@ -199,11 +222,16 @@ namespace Autonoceptor.Host
 
                             if (mr == null)
                             {
+                                if (!FollowingWaypoints)
+                                    return;
+
                                 await WaypointFollowEnable(false);
                                 return;
                             }
 
                             await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
+
+                            await WriteToLcdNav($"Heading: {mr.HeadingToTargetWp}", $"Distance: {mr.DistanceToTargetWp}ft");
                         }
                         catch (Exception e)
                         {
@@ -224,13 +252,15 @@ namespace Autonoceptor.Host
                     return;
                 }
 
+                await SetVehicleTorque(MovementDirection.Forward, 50);
+
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
                 await WriteToLcd("Started Nav to", $"{Waypoints.Count} WPs", true);
 
                 if (SpeedControlEnabled)
                 {
-                    await SetCruiseControl(480, _cruiseControlCancellationTokenSource.Token); //UGH, Justin ... I really want to increase this maybe just a smidge? :)
+                    await SetCruiseControl(400, _cruiseControlCancellationTokenSource.Token);
                 }
 
                 return;

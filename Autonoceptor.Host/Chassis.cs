@@ -105,16 +105,18 @@ namespace Autonoceptor.Host
             Lcd.ConfigureLcdWriters();
         }
 
-        protected async Task SetChannelValue(int value, ushort channel)
+        protected async Task<uint> SetChannelValue(int value, ushort channel)
         {
-            if (Stopped && (channel == MovementChannel || channel == SteeringChannel))
+            var returnValue = 0u;
+            if (Stopped && channel == MovementChannel)// || channel == SteeringChannel))
             {
-                await PwmController.SetChannelValue(StoppedPwm * 4, MovementChannel);
-                await PwmController.SetChannelValue(0, SteeringChannel);
-                return;
+                returnValue = await PwmController.SetChannelValue(StoppedPwm * 4, MovementChannel);
+                //returnValue = await PwmController.SetChannelValue(0, SteeringChannel);
+                return returnValue;
             }
 
-            await PwmController.SetChannelValue(value, channel);
+            returnValue = await PwmController.SetChannelValue(value, channel);
+            return returnValue;
         }
 
         protected async Task<int> GetChannelValue(ushort channel)

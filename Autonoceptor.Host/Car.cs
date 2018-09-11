@@ -4,13 +4,15 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Windows.UI.Xaml.Media;
+using Windows.ApplicationModel.Core;
+using Windows.Foundation;
+using Windows.UI.Core;
 using Autonoceptor.Service.Hardware;
 using Autonoceptor.Shared;
 using Autonoceptor.Shared.Utilities;
 using Newtonsoft.Json;
+using Nito.AsyncEx;
 using NLog;
-using RxMqtt.Shared;
 
 namespace Autonoceptor.Host
 {
@@ -18,32 +20,27 @@ namespace Autonoceptor.Host
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
+        private volatile int _ppUpdateInterval;
+
         protected const ushort _extraInputChannel = 14;
 
         private const ushort _lidarServoChannel = 17;
 
         private const int _rightLidarPwm = 1056;
-        private const int _rightMidLidarPwm = 1371;
-        private const int _centerLidarPwm = 1472;
-        private const int _leftMidLidarPwm = 1572;
+        private const int _rightMidLidarPwm = 1282;
+        private const int _centerLidarPwm = 1488;
+        private const int _leftMidLidarPwm = 1682;
         private const int _leftLidarPwm = 1880;
 
         private const int _nerfDartChannel = 15;
 
-        private int _safeDistance = 100;
-
-        public int SafeDistance
-        {
-            get => Volatile.Read(ref _safeDistance);
-            set => Volatile.Write(ref _safeDistance, value);
-        } 
+        private int _safeDistance = 130;
 
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
 
         private IDisposable _odoLcdDisposable;
 
-        private Task _lidarTask;
-        private Task _speedControlTask;
+        private IAsyncAction _lidarTask;
 
         private DisplayGroup _displayGroup;
 
@@ -51,12 +48,28 @@ namespace Autonoceptor.Host
 
         protected string BrokerHostnameOrIp { get; set; }
 
+        private readonly AsyncManualResetEvent _asyncResetEvent = new AsyncManualResetEvent(false);
+
+        public CancellationTokenSource LidarCancellationTokenSource { get; set; } = new CancellationTokenSource();
+
+        public int SafeDistance
+        {
+            get => Volatile.Read(ref _safeDistance);
+            set => Volatile.Write(ref _safeDistance, value);
+        } 
+
         protected Car(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
             : base(cancellationTokenSource)
         {
             BrokerHostnameOrIp = brokerHostnameOrIp;
 
-            cancellationTokenSource.Token.Register(async () => { await Stop(); });
+            cancellationTokenSource.Token.Register(async () =>
+            {
+                await Stop();
+                await SetChannelValue(0, _lidarServoChannel);
+                await SetChannelValue(0, MovementChannel);
+                await SetChannelValue(0, SteeringChannel);
+            });
         }
 
         protected new void DisposeLcdWriters()
@@ -90,8 +103,6 @@ namespace Autonoceptor.Host
             _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
         }
 
-        public CancellationTokenSource LidarCancellationTokenSource { get; set; } = new CancellationTokenSource();
-
         protected new async Task InitializeAsync()
         {
             await base.InitializeAsync();
@@ -106,49 +117,138 @@ namespace Autonoceptor.Host
             StartLidarTask();
         }
 
+        private Thread _speedThread;
+
         public void StartLidarTask()
         {
-            if (!LidarCancellationTokenSource.IsCancellationRequested)
+            if (LidarCancellationTokenSource == null || !LidarCancellationTokenSource.IsCancellationRequested)
             {
-                LidarCancellationTokenSource.Cancel();
+                LidarCancellationTokenSource?.Cancel();
+                LidarCancellationTokenSource?.Dispose();
                 LidarCancellationTokenSource = new CancellationTokenSource();
             }
 
-            _lidarTask = new Task(async () =>
+            _speedThread = new Thread(async () =>
             {
-                var safeDistance = SafeDistance;
-
-                while (!LidarCancellationTokenSource.IsCancellationRequested)
-                {
-                    try
+                await CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
+                    async () =>
                     {
-                        var sweepData = await Sweep(Host.Sweep.Center);
+                        var safeDistance = SafeDistance;
 
-                        var dangerAngles = sweepData.Where(d => d.Distance < safeDistance).ToList();
+                        var ir = await SetChannelValue(_rightMidLidarPwm * 4, _lidarServoChannel);
 
-                        if (!dangerAngles.Any())
+                        await Task.Delay(250);
+
+                        while (!LidarCancellationTokenSource.IsCancellationRequested)
                         {
-                            continue;
-                        }
+                            try
+                            {
+                                if (Stopped)
+                                {
+                                    await Task.Delay(500);
+                                    continue;
+                                }
 
-                        var dangerAngle = dangerAngles.Average(d => d.Angle);
+                                var data = new List<LidarData>();
 
-                        if (dangerAngle < 0)
-                        {
-                            await SetVehicleHeading(SteeringDirection.Right, dangerAngle);
+                                for (var pwm = _rightMidLidarPwm; pwm < _leftMidLidarPwm; pwm += 10)
+                                {
+                                    var r = await SetChannelValue(pwm * 4, _lidarServoChannel);
+
+                                    var lidarData = await Lidar.GetLatest();
+
+                                    if (!lidarData.IsValid)
+                                        continue;
+
+                                    lidarData.Angle = Math.Round(pwm.Map(_rightMidLidarPwm, _leftMidLidarPwm, 35, -35));
+                                    data.Add(lidarData);
+
+                                    if (lidarData.Distance < safeDistance)
+                                    {
+                                        if (lidarData.Angle < 0)
+                                        {
+                                            var newAngle = lidarData.Angle.Map(-35, 0, 0, -35);
+
+                                            await SetVehicleHeadingLidar(SteeringDirection.Right,
+                                                Math.Abs(newAngle * 8));
+                                        }
+                                        else
+                                        {
+                                            var newAngle = lidarData.Angle.Map(35, 0, 0, 35);
+                                            await SetVehicleHeadingLidar(SteeringDirection.Left,
+                                                Math.Abs(newAngle * 8));
+                                        }
+                                    }
+                                }
+
+                                var dangerAngles = data.Where(d => d.Distance < safeDistance).ToList();
+
+                                data = new List<LidarData>();
+
+                                for (var pwm = _leftMidLidarPwm; pwm >= _rightMidLidarPwm; pwm -= 10)
+                                {
+                                    var r = await SetChannelValue(pwm * 4, _lidarServoChannel);
+
+                                    var lidarData = await Lidar.GetLatest();
+
+                                    if (!lidarData.IsValid)
+                                        continue;
+
+                                    lidarData.Angle = Math.Round(pwm.Map(_leftMidLidarPwm, _rightMidLidarPwm, -35, 35));
+                                    data.Add(lidarData);
+
+                                    if (lidarData.Distance < safeDistance)
+                                    {
+                                        if (lidarData.Angle < 0)
+                                        {
+                                            var newAngle = lidarData.Angle.Map(-35, 0, 0, -35);
+                                            await SetVehicleHeadingLidar(SteeringDirection.Right,
+                                                Math.Abs(newAngle * 8));
+                                        }
+                                        else
+                                        {
+                                            var newAngle = lidarData.Angle.Map(35, 0, 0, 35);
+                                            await SetVehicleHeadingLidar(SteeringDirection.Left,
+                                                Math.Abs(newAngle * 8));
+                                        }
+                                    }
+                                }
+
+                                dangerAngles.AddRange(data.Where(d => d.Distance < safeDistance).ToList());
+
+                                if (dangerAngles.Any())
+                                {
+                                    _asyncResetEvent.Set();
+                                }
+                                else
+                                {
+                                    _asyncResetEvent.Reset();
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Log(LogLevel.Error, $"Sweep: {e.Message}");
+                            }
                         }
-                        else
-                        {
-                            await SetVehicleHeading(SteeringDirection.Left, dangerAngle);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.Log(LogLevel.Error, $"Sweep: {e.Message}");
-                    }
-                }
-            });
-            _lidarTask.Start();
+                    });
+            }) {IsBackground = true};
+            _speedThread.Start();
+        }
+
+        private async Task SetSteeringOnDangerAngle(List<LidarData> dangerAngles)
+        {
+            var avgAngle = dangerAngles.Average(a => a.Angle);
+
+            if (avgAngle < 0)
+            {
+                await SetVehicleHeadingLidar(SteeringDirection.Right, 90);
+            }
+            else
+            {
+                await SetVehicleHeadingLidar(SteeringDirection.Left, 90);
+            }
+
+            await Task.Delay(250);
         }
 
         private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
@@ -211,7 +311,7 @@ namespace Autonoceptor.Host
                     }));
         }
 
-        private async Task UpdateMoveMagnitude(double pulseCountPerUpdate, CancellationToken token)
+        private async Task UpdateMoveMagnitude(CancellationToken token)
         {
             var moveMagnitude = 0d;
             var starting = true;
@@ -219,6 +319,8 @@ namespace Autonoceptor.Host
 
             while (!token.IsCancellationRequested)
             {
+                var pulseCountPerUpdate = _ppUpdateInterval;
+
                 var odometer = await Odometer.GetLatest();
 
                 var pulseCount = odometer.PulseCount;
@@ -310,13 +412,14 @@ namespace Autonoceptor.Host
 
         public async Task SetCruiseControl(int pulseCountPerUpdateInterval, CancellationToken token)
         {
-            _speedControlTask?.Dispose();
-            _speedControlTask = null;
+            _ppUpdateInterval = pulseCountPerUpdateInterval;
 
-            await SetVehicleTorque(MovementDirection.Forward, 100);
+            await SetVehicleTorque(MovementDirection.Forward, 60);
+        }
 
-            _speedControlTask = UpdateMoveMagnitude(pulseCountPerUpdateInterval, token);
-            _speedControlTask.Start();
+        public void UpdateCruiseControl(int pulseCountPerUpdateInterval)
+        {
+            _ppUpdateInterval = pulseCountPerUpdateInterval;
         }
 
         public async Task Stop(bool isCanceled = false)
@@ -347,94 +450,30 @@ namespace Autonoceptor.Host
             await SetChannelValue(0, SteeringChannel);
         }
 
-        private async Task<List<LidarData>> Sweep(Sweep sweep)
+        private async Task SetVehicleHeadingLidar(SteeringDirection direction, double magnitude)
         {
             try
             {
-                var data = new List<LidarData>();
+                var steerValue = CenterPwm * 4;
 
-                switch (sweep)
+                if (magnitude > 100)
+                    magnitude = 100;
+
+                switch (direction)
                 {
-                    case Host.Sweep.Left:
-                        {
-                            for (var pwm = _centerLidarPwm; pwm < _leftLidarPwm; pwm += 10)
-                            {
-                                await SetChannelValue(pwm * 4, _lidarServoChannel);
-
-                                var lidarData = await Lidar.GetLatest();
-                                
-                                if (!lidarData.IsValid)
-                                    continue;
-
-                                lidarData.Angle = Math.Round(pwm.Map(_leftMidLidarPwm, _leftLidarPwm, 0, -45));
-                                data.Add(lidarData);
-                            }
-
-                            break;
-                        }
-                    case Host.Sweep.Right:
-                        {
-                            for (var pwm = _centerLidarPwm; pwm > _rightLidarPwm; pwm -= 10)
-                            {
-                                await SetChannelValue(pwm * 4, _lidarServoChannel);
-
-                                var lidarData = await Lidar.GetLatest();
-                                
-                                if (!lidarData.IsValid)
-                                    continue;
-
-                                lidarData.Angle = Math.Round(pwm.Map(_rightMidLidarPwm, _rightLidarPwm, 0, 45)); ;
-                                data.Add(lidarData);
-                            }
-
-                            break;
-                        }
-                    case Host.Sweep.Center:
-                        {
-                            // sweep left 15 degrees
-                            for (var pwm = _centerLidarPwm; pwm < _leftMidLidarPwm; pwm += 10)
-                            {
-                                await SetChannelValue(pwm * 4, _lidarServoChannel);
-
-                                var lidarData = await Lidar.GetLatest();
-
-                                if (!lidarData.IsValid)
-                                    continue;
-
-                                lidarData.Angle = Math.Round(pwm.Map(_centerLidarPwm, _leftMidLidarPwm, 0, -15));
-                                data.Add(lidarData);
-                            }
-
-                            await Task.Delay(250);
-
-                            // sweep right 30 degrees
-                            for (var pwm = _leftMidLidarPwm; pwm > _rightMidLidarPwm; pwm -= 10)
-                            {
-                                await SetChannelValue(pwm * 4, _lidarServoChannel);
-
-                                var lidarData = await Lidar.GetLatest();
-
-                                if (!lidarData.IsValid)
-                                    continue;
-
-                                lidarData.Angle = Math.Round(pwm.Map(_leftMidLidarPwm, _rightMidLidarPwm, -15, 15));
-                                data.Add(lidarData);
-                            }
-
-                            break;
-                        }
+                    case SteeringDirection.Left:
+                        steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4;
+                        break;
+                    case SteeringDirection.Right:
+                        steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, RightPwmMax)) * 4;
+                        break;
                 }
 
-                await Task.Delay(500);
-                await SetChannelValue(_centerLidarPwm * 4, _lidarServoChannel);
-
-                return await Task.FromResult(data);
+                await SetChannelValue(steerValue, SteeringChannel);
             }
             catch (Exception err)
             {
-                _logger.Log(LogLevel.Error, "Error in SweepInternal");
-                _logger.Log(LogLevel.Error, err.Message);
-                return await Task.FromResult(new List<LidarData>(null));
+                _logger.Log(LogLevel.Error, $"Error in SetVehicleHeadingLidar: {err}");
             }
         }
 
@@ -448,6 +487,9 @@ namespace Autonoceptor.Host
                     await SetChannelValue(0, SteeringChannel);
                     return;
                 }
+
+                if (!_asyncResetEvent.IsSet) //Will this work? We shall see
+                    return;
 
                 var steerValue = CenterPwm * 4;
 
@@ -468,8 +510,7 @@ namespace Autonoceptor.Host
             }
             catch (Exception err)
             {
-                _logger.Log(LogLevel.Error, "Error in SetVehicleHeading");
-                _logger.Log(LogLevel.Error, err);
+                _logger.Log(LogLevel.Error, $"Error in SetVehicleHeading: {err}");
             }
         }
     }
