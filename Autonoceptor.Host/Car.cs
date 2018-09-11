@@ -36,11 +36,13 @@ namespace Autonoceptor.Host
 
         private int _safeDistance = 130;
 
+        private Thread _lidarThread;
+
+        private Thread _cruiseControlThread;
+
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
 
         private IDisposable _odoLcdDisposable;
-
-        private IAsyncAction _lidarTask;
 
         private DisplayGroup _displayGroup;
 
@@ -49,6 +51,8 @@ namespace Autonoceptor.Host
         protected string BrokerHostnameOrIp { get; set; }
 
         private readonly AsyncManualResetEvent _asyncResetEvent = new AsyncManualResetEvent(false);
+
+        private CancellationTokenSource _cruiseControlCancellationTokenSource = new CancellationTokenSource();
 
         public CancellationTokenSource LidarCancellationTokenSource { get; set; } = new CancellationTokenSource();
 
@@ -113,11 +117,7 @@ namespace Autonoceptor.Host
 
             await Stop();
             await DisableServos();
-
-            StartLidarTask();
         }
-
-        private Thread _speedThread;
 
         public void StartLidarTask()
         {
@@ -128,7 +128,7 @@ namespace Autonoceptor.Host
                 LidarCancellationTokenSource = new CancellationTokenSource();
             }
 
-            _speedThread = new Thread(async () =>
+            _lidarThread = new Thread(async () =>
             {
                 await CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
                     async () =>
@@ -232,26 +232,10 @@ namespace Autonoceptor.Host
                         }
                     });
             }) {IsBackground = true};
-            _speedThread.Start();
+            _lidarThread.Start();
         }
 
-        private async Task SetSteeringOnDangerAngle(List<LidarData> dangerAngles)
-        {
-            var avgAngle = dangerAngles.Average(a => a.Angle);
-
-            if (avgAngle < 0)
-            {
-                await SetVehicleHeadingLidar(SteeringDirection.Right, 90);
-            }
-            else
-            {
-                await SetVehicleHeadingLidar(SteeringDirection.Left, 90);
-            }
-
-            await Task.Delay(250);
-        }
-
-        private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
+        private async Task WriteToLcd(string line1, string line2 = "", bool refreshDisplay = false)
         {
             if (_displayGroup == null)
                 return;
@@ -311,83 +295,91 @@ namespace Autonoceptor.Host
                     }));
         }
 
-        private async Task UpdateMoveMagnitude(CancellationToken token)
+        protected void StartCruiseControlThread()
         {
-            var moveMagnitude = 0d;
-            var starting = true;
-            var isStuck = false;
-
-            while (!token.IsCancellationRequested)
+            _cruiseControlThread = new Thread(async () =>
             {
-                var pulseCountPerUpdate = _ppUpdateInterval;
-
-                var odometer = await Odometer.GetLatest();
-
-                var pulseCount = odometer.PulseCount;
-
-                if (pulseCount < 100 && !starting)
-                {
-                    isStuck = true;
-                }
-
-                //Give it some wiggle room
-                if (pulseCount < pulseCountPerUpdate + 30 && pulseCount > pulseCountPerUpdate - 50)
-                {
-                    return;
-                }
-
-                if (pulseCount < pulseCountPerUpdate)
-                    moveMagnitude = moveMagnitude + 30;
-
-                if (pulseCount > pulseCountPerUpdate)
-                {
-                    starting = false;
-
-                    if (moveMagnitude > 50)
+                await CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
+                    async () =>
                     {
-                        moveMagnitude = moveMagnitude - 5;
-                    }
-                    else if (moveMagnitude > 40)
-                    {
-                        moveMagnitude = moveMagnitude - 2;
-                    }
-                    else
-                    {
-                        moveMagnitude = moveMagnitude - .7;
-                    }
-                }
+                        var moveMagnitude = 0d;
+                        var starting = true;
+                        var isStuck = false;
 
-                if (moveMagnitude > 55)
-                    moveMagnitude = 55;
+                        while (!_cruiseControlCancellationTokenSource.IsCancellationRequested)
+                        {
+                            var pulseCountPerUpdate = _ppUpdateInterval;
 
-                if (moveMagnitude < 0)
-                    moveMagnitude = 0;
+                            var odometer = await Odometer.GetLatest();
 
-                if (Stopped)
-                    return;
+                            var pulseCount = odometer.PulseCount;
 
-                if (!isStuck)
-                {
-                    await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
-                }
-                else
-                {
-                    // shoot a nerf dart
-                    //await SetChannelValue(1500 * 4, 15);
+                            if (pulseCount < 100 && !starting)
+                            {
+                                isStuck = true;
+                            }
 
-                    // turn wheels slightly to the left
-                    await SetVehicleHeading(SteeringDirection.Left, 70);
+                            //Give it some wiggle room
+                            if (pulseCount < pulseCountPerUpdate + 30 && pulseCount > pulseCountPerUpdate - 50)
+                            {
+                                return;
+                            }
 
-                    // reverse
-                    await SetVehicleTorque(MovementDirection.Reverse, 60);
-                    await Task.Delay(1800, token);
+                            if (pulseCount < pulseCountPerUpdate)
+                                moveMagnitude = moveMagnitude + 30;
 
-                    // now continue trying to get to next waypoint
-                    await SetVehicleTorque(MovementDirection.Forward, 60);
+                            if (pulseCount > pulseCountPerUpdate)
+                            {
+                                starting = false;
 
-                    isStuck = false;
-                }
-            }
+                                if (moveMagnitude > 50)
+                                {
+                                    moveMagnitude = moveMagnitude - 5;
+                                }
+                                else if (moveMagnitude > 40)
+                                {
+                                    moveMagnitude = moveMagnitude - 2;
+                                }
+                                else
+                                {
+                                    moveMagnitude = moveMagnitude - .7;
+                                }
+                            }
+
+                            if (moveMagnitude > 55)
+                                moveMagnitude = 55;
+
+                            if (moveMagnitude < 0)
+                                moveMagnitude = 0;
+
+                            if (Stopped)
+                                return;
+
+                            if (!isStuck)
+                            {
+                                await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
+                            }
+                            else
+                            {
+                                // shoot a nerf dart
+                                //await SetChannelValue(1500 * 4, 15);
+
+                                // turn wheels slightly to the left
+                                await SetVehicleHeading(SteeringDirection.Left, 70);
+
+                                // reverse
+                                await SetVehicleTorque(MovementDirection.Reverse, 60);
+                                await Task.Delay(1800);
+
+                                // now continue trying to get to next waypoint
+                                await SetVehicleTorque(MovementDirection.Forward, 60);
+
+                                isStuck = false;
+                            }
+                        }
+                    });
+            }) {IsBackground = true};
+            _cruiseControlThread.Start();
         }
 
         protected async Task SetVehicleTorque(MovementDirection direction, double magnitude)
@@ -410,11 +402,30 @@ namespace Autonoceptor.Host
             await SetChannelValue(moveValue, MovementChannel);
         }
 
-        public async Task SetCruiseControl(int pulseCountPerUpdateInterval, CancellationToken token)
+        public async Task SetCruiseControl(int pulseCountPerUpdateInterval)
         {
+            _cruiseControlCancellationTokenSource.Cancel();
+
+            await Task.Delay(250);
+
+            _cruiseControlCancellationTokenSource.Dispose();
+
+            _cruiseControlCancellationTokenSource = new CancellationTokenSource();
+
             _ppUpdateInterval = pulseCountPerUpdateInterval;
 
-            await SetVehicleTorque(MovementDirection.Forward, 60);
+            await SetVehicleTorque(MovementDirection.Forward, 40);
+
+            StartCruiseControlThread();
+        }
+
+        public async Task StopCruiseControl()
+        {
+            _cruiseControlCancellationTokenSource.Cancel();
+            _cruiseControlCancellationTokenSource.Dispose();
+            _cruiseControlCancellationTokenSource = new CancellationTokenSource();
+
+            await Stop();
         }
 
         public void UpdateCruiseControl(int pulseCountPerUpdateInterval)

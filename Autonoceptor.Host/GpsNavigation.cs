@@ -24,8 +24,6 @@ namespace Autonoceptor.Host
 
         public bool SpeedControlEnabled { get; set; } = true;
 
-        private CancellationTokenSource _cruiseControlCancellationTokenSource;
-
         protected GpsNavigation(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp)
             : base(cancellationTokenSource, brokerHostnameOrIp)
         {
@@ -165,14 +163,6 @@ namespace Autonoceptor.Host
 
             if (enabled)
             {
-                if (_cruiseControlCancellationTokenSource != null && !_cruiseControlCancellationTokenSource.IsCancellationRequested)
-                {
-                    _cruiseControlCancellationTokenSource.Cancel();
-                    _cruiseControlCancellationTokenSource = null;
-                }
-
-                _cruiseControlCancellationTokenSource = new CancellationTokenSource();
-
                 await Waypoints.Load(); //Load waypoint file from disk
 
                 if (!Waypoints.Any())
@@ -260,13 +250,13 @@ namespace Autonoceptor.Host
 
                 if (SpeedControlEnabled)
                 {
-                    await SetCruiseControl(400, _cruiseControlCancellationTokenSource.Token);
+                    await SetCruiseControl(400);
                 }
 
                 return;
             }
 
-            _cruiseControlCancellationTokenSource?.Cancel();
+            await StopCruiseControl();
 
             await WriteToLcd("Nav finished to", $"{Waypoints.Count} WPs", true);
 

@@ -275,7 +275,7 @@ namespace Autonoceptor.Host
                     var sdu = SafeDistance;
                     sdu = sdu + 2;
 
-                    if (sdu > 200)
+                    if (sdu > 200)  
                         sdu = 200;
 
                     SafeDistance = sdu;
