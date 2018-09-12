@@ -75,18 +75,14 @@ namespace Autonoceptor.Host
             });
         }
 
-        protected new void DisposeLcdWriters()
+        protected void DisposeLcdWriters()
         {
             _odoLcdDisposable?.Dispose();
             _odoLcdDisposable = null;
-
-            base.DisposeLcdWriters();
         }
 
-        protected new async Task ConfigureLcdWriters()
+        protected async Task ConfigureLcdWriters()
         {
-            base.ConfigureLcdWriters();
-
             _odoLcdDisposable = Odometer
                 .GetObservable()
                 .Sample(TimeSpan.FromMilliseconds(250))

@@ -98,7 +98,7 @@ namespace Autonoceptor.Service.Hardware.Lcd
         public void ConfigureLcdWriters()
         {
             _updateObservable = Observable
-                .Interval(TimeSpan.FromMilliseconds(250))
+                .Interval(TimeSpan.FromMilliseconds(350))
                 .ObserveOnDispatcher()
                 .Subscribe(
                     async _ =>
@@ -247,14 +247,22 @@ namespace Autonoceptor.Service.Hardware.Lcd
                 {
                     _currentGroup++;
 
-                    if (_currentGroup > _displayGroups.Count)
-                        _currentGroup = 1;
+                    if (_currentGroup > 11)
+                        _currentGroup = 0;
 
-                    if (_currentGroup < 1)
-                        _currentGroup = _displayGroups.Count - 1;
+                    if (_currentGroup < 0)
+                        _currentGroup = 11;
 
                     if (!_displayGroups.ContainsKey(_currentGroup))
+                    {
+                        _displayGroups.TryAdd(_currentGroup, new DisplayGroup((DisplayGroupName)_currentGroup));
+
+                        await ClearScreen();
+
+                        await WriteToFirstLineAsync($"{(DisplayGroupName)_currentGroup}");
+                        await WriteToSecondLineAsync($"... NA!");
                         return;
+                    }
 
                     var displayGroup = _displayGroups[_currentGroup];
 
@@ -278,14 +286,19 @@ namespace Autonoceptor.Service.Hardware.Lcd
                 {
                     _currentGroup--;
 
-                    if (_currentGroup > _displayGroups.Count)
-                        _currentGroup = 1;
-
-                    if (_currentGroup < 1)
-                        _currentGroup = _displayGroups.Count - 1;
+                    if (_currentGroup < 0)
+                        _currentGroup = 11 ;
 
                     if (!_displayGroups.ContainsKey(_currentGroup))
+                    {
+                        _displayGroups.TryAdd(_currentGroup, new DisplayGroup((DisplayGroupName) _currentGroup));
+
+                        await ClearScreen();
+
+                        await WriteToFirstLineAsync($"{(DisplayGroupName)_currentGroup}");
+                        await WriteToSecondLineAsync($"... NA!");
                         return;
+                    }
 
                     var displayGroup = _displayGroups[_currentGroup];
 
@@ -360,6 +373,5 @@ namespace Autonoceptor.Service.Hardware.Lcd
 
             await WriteAsync(text, _startOfSecondLine, false);
         }
-
     }
 }

@@ -88,6 +88,8 @@ namespace Autonoceptor.Host
                 {
                     await SyncImuYaw();
                 });
+
+            await ConfigureLcdWriters();
         }
 
         public async Task WaypointFollowEnable(bool enabled)
