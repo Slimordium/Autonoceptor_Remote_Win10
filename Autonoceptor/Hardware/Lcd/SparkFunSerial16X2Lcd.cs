@@ -87,16 +87,7 @@ namespace Autonoceptor.Service.Hardware.Lcd
             _logger.Log(LogLevel.Info, "Lcd Opened");
 
             _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
-        }
 
-        public void DisposeLcdUpdate()
-        {
-            _updateObservable?.Dispose();
-            _updateObservable = null;
-        }
-
-        public void ConfigureLcdWriters()
-        {
             _updateObservable = Observable
                 .Interval(TimeSpan.FromMilliseconds(350))
                 .ObserveOnDispatcher()
