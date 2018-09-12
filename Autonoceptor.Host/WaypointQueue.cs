@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Autonoceptor.Service.Hardware;
+using Autonoceptor.Service.Hardware.Lcd;
 using Autonoceptor.Shared.Utilities;
 using Newtonsoft.Json;
 using Nito.AsyncEx;
@@ -55,32 +56,6 @@ namespace Autonoceptor.Host
             _lcd = lcd;
         }
 
-        private DisplayGroup _displayGroup;
-
-        public async Task InitializeAsync()
-        {
-            var displayGroup = new DisplayGroup
-            {
-                DisplayItems = new Dictionary<int, string> { { 1, "WP Q init" }, { 2, "Complete" } },
-                GroupName = "WaypointQueue"
-            };
-
-            _displayGroup = await _lcd.AddDisplayGroup(displayGroup);
-        }
-
-        private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
-        {
-            _logger.Log(LogLevel.Info, $"{line1} / {line2}");
-
-            _displayGroup.DisplayItems = new Dictionary<int, string>
-            {
-                {1, line1 },
-                {2, line2 }
-            };
-
-            await _lcd.UpdateDisplayGroup(_displayGroup, refreshDisplay);
-        }
-
         public new async Task Enqueue(Waypoint waypoint)
         {
             using (await _asyncLock.LockAsync())
@@ -89,7 +64,8 @@ namespace Autonoceptor.Host
                     Math.Abs(fixData.Lat - waypoint.Lat) < _minWaypointDistance ||
                     Math.Abs(fixData.Lon - waypoint.Lon) < _minWaypointDistance))
                 {
-                    await WriteToLcd($"({Count}) {waypoint.Lat}", $"{waypoint.Lon}");
+                    await _lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, $"({Count}) {waypoint.Lat}",
+                        $"{waypoint.Lon}");
 
                     base.Enqueue(waypoint);
                 }
@@ -105,7 +81,7 @@ namespace Autonoceptor.Host
                     string filename = GetWaypointsFileName();
                     await FileExtensions.SaveStringToFile(filename, JsonConvert.SerializeObject(ToArray()));
 
-                    await WriteToLcd($"Saved {Count}", "waypoints...", true);
+                    await _lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, $"Saved {Count}", "waypoints...", true);
 
                     return true;
                 }
@@ -135,16 +111,22 @@ namespace Autonoceptor.Host
 
                     Clear(); //Remove everything from the queue
 
+                    if (waypoints == null)
+                    {
+                        await _lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, "Waypoints null", string.Empty, true);
+                        return;
+                    }
+
                     foreach (var wp in waypoints)
                     {
                         base.Enqueue(wp);
                     }
 
-                    await WriteToLcd($"#Set {_waypointSetNumber}, {Count} WPs", "Load Successful", true);
+                    await _lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, $"#Set {_waypointSetNumber}, {Count} WPs", "Load Successful", true);
                 }
                 catch (Exception e)
                 {
-                    await WriteToLcd(e.Message, "Load failed", true);
+                    await _lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, e.Message, "Load failed", true);
                 }
             }
         }

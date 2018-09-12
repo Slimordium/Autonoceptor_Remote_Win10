@@ -8,6 +8,7 @@ using Windows.ApplicationModel.Core;
 using Windows.Foundation;
 using Windows.UI.Core;
 using Autonoceptor.Service.Hardware;
+using Autonoceptor.Service.Hardware.Lcd;
 using Autonoceptor.Shared;
 using Autonoceptor.Shared.Utilities;
 using Newtonsoft.Json;
@@ -43,8 +44,6 @@ namespace Autonoceptor.Host
         private List<IDisposable> _sensorDisposables = new List<IDisposable>();
 
         private IDisposable _odoLcdDisposable;
-
-        private DisplayGroup _displayGroup;
 
         public WaypointQueue Waypoints { get; set; }
 
@@ -95,16 +94,10 @@ namespace Autonoceptor.Host
                 .Subscribe(
                     async odoData =>
                     {
-                        await WriteToLcd($"FPS: {Math.Round(odoData.FeetPerSecond, 1)},PC: {odoData.PulseCount}", $"Trv: {Math.Round(odoData.InTraveled / 12, 1)}ft");
+                        await Lcd.UpdateDisplayGroup(DisplayGroupName.Odometer, $"FPS: {Math.Round(odoData.FeetPerSecond, 1)},PC: {odoData.PulseCount}", $"Trv: {Math.Round(odoData.InTraveled / 12, 1)}ft");
                     });
 
-            var displayGroup = new DisplayGroup
-            {
-                DisplayItems = new Dictionary<int, string> { { 1, "Init Car" }, { 2, "Complete" } },
-                GroupName = "Car"
-            };
-
-            _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
+            await Lcd.UpdateDisplayGroup(DisplayGroupName.General, "Init Car", "Complete");
         }
 
         protected new async Task InitializeAsync()
@@ -112,8 +105,6 @@ namespace Autonoceptor.Host
             await base.InitializeAsync();
 
             Waypoints = new WaypointQueue(.0000001, Lcd);
-
-            await Waypoints.InitializeAsync();
 
             await Stop();
             await DisableServos();
@@ -233,20 +224,6 @@ namespace Autonoceptor.Host
                     });
             }) {IsBackground = true};
             _lidarThread.Start();
-        }
-
-        private async Task WriteToLcd(string line1, string line2 = "", bool refreshDisplay = false)
-        {
-            if (_displayGroup == null)
-                return;
-
-            _displayGroup.DisplayItems = new Dictionary<int, string>
-            {
-                {1, line1 },
-                {2, line2 }
-            };
-
-            await Lcd.UpdateDisplayGroup(_displayGroup, refreshDisplay);
         }
 
         protected void ConfigureSensorPublish()
@@ -439,7 +416,7 @@ namespace Autonoceptor.Host
             {
                 Stopped = false;
 
-                await WriteToLcd("Started", "", true);
+                await Lcd.UpdateDisplayGroup(DisplayGroupName.Car, "Started", "", true);
 
                 return;
             }
@@ -452,7 +429,7 @@ namespace Autonoceptor.Host
 
             Stopped = true;
 
-            await WriteToLcd("Stopped", "", true);
+            await Lcd.UpdateDisplayGroup(DisplayGroupName.Car, "Stopped", "", true);
         }
 
         public async Task DisableServos()

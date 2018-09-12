@@ -107,7 +107,6 @@
     <Compile Include="Chassis.cs" />
     <Compile Include="Conductor.cs" />
     <Compile Include="FileExtensions.cs" />
-    <Compile Include="LcdGroup.cs" />
     <Compile Include="Sweep.cs" />
     <Compile Include="MoveRequest.cs" />
     <Compile Include="GpsNavigation.cs" />

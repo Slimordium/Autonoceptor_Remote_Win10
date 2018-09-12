@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.Enumeration;
 using Windows.Devices.HumanInterfaceDevice;
-using Autonoceptor.Service.Hardware;
+using Autonoceptor.Service.Hardware.Lcd;
 using Autonoceptor.Shared.Utilities;
 using Hardware.Xbox;
 using Hardware.Xbox.Enums;
@@ -27,8 +27,6 @@ namespace Autonoceptor.Host
         private const ushort _enableLcdChannel = 13;
         private const ushort _enableLidarChannel = 14;
         private IDisposable _enableLcdDisposable;
-
-        private DisplayGroup _displayGroup;
 
         public XboxController(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
             : base(cancellationTokenSource, brokerHostnameOrIp)
@@ -76,33 +74,6 @@ namespace Autonoceptor.Host
                 });
         }
 
-        protected new async Task ConfigureLcdWriters()
-        {
-            await base.ConfigureLcdWriters();
-
-            var displayGroup = new DisplayGroup
-            {
-                DisplayItems = new Dictionary<int, string> { { 1, "Init XBox" }, { 2, "Complete" } },
-                GroupName = "Xbox"
-            };
-
-            _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
-        }
-
-        private async Task WriteToLcd(string line1, string line2, bool display = false)
-        {
-            if (_displayGroup == null)
-                return;
-
-            _displayGroup.DisplayItems = new Dictionary<int, string>
-            {
-                {1, line1 },
-                {2, line2 }
-            };
-
-            await Lcd.UpdateDisplayGroup(_displayGroup, display);
-        }
-
         public new async Task InitializeAsync()
         {
             await base.InitializeAsync();
@@ -120,12 +91,11 @@ namespace Autonoceptor.Host
                 });
 
             _enableLcdDisposable = PwmObservable
-                .Where(channel => channel.ChannelId == _enableLcdChannel || 
-                                  channel.ChannelId == _enableLidarChannel)
+                .Where(channel => channel.ChannelId == _enableLidarChannel)
                 .Sample(TimeSpan.FromMilliseconds(500))
                 .ObserveOnDispatcher()
                 .Subscribe(
-                    async channel =>
+                    channel =>
                     {
                         if (channel.ChannelId == _enableLidarChannel)
                         {
@@ -141,28 +111,6 @@ namespace Autonoceptor.Host
                             return;
                         }
 
-                        if (channel.ChannelId == _enableLcdChannel)
-                        {
-                            if (channel.DigitalValue)
-                            {
-                                await ConfigureLcdWriters();
-
-                                await Lcd.WriteAsync("LCD Writers", 1);
-                                await Lcd.WriteAsync("Configured", 2);
-
-                                _logger.Log(LogLevel.Info, "LCD Writers Configured");
-
-                                return;
-                            }
-
-                            await Lcd.WriteAsync("LCD Writers", 1);
-                            await Lcd.WriteAsync("Disposed", 2);
-
-                            _logger.Log(LogLevel.Info, "LCD Writers Disposed");
-
-                            DisposeLcdWriters();
-                            return;
-                        }
                     });
 
             _xboxConnectedCheckDisposable = Observable
@@ -271,31 +219,11 @@ namespace Autonoceptor.Host
                     break;
                 case Direction.Up:
 
-                    //Because it is volatile 
-                    var sdu = SafeDistance;
-                    sdu = sdu + 2;
-
-                    if (sdu > 200)  
-                        sdu = 200;
-
-                    SafeDistance = sdu;
-
-                    await WriteToLcd($"Safe distance", $"    {sdu}", true);
-
+                    await Lcd.InvokeUpCallback();
                     break;
                 case Direction.Down:
 
-                    //Because it is volatile 
-                    var sdd = SafeDistance;
-                    sdd = sdd - 2;
-
-                    if (sdd < 20)
-                        sdd = 20;
-
-                    SafeDistance = sdd;
-
-                    await WriteToLcd($"Safe distance", $"    {sdd}", true);
-
+                    await Lcd.InvokeDownCallback();
                     break;
             }
         }
@@ -306,7 +234,7 @@ namespace Autonoceptor.Host
             {
                 await Waypoints.Save();
 
-                await WriteToLcd($"{Waypoints.Count} WPs...", "...saved", true);
+                await Lcd.UpdateDisplayGroup(DisplayGroupName.General, $"{Waypoints.Count} WPs...", "...saved", true);
 
                 return;
             }
@@ -329,12 +257,12 @@ namespace Autonoceptor.Host
             {
                 if (FollowingWaypoints)
                 {
-                    await WriteToLcd("Stopped WP...", "...following");
+                    await Lcd.UpdateDisplayGroup(DisplayGroupName.General, "Stopped WP...", "...following");
                     await WaypointFollowEnable(false);
                 }
                 else
                 {
-                    await WriteToLcd("Started WP...", "...following");
+                    await Lcd.UpdateDisplayGroup(DisplayGroupName.General, "Started WP...", "...following");
                     await WaypointFollowEnable(true);
                 }
 
@@ -356,7 +284,7 @@ namespace Autonoceptor.Host
 
                 _logger.Log(LogLevel.Info, $"WP Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}, {gpsFix.Quality}");
 
-                await WriteToLcd($"WP {Waypoints.Count}...", "...queued");
+                await Lcd.UpdateDisplayGroup(DisplayGroupName.General, $"WP {Waypoints.Count}...", "...queued");
 
                 return;
             }

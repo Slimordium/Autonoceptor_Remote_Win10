@@ -112,10 +112,11 @@
     <Compile Include="Hardware\Tf02Lidar.cs" />
     <Compile Include="Hardware\Gps.cs" />
     <Compile Include="Hardware\I2CDevice.cs" />
-    <Compile Include="Hardware\MaxbotixSonar.cs" />
     <Compile Include="Hardware\Imu.cs" />
     <Compile Include="Hardware\SerialDeviceHelper.cs" />
-    <Compile Include="Hardware\SparkFunSerial16X2Lcd.cs" />
+    <Compile Include="Hardware\Lcd\SparkFunSerial16X2Lcd.cs" />
+    <Compile Include="Hardware\Lcd\DisplayGroupName.cs" />
+    <Compile Include="Hardware\Lcd\DisplayGroup.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="Properties\Test2.rd.xml" />
   </ItemGroup>
@@ -173,6 +174,7 @@
   <ItemGroup>
     <None Include="app.config" />
   </ItemGroup>
+  <ItemGroup />
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
   </PropertyGroup>

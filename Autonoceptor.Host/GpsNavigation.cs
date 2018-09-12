@@ -1,10 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Autonoceptor.Service.Hardware;
+using Autonoceptor.Service.Hardware.Lcd;
 using NLog;
 
 namespace Autonoceptor.Host
@@ -18,9 +17,6 @@ namespace Autonoceptor.Host
         private IDisposable _gpsDisposable;
         private IDisposable _imuLcdLoggerDisposable;
         private IDisposable _gpsLcdLoggerDisposable;
-
-        private DisplayGroup _displayGroup;
-        private DisplayGroup _displayGroupImu;
 
         public bool SpeedControlEnabled { get; set; } = true;
 
@@ -36,7 +32,6 @@ namespace Autonoceptor.Host
         }
 
         private bool _followingWaypoints;
-        private DisplayGroup _displayGroupNav;
 
         protected bool FollowingWaypoints
         {
@@ -66,7 +61,7 @@ namespace Autonoceptor.Host
                 .Subscribe(
                     async imuData =>
                     {
-                        await WriteToImuLcd($"Yaw: {imuData.Yaw}", $"UYaw: {imuData.UncorrectedYaw}");
+                        await Lcd.UpdateDisplayGroup(DisplayGroupName.Imu, $"Yaw: {imuData.Yaw}", $"UYaw: {imuData.UncorrectedYaw}");
                     });
 
             _gpsLcdLoggerDisposable = Gps
@@ -76,30 +71,10 @@ namespace Autonoceptor.Host
                 .Subscribe(
                     async gpsFixData =>
                     {
-                        await WriteToLcd($"{gpsFixData.Lat},{gpsFixData.SatellitesInView},{gpsFixData.Hdop}", $"{gpsFixData.Lon},{gpsFixData.Quality}");
+                        await Lcd.UpdateDisplayGroup(DisplayGroupName.Gps,
+                            $"{gpsFixData.Lat},{gpsFixData.SatellitesInView},{gpsFixData.Hdop}",
+                            $"{gpsFixData.Lon},{gpsFixData.Quality}");
                     });
-
-            var displayGroup = new DisplayGroup
-            {
-                DisplayItems = new Dictionary<int, string> { { 1, "Init GPS nav" }, { 2, "Complete" } },
-                GroupName = "GPSNav"
-            };
-
-            var displayGroupImu = new DisplayGroup
-            {
-                DisplayItems = new Dictionary<int, string> { { 1, "IMU" }, { 2, "" } },
-                GroupName = "Imu"
-            };
-
-            var displayGroupNav = new DisplayGroup
-            {
-                DisplayItems = new Dictionary<int, string> { { 1, "Nav" }, { 2, "" } },
-                GroupName = "Nav"
-            };
-
-            _displayGroup = await Lcd.AddDisplayGroup(displayGroup);
-            _displayGroupImu = await Lcd.AddDisplayGroup(displayGroupImu);
-            _displayGroupNav = await Lcd.AddDisplayGroup(displayGroupNav);
         }
 
         protected new async Task InitializeAsync()
@@ -115,48 +90,6 @@ namespace Autonoceptor.Host
                 });
         }
 
-        private async Task WriteToLcd(string line1, string line2, bool refreshDisplay = false)
-        {
-            if (_displayGroup == null)
-                return;
-
-            _displayGroup.DisplayItems = new Dictionary<int, string>
-            {
-                {1, line1 },
-                {2, line2 }
-            };
-
-            await Lcd.UpdateDisplayGroup(_displayGroup, refreshDisplay);
-        }
-
-        private async Task WriteToImuLcd(string line1, string line2, bool refreshDisplay = false)
-        {
-            if (_displayGroupImu == null)
-                return;
-
-            _displayGroupImu.DisplayItems = new Dictionary<int, string>
-            {
-                {1, line1 },
-                {2, line2 }
-            };
-
-            await Lcd.UpdateDisplayGroup(_displayGroupImu, refreshDisplay);
-        }
-
-        private async Task WriteToLcdNav(string line1, string line2, bool refreshDisplay = false)
-        {
-            if (_displayGroupNav == null)
-                return;
-
-            _displayGroupNav.DisplayItems = new Dictionary<int, string>
-            {
-                {1, line1 },
-                {2, line2 }
-            };
-
-            await Lcd.UpdateDisplayGroup(_displayGroupNav, refreshDisplay);
-        }
-
         public async Task WaypointFollowEnable(bool enabled)
         {
             FollowingWaypoints = enabled;
@@ -169,7 +102,7 @@ namespace Autonoceptor.Host
                 {
                     FollowingWaypoints = false;
 
-                    await WriteToLcd("No waypoints...", "...found!", true);
+                    await Lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, "No waypoints...", "...found!", true);
                     return;
                 }
 
@@ -195,7 +128,7 @@ namespace Autonoceptor.Host
 
                         await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
 
-                        await WriteToLcd($"Heading: {mr.HeadingToTargetWp}", $"Distance: {mr.DistanceToTargetWp}ft");
+                        await Lcd.UpdateDisplayGroup(DisplayGroupName.GpsNav, $"Heading: {mr.HeadingToTargetWp}", $"Distance: {mr.DistanceToTargetWp}ft");
                     });
 
                 _imuHeadingUpdateDisposable = Imu
@@ -221,7 +154,7 @@ namespace Autonoceptor.Host
 
                             await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
 
-                            await WriteToLcdNav($"Heading: {mr.HeadingToTargetWp}", $"Distance: {mr.DistanceToTargetWp}ft");
+                            await Lcd.UpdateDisplayGroup(DisplayGroupName.GpsNav, $"Heading: {mr.HeadingToTargetWp}", $"Distance: {mr.DistanceToTargetWp}ft");
                         }
                         catch (Exception e)
                         {
@@ -237,7 +170,7 @@ namespace Autonoceptor.Host
                 if (moveRequest == null)
                 {
                     _logger.Log(LogLevel.Info, "Either no waypoints, or there was only one and we were already at it.");
-                    await WriteToLcd($"Already at wp?", "", true);
+                    await Lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, $"Already at wp?", "", true);
 
                     return;
                 }
@@ -246,7 +179,7 @@ namespace Autonoceptor.Host
 
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
-                await WriteToLcd("Started Nav", string.Empty, true);
+                await Lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, "Started Nav", string.Empty, true);
 
                 if (SpeedControlEnabled)
                 {
@@ -258,7 +191,7 @@ namespace Autonoceptor.Host
 
             await StopCruiseControl();
 
-            await WriteToLcd("Nav finished to", $"{Waypoints.Count} WPs", true);
+            await Lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, "Nav finished to", $"{Waypoints.Count} WPs", true);
 
             await Stop();
 
