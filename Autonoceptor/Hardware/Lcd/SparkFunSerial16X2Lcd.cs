@@ -134,7 +134,7 @@ namespace Autonoceptor.Service.Hardware.Lcd
             }
         }
 
-        public async Task SetUpCallback(DisplayGroupName displayGroupName, Action callback)
+        public async Task SetUpCallback(DisplayGroupName displayGroupName, Func<string> callback)
         {
             using (await _asyncMutex.LockAsync())
             {
@@ -143,21 +143,29 @@ namespace Autonoceptor.Service.Hardware.Lcd
                     _displayGroups.TryAdd((int)displayGroupName, new DisplayGroup(displayGroupName));
                 }
 
-                _displayGroups[(int)displayGroupName].UpCallback = callback;
+                _displayGroups[(int)displayGroupName].UpCallback = () => CallbackProxy(displayGroupName, callback);
             }
         }
 
-        public async Task SetDownCallback(DisplayGroupName displayGroupName, Action callback)
+        public async Task SetDownCallback(DisplayGroupName displayGroupName, Func<string> callback)
         {
             using (await _asyncMutex.LockAsync())
             {
-                if (!_displayGroups.ContainsKey((int)displayGroupName))
+                if (!_displayGroups.ContainsKey((int) displayGroupName))
                 {
-                    _displayGroups.TryAdd((int)displayGroupName, new DisplayGroup(displayGroupName));
+                    _displayGroups.TryAdd((int) displayGroupName, new DisplayGroup(displayGroupName));
                 }
 
-                _displayGroups[(int)displayGroupName].DownCallback = callback;
+                _displayGroups[(int) displayGroupName].DownCallback = () => CallbackProxy(displayGroupName, callback);
             }
+        }
+
+        private void CallbackProxy(DisplayGroupName displayGroupName, Func<string> callback)
+        {
+            if ((DisplayGroupName) _currentGroup != displayGroupName)
+                return;
+
+            _displayGroups[(int)displayGroupName].DisplayLineItems[2] = callback.Invoke();
         }
 
         public async Task ClearScreen()

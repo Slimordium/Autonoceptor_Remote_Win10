@@ -52,13 +52,25 @@ namespace Autonoceptor.Host
         private readonly AsyncManualResetEvent _asyncResetEvent = new AsyncManualResetEvent(false);
 
         private CancellationTokenSource _cruiseControlCancellationTokenSource = new CancellationTokenSource();
+        private IDisposable _lidarLcdDisposable;
 
         public CancellationTokenSource LidarCancellationTokenSource { get; set; } = new CancellationTokenSource();
 
         public int SafeDistance
         {
             get => Volatile.Read(ref _safeDistance);
-            set => Volatile.Write(ref _safeDistance, value);
+            set
+            {
+                var val = value;
+
+                if (val < 0)
+                    val = 0;
+
+                if (val > 300)
+                    val = 300;
+
+                Volatile.Write(ref _safeDistance, val);
+            } 
         } 
 
         protected Car(CancellationTokenSource cancellationTokenSource, string brokerHostnameOrIp) 
@@ -93,6 +105,19 @@ namespace Autonoceptor.Host
                         await Lcd.UpdateDisplayGroup(DisplayGroupName.Odometer, $"FPS: {Math.Round(odoData.FeetPerSecond, 1)},PC: {odoData.PulseCount}", $"Trv: {Math.Round(odoData.InTraveled / 12, 1)}ft");
                     });
 
+            _lidarLcdDisposable = Lidar
+                .GetObservable()
+                .Sample(TimeSpan.FromMilliseconds(250))
+                .ObserveOnDispatcher()
+                .Subscribe(
+                    async lidarData =>
+                    {
+                        if (!lidarData.IsValid)
+                            return;
+
+                        await Lcd.UpdateDisplayGroup(DisplayGroupName.Lidar, $"Distance: {lidarData.Distance}", $"Str: {lidarData.Strength}");
+                    });
+
             await Lcd.UpdateDisplayGroup(DisplayGroupName.General, "Init Car", "Complete");
         }
 
@@ -104,6 +129,70 @@ namespace Autonoceptor.Host
 
             await Stop();
             await DisableServos();
+
+            await Lcd.UpdateDisplayGroup(DisplayGroupName.LidarDangerZone, "Safe zone");
+            await Lcd.SetUpCallback(DisplayGroupName.LidarDangerZone, IncrementSafeDistance);
+            await Lcd.SetDownCallback(DisplayGroupName.LidarDangerZone, DecrementSafeDistance);
+
+            await Lcd.UpdateDisplayGroup(DisplayGroupName.GpsNavSpeed, "GPS Nav speed", $"{_ppUpdateInterval} / 200ms");
+            await Lcd.SetUpCallback(DisplayGroupName.GpsNavSpeed, IncrementSpeed);
+            await Lcd.SetDownCallback(DisplayGroupName.GpsNavSpeed, DecrementSpeed);
+        }
+
+        private string IncrementSafeDistance()
+        {
+            var sd = SafeDistance;
+
+            sd++;
+
+            if (sd > 300)
+                sd = 300;
+
+            SafeDistance = sd;
+
+            return $"  {sd}cm";
+        }
+
+        private string DecrementSafeDistance()
+        {
+            var sd = SafeDistance;
+
+            sd--;
+
+            if (sd < 40)
+                sd = 40;
+
+            SafeDistance = sd;
+
+            return $"  {sd}cm";
+        }
+
+        private string IncrementSpeed()
+        {
+            var p = _ppUpdateInterval;
+
+            p = p + 5;
+
+            if (p > 700)
+                p = 700;
+
+            _ppUpdateInterval = p;
+
+            return $"{p} / 200ms";
+        }
+
+        private string DecrementSpeed()
+        {
+            var p = _ppUpdateInterval;
+
+            p = p - 5;
+
+            if (p < 0)
+                p = 0;
+
+            _ppUpdateInterval = p;
+
+            return $"{p} / 200ms";
         }
 
         public void StartLidarTask()
@@ -120,14 +209,14 @@ namespace Autonoceptor.Host
                 await CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
                     async () =>
                     {
-                        var safeDistance = SafeDistance;
-
                         var ir = await SetChannelValue(_rightMidLidarPwm * 4, _lidarServoChannel);
 
                         await Task.Delay(250);
 
                         while (!LidarCancellationTokenSource.IsCancellationRequested)
                         {
+                            var safeDistance = SafeDistance;
+
                             try
                             {
                                 if (Stopped)

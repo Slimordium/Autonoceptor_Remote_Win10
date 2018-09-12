@@ -2,8 +2,8 @@
 {
     public enum DisplayGroupName
     {
-        Gps,
-
+        Gps1,
+        Gps2,
         GpsNav,
         GpsNavSpeed,
         GpsNavCurrentWp,

@@ -71,9 +71,13 @@ namespace Autonoceptor.Host
                 .Subscribe(
                     async gpsFixData =>
                     {
-                        await Lcd.UpdateDisplayGroup(DisplayGroupName.Gps,
-                            $"{gpsFixData.Lat},{gpsFixData.SatellitesInView},{gpsFixData.Hdop}",
-                            $"{gpsFixData.Lon},{gpsFixData.Quality}");
+                        await Lcd.UpdateDisplayGroup(DisplayGroupName.Gps1,
+                            $"{gpsFixData.Lat}",
+                            $"{gpsFixData.Lon}");
+
+                        await Lcd.UpdateDisplayGroup(DisplayGroupName.Gps2,
+                            $"S: {gpsFixData.SatellitesInView} HDOP: {gpsFixData.Hdop}",
+                            $"Q: {gpsFixData.Quality}");
                     });
         }
 
@@ -129,8 +133,6 @@ namespace Autonoceptor.Host
                             UpdateCruiseControl(310);
 
                         await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
-
-                        await Lcd.UpdateDisplayGroup(DisplayGroupName.GpsNav, $"Heading: {mr.HeadingToTargetWp}", $"Distance: {mr.DistanceToTargetWp}ft");
                     });
 
                 _imuHeadingUpdateDisposable = Imu
@@ -156,7 +158,7 @@ namespace Autonoceptor.Host
 
                             await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
 
-                            await Lcd.UpdateDisplayGroup(DisplayGroupName.GpsNav, $"Heading: {mr.HeadingToTargetWp}", $"Distance: {mr.DistanceToTargetWp}ft");
+                            await Lcd.UpdateDisplayGroup(DisplayGroupName.GpsNavDistHeading, $"Heading: {mr.HeadingToTargetWp}", $"Distance: {mr.DistanceToTargetWp}ft");
                         }
                         catch (Exception e)
                         {
@@ -177,7 +179,7 @@ namespace Autonoceptor.Host
                     return;
                 }
 
-                await SetVehicleTorque(MovementDirection.Forward, 50);
+                await SetVehicleTorque(MovementDirection.Forward, 30);
 
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
@@ -185,7 +187,7 @@ namespace Autonoceptor.Host
 
                 if (SpeedControlEnabled)
                 {
-                    await SetCruiseControl(400);
+                    await SetCruiseControl(330);
                 }
 
                 return;
