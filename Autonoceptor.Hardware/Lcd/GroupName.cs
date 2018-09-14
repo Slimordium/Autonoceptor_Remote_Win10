@@ -4,12 +4,13 @@
     {
         Gps1,
         Gps2,
-        GpsNav,
+
         GpsNavSpeed,
-        GpsNavCurrentWp,
+
         GpsNavDistHeading,
 
         Waypoint,
+        WaypointInfo,
 
         Imu,
         
@@ -20,6 +21,6 @@
 
         General,
 
-        Car,
+        Car, //11
     }
 }

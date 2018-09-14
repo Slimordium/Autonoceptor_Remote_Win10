@@ -107,12 +107,11 @@
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="ChannelData.cs" />
-    <Compile Include="MaestroPwmController.cs" />
+    <Compile Include="Maestro\ChannelData.cs" />
+    <Compile Include="Maestro\PwmController.cs" />
     <Compile Include="Odometer.cs" />
     <Compile Include="Tf02Lidar.cs" />
     <Compile Include="Gps.cs" />
-    <Compile Include="I2CDevice.cs" />
     <Compile Include="Imu.cs" />
     <Compile Include="SerialDeviceHelper.cs" />
     <Compile Include="Lcd\Lcd.cs" />

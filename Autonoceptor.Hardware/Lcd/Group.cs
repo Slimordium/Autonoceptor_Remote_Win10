@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace Autonoceptor.Hardware.Lcd
 {
@@ -15,7 +14,15 @@ namespace Autonoceptor.Hardware.Lcd
             DisplayLineItems[2] = "NA";
         }
         public Dictionary<int, string> DisplayLineItems { get; } = new Dictionary<int, string>();
+
+        /// <summary>
+        /// Xbox DPad Up
+        /// </summary>
         public Action UpCallback { get; set; }
+
+        /// <summary>
+        /// Xbox DPad Down
+        /// </summary>
         public Action DownCallback { get; set; }
     }
 }

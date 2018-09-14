@@ -2,7 +2,6 @@
 using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
-using System.Reactive.Threading.Tasks;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
@@ -97,7 +96,7 @@ namespace Autonoceptor.Hardware
 
                     _subject.OnNext(lidarData);
                 }
-            });
+            }, TaskCreationOptions.LongRunning);
             _lidarTask.Start();
         }
 

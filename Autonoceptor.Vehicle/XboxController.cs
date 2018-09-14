@@ -250,12 +250,12 @@ namespace Autonoceptor.Vehicle
             {
                 if (FollowingWaypoints)
                 {
-                    await Lcd.Update(GroupName.Waypoint, "Stopped WP...", "...following");
+                    await Lcd.Update(GroupName.Waypoint, "Stopped WP...", "...following", true);
                     await WaypointFollowEnable(false);
                 }
                 else
                 {
-                    await Lcd.Update(GroupName.Waypoint, "Started WP...", "...following");
+                    await Lcd.Update(GroupName.Waypoint, "Started WP...", "...following", true);
                     await WaypointFollowEnable(true);
                 }
 
@@ -277,7 +277,10 @@ namespace Autonoceptor.Vehicle
 
                 _logger.Log(LogLevel.Info, $"WP Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}, {gpsFix.Quality}");
 
-                await Lcd.Update(GroupName.Waypoint, $"WP {Waypoints.Count}...", "...queued");
+
+                await Lcd.Update(GroupName.WaypointInfo, $"WP: {gpsFix.Lat}", $"{ gpsFix.Lon}", true);
+
+                await Lcd.Update(GroupName.Waypoint, $"WP {Waypoints.Count}...", "...queued", true);
 
                 return;
             }
@@ -290,7 +293,7 @@ namespace Autonoceptor.Vehicle
 
                 await Waypoints.Save();
 
-                _logger.Log(LogLevel.Info, "WPs Cleared");
+                await Lcd.Update(GroupName.Waypoint, $"WPs Cleared", "...", true);
             }
         }
     }

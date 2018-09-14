@@ -150,7 +150,7 @@ namespace Autonoceptor.Hardware
                         }
                     }
                 }
-            });
+            }, TaskCreationOptions.LongRunning);
             _readTask.Start();
         }
 

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Autonoceptor.Hardware;
 using Autonoceptor.Hardware.Lcd;
+using Autonoceptor.Hardware.Maestro;
 using Hardware.Xbox;
 using NLog;
 using RxMqtt.Client;
@@ -36,7 +37,7 @@ namespace Autonoceptor.Vehicle
         public Imu Imu { get; private set; }
         public Tf02Lidar Lidar { get; private set; }
         protected Lcd Lcd { get; } = new Lcd();
-        private MaestroPwmController PwmController { get; set; }
+        private PwmController PwmController { get; set; }
         public Gps Gps { get; private set; }
         protected XboxDevice XboxDevice { get; set; }
 
@@ -59,13 +60,13 @@ namespace Autonoceptor.Vehicle
 
             Odometer = new Odometer(CancellationToken);
             Imu = new Imu(CancellationToken);
-            Gps = new Gps(CancellationToken);
+            Gps = new Gps();
             Lidar = new Tf02Lidar(CancellationToken);
 
             await Lcd.InitializeAsync();
             await Lcd.Update(GroupName.General, "Initializing...");
 
-            PwmController = new MaestroPwmController(new ushort[] {12, 13, 14}); //Channel 12, 13 and 14 are inputs
+            PwmController = new PwmController(new ushort[] {12, 13, 14}); //Channel 12, 13 and 14 are inputs
 
             await PwmController.InitializeAsync(CancellationToken);
 

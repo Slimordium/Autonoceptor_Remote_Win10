@@ -1,4 +1,4 @@
-﻿namespace Autonoceptor.Hardware
+﻿namespace Autonoceptor.Hardware.Maestro
 {
     public class ChannelData
     {

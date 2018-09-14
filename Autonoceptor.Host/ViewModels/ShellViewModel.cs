@@ -137,6 +137,7 @@ namespace Autonoceptor.Host.ViewModels
             _gpsDisposable = _conductor
                 .Gps
                 .GetObservable()
+                .Where(data => data != null)
                 .ObserveOnDispatcher()
                 .Subscribe(data =>
                 {

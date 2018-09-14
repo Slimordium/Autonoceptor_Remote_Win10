@@ -130,6 +130,8 @@ namespace Autonoceptor.Hardware.Lcd
 
                 if (display)
                 {
+                    _currentGroup = (int)groupName;
+
                     await WriteToFirstLineAsync(displayGroup.DisplayLineItems[1]);
                     await WriteToSecondLineAsync(displayGroup.DisplayLineItems[2]);
                 }

@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
-using Autonoceptor.Hardware;
 using Autonoceptor.Hardware.Lcd;
 using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Utilities;
@@ -166,6 +164,8 @@ namespace Autonoceptor.Vehicle
                 moveReq.HeadingToTargetWp = Math.Round(distanceAndHeading.HeadingToWaypoint);
                 moveReq.DistanceToTargetWp = Math.Round(distanceAndHeading.DistanceInFeet);
 
+                await _lcd.Update(GroupName.WaypointInfo, $"D: {distanceAndHeading.DistanceInFeet}ft", $"H: {distanceAndHeading.HeadingToWaypoint}");
+
                 if (radiusDistanceInCheck <= CurrentWaypoint.Radius || moveReq.SteeringMagnitude > 120) //Was 85
                 {
                     Dequeue(); //Remove waypoint from queue, as we have arrived, move on to next one if available
@@ -196,6 +196,8 @@ namespace Autonoceptor.Vehicle
 
                 moveReq.HeadingToTargetWp = Math.Round(distanceAndHeading.HeadingToWaypoint);
                 moveReq.DistanceToTargetWp = Math.Round(distanceAndHeading.DistanceInFeet);
+
+                await _lcd.Update(GroupName.WaypointInfo, $"D: {distanceAndHeading.DistanceInFeet}ft", $"H: {distanceAndHeading.HeadingToWaypoint}");
 
                 return moveReq;
             }

@@ -66,6 +66,7 @@ namespace Autonoceptor.Vehicle
 
             _gpsLcdLoggerDisposable = Gps
                 .GetObservable()
+                .Where(gpsFixData => gpsFixData != null)
                 .ObserveOnDispatcher()
                 .Subscribe(
                     async gpsFixData =>
@@ -173,7 +174,7 @@ namespace Autonoceptor.Vehicle
                 if (moveRequest == null)
                 {
                     _logger.Log(LogLevel.Info, "Either no waypoints, or there was only one and we were already at it.");
-                    await Lcd.Update(GroupName.Waypoint, $"Already at wp?", "", true);
+                    await Lcd.Update(GroupName.Waypoint, $"Already at wp?", string.Empty, true);
 
                     return;
                 }
@@ -194,7 +195,7 @@ namespace Autonoceptor.Vehicle
 
             await StopCruiseControl();
 
-            await Lcd.Update(GroupName.Waypoint, "Nav finished to", $"{Waypoints.Count} WPs", true);
+            await Lcd.Update(GroupName.Waypoint, "Nav finished", string.Empty, true);
 
             await Stop();
 

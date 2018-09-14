@@ -9,11 +9,9 @@ using Windows.Storage.Streams;
 using Nito.AsyncEx;
 using NLog;
 
-namespace Autonoceptor.Hardware
+namespace Autonoceptor.Hardware.Maestro
 {
-   
-
-    public class MaestroPwmController
+    public class PwmController
     {
         private SerialDevice _maestroPwmDevice;
 
@@ -42,7 +40,7 @@ namespace Autonoceptor.Hardware
 
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-        public MaestroPwmController(IEnumerable<ushort> inputChannels)
+        public PwmController(IEnumerable<ushort> inputChannels)
         {
             foreach (var c in inputChannels)
             {
@@ -103,7 +101,7 @@ namespace Autonoceptor.Hardware
                 _outputStream.WriteBytes(new[] { (byte)0x84, (byte)channel, lsb, msb });
                 var r = await _outputStream.StoreAsync();
 
-                return r;
+                return await Task.FromResult(r);
             }
         }
 
@@ -114,7 +112,7 @@ namespace Autonoceptor.Hardware
 
             using (await _mutex.LockAsync())
             {
-                _outputStream.WriteBytes(new[] { (byte)0xAA, (byte)0x0C, (byte)0x10, (byte)channel });//Forward / reverse
+                _outputStream.WriteBytes(new[] { (byte)0xAA, (byte)0x0C, (byte)0x10, (byte)channel });
                 var r = await _outputStream.StoreAsync();
 
                 await _inputStream.LoadAsync(2);

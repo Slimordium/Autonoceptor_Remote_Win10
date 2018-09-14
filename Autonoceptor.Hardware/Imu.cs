@@ -3,20 +3,20 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
-using System.Reactive.Threading.Tasks;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
-using Windows.Security.Cryptography.Core;
 using Windows.Storage.Streams;
 using Autonoceptor.Shared.Imu;
-using Autonoceptor.Shared.Utilities;
-using Nito.AsyncEx;
 using NLog;
 
 namespace Autonoceptor.Hardware
 {
+    /// <summary>
+    /// SparkFun Razor IMU
+    /// With this firmware: https://github.com/Razor-AHRS/razor-9dof-ahrs/wiki/tutorial
+    /// </summary>
     public class Imu
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
@@ -31,8 +31,6 @@ namespace Autonoceptor.Hardware
         private Task _readTask;
 
         private readonly CancellationToken _cancellationToken;
-
-        private ImuData _currentImuData = new ImuData();
 
         public Imu(CancellationToken cancellationToken)
         {
@@ -79,72 +77,61 @@ namespace Autonoceptor.Hardware
                 {
                     var imuReadings = new List<ImuData>();
 
-                    var lastYaw = -1d;
+                    _outputStream.WriteBytes(new[] { (byte)'#', (byte)'f' }); //Request next data frame
+                    await _outputStream.StoreAsync();
 
-                    //while (imuReadings.Count < 2) //Not sure if we need this?
+                    await _inputStream.LoadAsync(32);
+
+                    var buffer = new byte[_inputStream.UnconsumedBufferLength];
+
+                    _inputStream.ReadBytes(buffer);
+
+                    var imuReadString = Encoding.ASCII.GetString(buffer);
+
+                    var readings = imuReadString.Split("#");
+
+                    foreach (var data in readings)
                     {
-                        _outputStream.WriteBytes(new[] { (byte)'#', (byte)'f' }); //Request next data frame
-                        await _outputStream.StoreAsync();
+                        if (!data.StartsWith("Y") && !data.EndsWith('\n'))
+                            continue;
 
-                        await _inputStream.LoadAsync(32);
+                        var reading = data.Replace("\r\n", "").Replace("#", "").Replace("YPR=", "");
 
-                        var buffer = new byte[_inputStream.UnconsumedBufferLength];
-
-                        _inputStream.ReadBytes(buffer);
-
-                        var imuReadString = Encoding.ASCII.GetString(buffer);
-
-                        var readings = imuReadString.Split("#");
-
-                        foreach (var data in readings)
+                        try
                         {
-                            if (!data.StartsWith("Y") && !data.EndsWith('\n'))
+                            var imuData = new ImuData();
+
+                            var splitYpr = reading.Split(',');
+
+                            if (splitYpr.Length != 3)
                                 continue;
 
-                            var reading = data.Replace("\r\n", "").Replace("#", "").Replace("YPR=", "");
-
-                            try
+                            if (!double.TryParse(splitYpr[0], out var tempYaw))
                             {
-                                var imuData = new ImuData();
-
-                                var splitYpr = reading.Split(',');
-
-                                if (splitYpr.Length != 3)
-                                    continue;
-
-                                if (!double.TryParse(splitYpr[0], out var tempYaw))
-                                {
-                                    continue;
-                                }
-
-                                var yawDegrees = tempYaw;
-
-                                yawDegrees = yawDegrees % 360;
-
-                                if (yawDegrees < 0)
-                                    yawDegrees += 360;
-
-                                if (Math.Abs(yawDegrees - lastYaw) > 15 && lastYaw > -1)
-                                {
-                                    _logger.Log(LogLevel.Info, $"Skipped {yawDegrees} last {lastYaw}");
-                                    continue;
-                                }
-
-                                imuData.UncorrectedYaw = yawDegrees;
-                                imuData.Yaw = yawDegrees;
-
-                                double.TryParse(splitYpr[1], out var pitch);
-                                imuData.Pitch = pitch;
-
-                                double.TryParse(splitYpr[2], out var roll);
-                                imuData.Roll = roll;
-
-                                imuReadings.Add(imuData);
+                                continue;
                             }
-                            catch (Exception e)
-                            {
-                                _logger.Log(LogLevel.Error, e.Message);
-                            }
+
+                            var yawDegrees = tempYaw;
+
+                            yawDegrees = yawDegrees % 360;
+
+                            if (yawDegrees < 0)
+                                yawDegrees += 360;
+
+                            imuData.UncorrectedYaw = yawDegrees;
+                            imuData.Yaw = yawDegrees;
+
+                            double.TryParse(splitYpr[1], out var pitch);
+                            imuData.Pitch = pitch;
+
+                            double.TryParse(splitYpr[2], out var roll);
+                            imuData.Roll = roll;
+
+                            imuReadings.Add(imuData);
+                        }
+                        catch (Exception e)
+                        {
+                            _logger.Log(LogLevel.Error, e.Message);
                         }
                     }
 
@@ -164,8 +151,6 @@ namespace Autonoceptor.Hardware
                         if (avgYaw > 360)
                             avgYaw -= 360;
 
-                        lastYaw = avgYaw;
-
                         var avgImuData = new ImuData { Pitch = avgPitch, Yaw = avgYaw, Roll = avgRoll, UncorrectedYaw = avgUncorrectedYaw };
 
                         _subject.OnNext(avgImuData);
@@ -175,7 +160,7 @@ namespace Autonoceptor.Hardware
                         _logger.Log(LogLevel.Error, $"{e.Message}");
                     }
                 }
-            });
+            }, TaskCreationOptions.LongRunning);
             _readTask.Start();
         }
 

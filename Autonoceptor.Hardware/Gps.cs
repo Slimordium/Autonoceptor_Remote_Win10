@@ -1,21 +1,17 @@
 ﻿using System;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
-using System.Reactive.Threading.Tasks;
-using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
 using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Utilities;
-using Nito.AsyncEx;
 using NLog;
 
 namespace Autonoceptor.Hardware
 {
     public class Gps
     {
-        private readonly CancellationToken _cancellationToken;
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         private readonly ISubject<GpsFixData> _subject = new BehaviorSubject<GpsFixData>(null);
@@ -28,11 +24,6 @@ namespace Autonoceptor.Hardware
         private DataWriter _outputStream;
 
         private SerialDevice _serialDevice;
-
-        public Gps(CancellationToken cancellationToken)
-        {
-            _cancellationToken = cancellationToken;
-        }
 
         public async Task<GpsFixData> GetLatest()
         {
@@ -119,7 +110,7 @@ namespace Autonoceptor.Hardware
                     {
                         _logger.Log(LogLevel.Error, e.Message);
                     }
-            });
+            }, TaskCreationOptions.LongRunning);
 
             _gpsReadTask.Start();
         }
