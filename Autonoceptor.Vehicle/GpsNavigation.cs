@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Autonoceptor.Hardware.Lcd;
 using NLog;
 
-namespace Autonoceptor.Host
+namespace Autonoceptor.Vehicle
 {
     public class GpsNavigation : Car
     {

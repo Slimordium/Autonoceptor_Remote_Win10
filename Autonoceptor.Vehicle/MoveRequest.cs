@@ -1,4 +1,4 @@
-﻿namespace Autonoceptor.Host
+﻿namespace Autonoceptor.Vehicle
 {
     public class MoveRequest
     {

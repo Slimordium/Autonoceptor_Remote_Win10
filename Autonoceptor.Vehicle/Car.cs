@@ -5,9 +5,7 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.Core;
-using Windows.Foundation;
 using Windows.UI.Core;
-using Autonoceptor.Hardware;
 using Autonoceptor.Hardware.Lcd;
 using Autonoceptor.Shared;
 using Autonoceptor.Shared.Utilities;
@@ -15,7 +13,7 @@ using Newtonsoft.Json;
 using Nito.AsyncEx;
 using NLog;
 
-namespace Autonoceptor.Host
+namespace Autonoceptor.Vehicle
 {
     public class Car : Chassis
     {

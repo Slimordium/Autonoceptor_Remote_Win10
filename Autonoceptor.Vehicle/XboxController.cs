@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
@@ -7,12 +6,13 @@ using System.Threading.Tasks;
 using Windows.Devices.Enumeration;
 using Windows.Devices.HumanInterfaceDevice;
 using Autonoceptor.Hardware.Lcd;
+using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Utilities;
 using Hardware.Xbox;
 using Hardware.Xbox.Enums;
 using NLog;
 
-namespace Autonoceptor.Host
+namespace Autonoceptor.Vehicle
 {
     public class XboxController : GpsNavigation
     {

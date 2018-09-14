@@ -3,7 +3,7 @@ using Windows.UI.Xaml;
 using Autonoceptor.Hardware.Lcd;
 using NLog;
 
-namespace Autonoceptor.Host
+namespace Autonoceptor.Vehicle
 {
     /// <summary>
     /// Any UI interaction would be routed through this class

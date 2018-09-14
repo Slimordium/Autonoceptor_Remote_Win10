@@ -8,7 +8,7 @@ using NLog;
 using RxMqtt.Client;
 using RxMqtt.Shared;
 
-namespace Autonoceptor.Host
+namespace Autonoceptor.Vehicle
 {
     public class Chassis
     {
