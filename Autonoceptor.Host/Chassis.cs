@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Autonoceptor.Service.Hardware;
-using Autonoceptor.Service.Hardware.Lcd;
+using Autonoceptor.Hardware;
+using Autonoceptor.Hardware.Lcd;
 using Hardware.Xbox;
 using NLog;
 using RxMqtt.Client;
@@ -35,7 +35,7 @@ namespace Autonoceptor.Host
         public Odometer Odometer { get; private set; }
         public Imu Imu { get; private set; }
         public Tf02Lidar Lidar { get; private set; }
-        protected SparkFunSerial16X2Lcd Lcd { get; } = new SparkFunSerial16X2Lcd();
+        protected Lcd Lcd { get; } = new Lcd();
         private MaestroPwmController PwmController { get; set; }
         public Gps Gps { get; private set; }
         protected XboxDevice XboxDevice { get; set; }
@@ -63,7 +63,7 @@ namespace Autonoceptor.Host
             Lidar = new Tf02Lidar(CancellationToken);
 
             await Lcd.InitializeAsync();
-            await Lcd.UpdateDisplayGroup(DisplayGroupName.General, "Initializing...");
+            await Lcd.Update(GroupName.General, "Initializing...");
 
             PwmController = new MaestroPwmController(new ushort[] {12, 13, 14}); //Channel 12, 13 and 14 are inputs
 
@@ -81,7 +81,7 @@ namespace Autonoceptor.Host
 
             await Lidar.InitializeAsync();
 
-            await Lcd.UpdateDisplayGroup(DisplayGroupName.General, "Initialized");
+            await Lcd.Update(GroupName.General, "Initialized");
         }
 
         protected async Task<bool> InitializeXboxController()
@@ -119,7 +119,7 @@ namespace Autonoceptor.Host
         {
             if (MqttClient != null)
             {
-                await Lcd.UpdateDisplayGroup(DisplayGroupName.General, "Disposing", "MQTT Client");
+                await Lcd.Update(GroupName.General, "Disposing", "MQTT Client");
                 MqttClient.Dispose();
             }
 
@@ -127,7 +127,7 @@ namespace Autonoceptor.Host
 
             var status = await MqttClient.InitializeAsync();
 
-            await Lcd.UpdateDisplayGroup(DisplayGroupName.General, $"MQTT {status}");
+            await Lcd.Update(GroupName.General, $"MQTT {status}");
 
             return status;
         }

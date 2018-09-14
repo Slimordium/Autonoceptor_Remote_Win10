@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.Enumeration;
 using Windows.Devices.HumanInterfaceDevice;
-using Autonoceptor.Service.Hardware.Lcd;
+using Autonoceptor.Hardware.Lcd;
 using Autonoceptor.Shared.Utilities;
 using Hardware.Xbox;
 using Hardware.Xbox.Enums;
@@ -85,32 +85,25 @@ namespace Autonoceptor.Host
                 {
                     DisposeLcdWriters();
 
-                    await Task.Delay(500);
+                    await Task.Delay(250);
 
                     await WaypointFollowEnable(channelData.DigitalValue);
                 });
 
             _enableLcdDisposable = PwmObservable
                 .Where(channel => channel.ChannelId == _enableLidarChannel)
-                .Sample(TimeSpan.FromMilliseconds(500))
                 .ObserveOnDispatcher()
                 .Subscribe(
                     channel =>
                     {
-                        if (channel.ChannelId == _enableLidarChannel)
+                        if (!channel.DigitalValue)
                         {
-                            if (!channel.DigitalValue)
-                            {
-                                LidarCancellationTokenSource?.Cancel(false);
-                                LidarCancellationTokenSource?.Dispose();
-                                return;
-                            }
-
-                            StartLidarTask();
-
+                            LidarCancellationTokenSource?.Cancel(false);
+                            LidarCancellationTokenSource?.Dispose();
                             return;
                         }
 
+                        StartLidarTask();
                     });
 
             _xboxConnectedCheckDisposable = Observable
@@ -234,7 +227,7 @@ namespace Autonoceptor.Host
             {
                 await Waypoints.Save();
 
-                await Lcd.UpdateDisplayGroup(DisplayGroupName.General, $"{Waypoints.Count} WPs...", "...saved", true);
+                await Lcd.Update(GroupName.Waypoint, $"{Waypoints.Count} WPs...", "...saved", true);
 
                 return;
             }
@@ -257,12 +250,12 @@ namespace Autonoceptor.Host
             {
                 if (FollowingWaypoints)
                 {
-                    await Lcd.UpdateDisplayGroup(DisplayGroupName.General, "Stopped WP...", "...following");
+                    await Lcd.Update(GroupName.Waypoint, "Stopped WP...", "...following");
                     await WaypointFollowEnable(false);
                 }
                 else
                 {
-                    await Lcd.UpdateDisplayGroup(DisplayGroupName.General, "Started WP...", "...following");
+                    await Lcd.Update(GroupName.Waypoint, "Started WP...", "...following");
                     await WaypointFollowEnable(true);
                 }
 
@@ -284,7 +277,7 @@ namespace Autonoceptor.Host
 
                 _logger.Log(LogLevel.Info, $"WP Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}, {gpsFix.Quality}");
 
-                await Lcd.UpdateDisplayGroup(DisplayGroupName.General, $"WP {Waypoints.Count}...", "...queued");
+                await Lcd.Update(GroupName.Waypoint, $"WP {Waypoints.Count}...", "...queued");
 
                 return;
             }

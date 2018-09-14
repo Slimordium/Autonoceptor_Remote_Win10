@@ -107,17 +107,17 @@
     <Compile Include="Chassis.cs" />
     <Compile Include="Conductor.cs" />
     <Compile Include="FileExtensions.cs" />
-    <Compile Include="Sweep.cs" />
     <Compile Include="MoveRequest.cs" />
     <Compile Include="GpsNavigation.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <None Include="PulseCount.ino" />
+    <None Include="Arduino\PulseCount.ino" />
     <Compile Include="ViewModels\ShellViewModel.cs" />
     <Compile Include="Views\ShellView.xaml.cs">
       <DependentUpon>ShellView.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Waypoint.cs" />
-    <Compile Include="WaypointQueue.cs" />
+    <Compile Include="Waypoint\Waypoint.cs" />
+    <Compile Include="Waypoint\WaypointQueue.cs" />
+    <Compile Include="Waypoint\WaypointType.cs" />
     <Compile Include="XboxController.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -176,9 +176,9 @@
       <Project>{696c75e3-040a-4aac-b008-a268bf73879a}</Project>
       <Name>Autonoceptor.Shared</Name>
     </ProjectReference>
-    <ProjectReference Include="..\Autonoceptor\Autonoceptor.Service.csproj">
+    <ProjectReference Include="..\Autonoceptor\Autonoceptor.Hardware.csproj">
       <Project>{a6422859-45bd-495e-bddb-7398730eba06}</Project>
-      <Name>Autonoceptor.Service</Name>
+      <Name>Autonoceptor.Hardware</Name>
     </ProjectReference>
     <ProjectReference Include="..\Hardware.Xbox\Hardware.Xbox.csproj">
       <Project>{81ded141-b2cd-4d21-aa5c-788c7534e2fa}</Project>
@@ -189,6 +189,7 @@
     <None Include="app.config" />
     <None Include="Autonoceptor.Host_TemporaryKey.pfx" />
   </ItemGroup>
+  <ItemGroup />
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
   </PropertyGroup>

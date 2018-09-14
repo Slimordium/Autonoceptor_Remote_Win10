@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Autonoceptor.Service.Hardware;
-using Autonoceptor.Service.Hardware.Lcd;
+using Autonoceptor.Hardware;
+using Autonoceptor.Hardware.Lcd;
 using Autonoceptor.Shared.Utilities;
 using Newtonsoft.Json;
 using Nito.AsyncEx;
@@ -38,7 +38,7 @@ namespace Autonoceptor.Host
         //http://navspark.mybigcommerce.com/content/S1722DR8_v0.4.pdf
 
         private readonly double _minWaypointDistance;
-        private readonly SparkFunSerial16X2Lcd _lcd;
+        private readonly Lcd _lcd;
 
         ///  <summary>
         /// The third decimal place is worth up to 110 m: it can identify a large agricultural field or institutional campus.
@@ -50,7 +50,7 @@ namespace Autonoceptor.Host
         ///  </summary>
         ///  <param name="minWaypointDistance"></param>
         /// <param name="lcd"></param>
-        public WaypointQueue(double minWaypointDistance, SparkFunSerial16X2Lcd lcd) // = .0000001
+        public WaypointQueue(double minWaypointDistance, Lcd lcd) // = .0000001
         {
             _minWaypointDistance = minWaypointDistance;
             _lcd = lcd;
@@ -64,7 +64,7 @@ namespace Autonoceptor.Host
                     Math.Abs(fixData.Lat - waypoint.Lat) < _minWaypointDistance ||
                     Math.Abs(fixData.Lon - waypoint.Lon) < _minWaypointDistance))
                 {
-                    await _lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, $"({Count}) {waypoint.Lat}",
+                    await _lcd.Update(GroupName.Waypoint, $"({Count}) {waypoint.Lat}",
                         $"{waypoint.Lon}");
 
                     base.Enqueue(waypoint);
@@ -81,7 +81,7 @@ namespace Autonoceptor.Host
                     string filename = GetWaypointsFileName();
                     await FileExtensions.SaveStringToFile(filename, JsonConvert.SerializeObject(ToArray()));
 
-                    await _lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, $"Saved {Count}", "waypoints...", true);
+                    await _lcd.Update(GroupName.Waypoint, $"Saved {Count}", "waypoints...", true);
 
                     return true;
                 }
@@ -113,7 +113,7 @@ namespace Autonoceptor.Host
 
                     if (waypoints == null)
                     {
-                        await _lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, "Waypoints null", string.Empty, true);
+                        await _lcd.Update(GroupName.Waypoint, "Waypoints null", string.Empty, true);
                         return;
                     }
 
@@ -122,11 +122,11 @@ namespace Autonoceptor.Host
                         base.Enqueue(wp);
                     }
 
-                    await _lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, $"#Set {_waypointSetNumber}, {Count} WPs", "Load Successful", true);
+                    await _lcd.Update(GroupName.Waypoint, $"#Set {_waypointSetNumber}, {Count} WPs", "Load Successful", true);
                 }
                 catch (Exception e)
                 {
-                    await _lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, e.Message, "Load failed", true);
+                    await _lcd.Update(GroupName.Waypoint, e.Message, "Load failed", true);
                 }
             }
         }

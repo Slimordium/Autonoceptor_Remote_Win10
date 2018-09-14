@@ -8,7 +8,7 @@ using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
 using NLog;
 
-namespace Autonoceptor.Service.Hardware
+namespace Autonoceptor.Hardware
 {
     public class Odometer
     {

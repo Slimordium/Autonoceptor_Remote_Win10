@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hardware.Xbox", "Hardware.X
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Autonoceptor.Host", "Autonoceptor.Host\Autonoceptor.Host.csproj", "{12C85440-1140-4737-ABDC-7F6546705982}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Autonoceptor.Service", "Autonoceptor\Autonoceptor.Service.csproj", "{A6422859-45BD-495E-BDDB-7398730EBA06}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Autonoceptor.Hardware", "Autonoceptor\Autonoceptor.Hardware.csproj", "{A6422859-45BD-495E-BDDB-7398730EBA06}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Autonoceptor.Shared", "Autonoceptor.Shared\Autonoceptor.Shared.csproj", "{696C75E3-040A-4AAC-B008-A268BF73879A}"
 EndProject

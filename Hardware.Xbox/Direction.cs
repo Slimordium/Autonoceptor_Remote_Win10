@@ -14,7 +14,4 @@
         TriggerLeft,
         TriggerRight
     }
-
-   
-    
 }

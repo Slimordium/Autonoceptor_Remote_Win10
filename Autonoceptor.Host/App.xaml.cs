@@ -10,7 +10,6 @@ using Windows.UI.Xaml.Controls;
 using Autonoceptor.Host.ViewModels;
 using Autonoceptor.Host.Views;
 using Caliburn.Micro;
-using Autonoceptor.Service;
 
 namespace Autonoceptor.Host
 {

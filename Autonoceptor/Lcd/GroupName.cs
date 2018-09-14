@@ -1,6 +1,6 @@
-﻿namespace Autonoceptor.Service.Hardware.Lcd
+﻿namespace Autonoceptor.Hardware.Lcd
 {
-    public enum DisplayGroupName
+    public enum GroupName
     {
         Gps1,
         Gps2,

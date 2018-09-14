@@ -9,26 +9,9 @@ using Windows.Storage.Streams;
 using Nito.AsyncEx;
 using NLog;
 
-namespace Autonoceptor.Service.Hardware
+namespace Autonoceptor.Hardware
 {
-    public class ChannelData
-    {
-        public ushort ChannelId { get; set; }
-
-        private int _analogValue;
-        public int AnalogValue
-        {
-            get => _analogValue;
-            set
-            {
-                DigitalValue = value > 1023;
-
-                _analogValue = value;
-            }
-        }
-
-        public bool DigitalValue { get; private set; }
-    }
+   
 
     public class MaestroPwmController
     {
@@ -57,7 +40,7 @@ namespace Autonoceptor.Service.Hardware
         private const ushort RestartScriptAtSubroutineWithParameterCommand = 0xA8;
         private const ushort GetScriptStatusCommand = 0xAE;
 
-        private ILogger _logger = LogManager.GetCurrentClassLogger();
+        private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         public MaestroPwmController(IEnumerable<ushort> inputChannels)
         {
@@ -87,7 +70,7 @@ namespace Autonoceptor.Service.Hardware
             _inputStream = new DataReader(_maestroPwmDevice.InputStream);
 
             _getChannelStatesDisposable = Observable
-                .Interval(TimeSpan.FromMilliseconds(200))
+                .Interval(TimeSpan.FromMilliseconds(250))
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {

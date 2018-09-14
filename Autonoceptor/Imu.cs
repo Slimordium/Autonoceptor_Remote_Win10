@@ -15,7 +15,7 @@ using Autonoceptor.Shared.Utilities;
 using Nito.AsyncEx;
 using NLog;
 
-namespace Autonoceptor.Service.Hardware
+namespace Autonoceptor.Hardware
 {
     public class Imu
     {

@@ -2,16 +2,16 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Autonoceptor.Service.Hardware.Lcd
+namespace Autonoceptor.Hardware.Lcd
 {
-    public class DisplayGroup
+    public class Group
     {
-        public DisplayGroup(DisplayGroupName displayGroupName)
+        public Group(GroupName groupName)
         {
             DisplayLineItems.Add(1, string.Empty);
             DisplayLineItems.Add(2, string.Empty);
 
-            DisplayLineItems[1] = displayGroupName.ToString();
+            DisplayLineItems[1] = groupName.ToString();
             DisplayLineItems[2] = "NA";
         }
         public Dictionary<int, string> DisplayLineItems { get; } = new Dictionary<int, string>();

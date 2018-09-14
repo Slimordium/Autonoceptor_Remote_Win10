@@ -18,11 +18,4 @@ namespace Hardware.Xbox
         public IEnumerable<FunctionButton> FunctionButtons { get; set; }
     }
 
-    public class XboxAnalog
-    {
-        public Direction Direction { get; set; } = Direction.None;
-
-        public double Magnitude;
-    }
-
 }

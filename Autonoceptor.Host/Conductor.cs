@@ -1,6 +1,6 @@
 ﻿using System.Threading;
 using Windows.UI.Xaml;
-using Autonoceptor.Service.Hardware.Lcd;
+using Autonoceptor.Hardware.Lcd;
 using NLog;
 
 namespace Autonoceptor.Host
@@ -29,7 +29,7 @@ namespace Autonoceptor.Host
 
         private async void Current_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            await Lcd.UpdateDisplayGroup(DisplayGroupName.General, $"Unhandled Exc", e.Message);
+            await Lcd.Update(GroupName.General, $"Unhandled Exc", e.Message);
 
             _logger.Log(LogLevel.Error, e);
         }

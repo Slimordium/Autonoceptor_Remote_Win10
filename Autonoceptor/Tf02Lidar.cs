@@ -10,7 +10,7 @@ using Windows.Storage.Streams;
 using Autonoceptor.Shared;
 using NLog;
 
-namespace Autonoceptor.Service.Hardware
+namespace Autonoceptor.Hardware
 {
     public class Tf02Lidar
     {

@@ -8,7 +8,7 @@ using Windows.Storage.Streams;
 using Nito.AsyncEx;
 using NLog;
 
-namespace Autonoceptor.Service.Hardware.Lcd
+namespace Autonoceptor.Hardware.Lcd
 {
     //    Serial.println("Green backlight set to 100%");
     //OpenLCD.write('|'); //Put LCD into setting mode
@@ -60,7 +60,7 @@ namespace Autonoceptor.Service.Hardware.Lcd
     /// <summary>
     /// SparkFun Serial 16x2 LCD
     /// </summary>
-    public class SparkFunSerial16X2Lcd
+    public class Lcd
     {
         private readonly byte[] _startOfFirstLine = {0xfe, 0x80};
         private readonly byte[] _startOfSecondLine = {0xfe, 0xc0};
@@ -70,7 +70,7 @@ namespace Autonoceptor.Service.Hardware.Lcd
 
         private SerialDevice _lcdSerialDevice;
 
-        private readonly ConcurrentDictionary<int, DisplayGroup> _displayGroups = new ConcurrentDictionary<int, DisplayGroup>();
+        private readonly ConcurrentDictionary<int, Group> _displayGroups = new ConcurrentDictionary<int, Group>();
 
         private readonly AsyncLock _asyncMutex = new AsyncLock();
 
@@ -106,66 +106,68 @@ namespace Autonoceptor.Service.Hardware.Lcd
                     });
         }
 
-        public async Task UpdateDisplayGroup(DisplayGroupName displayGroupName, string line1, string line2 = "", bool display = false)
+        public async Task Update(GroupName groupName, string line1, string line2 = "", bool display = false)
         {
             using (await _asyncMutex.LockAsync())
             {
-                if (!_displayGroups.ContainsKey((int) displayGroupName))
+                if (!_displayGroups.ContainsKey((int) groupName))
                 {
-                    _displayGroups.TryAdd((int) displayGroupName, new DisplayGroup(displayGroupName));
+                    _displayGroups.TryAdd((int) groupName, new Group(groupName));
                 }
 
-                var displayGroup = _displayGroups[(int) displayGroupName];
+                var displayGroup = _displayGroups[(int) groupName];
 
                 displayGroup.DisplayLineItems[1] = line1;
 
-                if (!string.IsNullOrEmpty(line2))
+                if (string.IsNullOrEmpty(line2))
+                {
+                    displayGroup.DisplayLineItems[2] = "                ";
+                }
+                else
                 {
                     displayGroup.DisplayLineItems[2] = line2;
                 }
 
                 if (display)
                 {
-                    await ClearScreen();
-
                     await WriteToFirstLineAsync(displayGroup.DisplayLineItems[1]);
                     await WriteToSecondLineAsync(displayGroup.DisplayLineItems[2]);
                 }
             }
         }
 
-        public async Task SetUpCallback(DisplayGroupName displayGroupName, Func<string> callback)
+        public async Task SetUpCallback(GroupName groupName, Func<string> callback)
         {
             using (await _asyncMutex.LockAsync())
             {
-                if (!_displayGroups.ContainsKey((int)displayGroupName))
+                if (!_displayGroups.ContainsKey((int)groupName))
                 {
-                    _displayGroups.TryAdd((int)displayGroupName, new DisplayGroup(displayGroupName));
+                    _displayGroups.TryAdd((int)groupName, new Group(groupName));
                 }
 
-                _displayGroups[(int)displayGroupName].UpCallback = () => CallbackProxy(displayGroupName, callback);
+                _displayGroups[(int)groupName].UpCallback = () => CallbackProxy(groupName, callback);
             }
         }
 
-        public async Task SetDownCallback(DisplayGroupName displayGroupName, Func<string> callback)
+        public async Task SetDownCallback(GroupName groupName, Func<string> callback)
         {
             using (await _asyncMutex.LockAsync())
             {
-                if (!_displayGroups.ContainsKey((int) displayGroupName))
+                if (!_displayGroups.ContainsKey((int) groupName))
                 {
-                    _displayGroups.TryAdd((int) displayGroupName, new DisplayGroup(displayGroupName));
+                    _displayGroups.TryAdd((int) groupName, new Group(groupName));
                 }
 
-                _displayGroups[(int) displayGroupName].DownCallback = () => CallbackProxy(displayGroupName, callback);
+                _displayGroups[(int) groupName].DownCallback = () => CallbackProxy(groupName, callback);
             }
         }
 
-        private void CallbackProxy(DisplayGroupName displayGroupName, Func<string> callback)
+        private void CallbackProxy(GroupName groupName, Func<string> callback)
         {
-            if ((DisplayGroupName) _currentGroup != displayGroupName)
+            if ((GroupName) _currentGroup != groupName)
                 return;
 
-            _displayGroups[(int)displayGroupName].DisplayLineItems[2] = callback.Invoke();
+            _displayGroups[(int)groupName].DisplayLineItems[2] = callback.Invoke();
         }
 
         public async Task ClearScreen()
@@ -174,30 +176,15 @@ namespace Autonoceptor.Service.Hardware.Lcd
             await _outputStream.StoreAsync();
         }
 
-        public async Task InvokeUpCallback(DisplayGroupName displayGroupName)
-        {
-            using (await _asyncMutex.LockAsync())
-            {
-                if (!_displayGroups.ContainsKey((int)displayGroupName))
-                {
-                    _displayGroups.TryAdd((int)displayGroupName, new DisplayGroup(displayGroupName));
-                }
-
-                var displayGroup = _displayGroups[(int)displayGroupName];
-
-                displayGroup.UpCallback?.Invoke();
-            }
-        }
-
         public async Task InvokeUpCallback()
         {
             using (await _asyncMutex.LockAsync())
             {
-                var displayGroupName = (DisplayGroupName) _currentGroup;
+                var displayGroupName = (GroupName) _currentGroup;
 
                 if (!_displayGroups.ContainsKey((int)displayGroupName))
                 {
-                    _displayGroups.TryAdd((int)displayGroupName, new DisplayGroup(displayGroupName));
+                    _displayGroups.TryAdd((int)displayGroupName, new Group(displayGroupName));
                 }
 
                 var displayGroup = _displayGroups[(int)displayGroupName];
@@ -210,26 +197,11 @@ namespace Autonoceptor.Service.Hardware.Lcd
         {
             using (await _asyncMutex.LockAsync())
             {
-                var displayGroupName = (DisplayGroupName)_currentGroup;
+                var displayGroupName = (GroupName)_currentGroup;
 
                 if (!_displayGroups.ContainsKey((int)displayGroupName))
                 {
-                    _displayGroups.TryAdd((int)displayGroupName, new DisplayGroup(displayGroupName));
-                }
-
-                var displayGroup = _displayGroups[(int)displayGroupName];
-
-                displayGroup.DownCallback?.Invoke();
-            }
-        }
-
-        public async Task InvokeDownCallback(DisplayGroupName displayGroupName)
-        {
-            using (await _asyncMutex.LockAsync())
-            {
-                if (!_displayGroups.ContainsKey((int)displayGroupName))
-                {
-                    _displayGroups.TryAdd((int)displayGroupName, new DisplayGroup(displayGroupName));
+                    _displayGroups.TryAdd((int)displayGroupName, new Group(displayGroupName));
                 }
 
                 var displayGroup = _displayGroups[(int)displayGroupName];
@@ -254,11 +226,11 @@ namespace Autonoceptor.Service.Hardware.Lcd
 
                     if (!_displayGroups.ContainsKey(_currentGroup))
                     {
-                        _displayGroups.TryAdd(_currentGroup, new DisplayGroup((DisplayGroupName)_currentGroup));
+                        _displayGroups.TryAdd(_currentGroup, new Group((GroupName)_currentGroup));
 
                         await ClearScreen();
 
-                        await WriteToFirstLineAsync($"{(DisplayGroupName)_currentGroup}");
+                        await WriteToFirstLineAsync($"{(GroupName)_currentGroup}");
                         await WriteToSecondLineAsync($"... NA!");
                         return;
                     }
@@ -290,11 +262,11 @@ namespace Autonoceptor.Service.Hardware.Lcd
 
                     if (!_displayGroups.ContainsKey(_currentGroup))
                     {
-                        _displayGroups.TryAdd(_currentGroup, new DisplayGroup((DisplayGroupName) _currentGroup));
+                        _displayGroups.TryAdd(_currentGroup, new Group((GroupName) _currentGroup));
 
                         await ClearScreen();
 
-                        await WriteToFirstLineAsync($"{(DisplayGroupName)_currentGroup}");
+                        await WriteToFirstLineAsync($"{(GroupName)_currentGroup}");
                         await WriteToSecondLineAsync($"... NA!");
                         return;
                     }

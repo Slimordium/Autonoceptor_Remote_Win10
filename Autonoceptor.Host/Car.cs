@@ -7,8 +7,8 @@ using System.Threading.Tasks;
 using Windows.ApplicationModel.Core;
 using Windows.Foundation;
 using Windows.UI.Core;
-using Autonoceptor.Service.Hardware;
-using Autonoceptor.Service.Hardware.Lcd;
+using Autonoceptor.Hardware;
+using Autonoceptor.Hardware.Lcd;
 using Autonoceptor.Shared;
 using Autonoceptor.Shared.Utilities;
 using Newtonsoft.Json;
@@ -102,7 +102,7 @@ namespace Autonoceptor.Host
                 .Subscribe(
                     async odoData =>
                     {
-                        await Lcd.UpdateDisplayGroup(DisplayGroupName.Odometer, $"FPS: {Math.Round(odoData.FeetPerSecond, 1)},PC: {odoData.PulseCount}", $"Trv: {Math.Round(odoData.InTraveled / 12, 1)}ft");
+                        await Lcd.Update(GroupName.Odometer, $"FPS: {Math.Round(odoData.FeetPerSecond, 1)},PC: {odoData.PulseCount}", $"Trv: {Math.Round(odoData.InTraveled / 12, 1)}ft");
                     });
 
             _lidarLcdDisposable = Lidar
@@ -115,10 +115,10 @@ namespace Autonoceptor.Host
                         if (!lidarData.IsValid)
                             return;
 
-                        await Lcd.UpdateDisplayGroup(DisplayGroupName.Lidar, $"Distance: {lidarData.Distance}", $"Str: {lidarData.Strength}");
+                        await Lcd.Update(GroupName.Lidar, $"Distance: {lidarData.Distance}", $"Str: {lidarData.Strength}");
                     });
 
-            await Lcd.UpdateDisplayGroup(DisplayGroupName.General, "Init Car", "Complete");
+            await Lcd.Update(GroupName.General, "Init Car", "Complete");
         }
 
         protected new async Task InitializeAsync()
@@ -130,13 +130,13 @@ namespace Autonoceptor.Host
             await Stop();
             await DisableServos();
 
-            await Lcd.UpdateDisplayGroup(DisplayGroupName.LidarDangerZone, "Safe zone");
-            await Lcd.SetUpCallback(DisplayGroupName.LidarDangerZone, IncrementSafeDistance);
-            await Lcd.SetDownCallback(DisplayGroupName.LidarDangerZone, DecrementSafeDistance);
+            await Lcd.Update(GroupName.LidarDangerZone, "Safe zone");
+            await Lcd.SetUpCallback(GroupName.LidarDangerZone, IncrementSafeDistance);
+            await Lcd.SetDownCallback(GroupName.LidarDangerZone, DecrementSafeDistance);
 
-            await Lcd.UpdateDisplayGroup(DisplayGroupName.GpsNavSpeed, "GPS Nav speed", $"{_ppUpdateInterval} / 200ms");
-            await Lcd.SetUpCallback(DisplayGroupName.GpsNavSpeed, IncrementSpeed);
-            await Lcd.SetDownCallback(DisplayGroupName.GpsNavSpeed, DecrementSpeed);
+            await Lcd.Update(GroupName.GpsNavSpeed, "GPS Nav speed", $"{_ppUpdateInterval} / 200ms");
+            await Lcd.SetUpCallback(GroupName.GpsNavSpeed, IncrementSpeed);
+            await Lcd.SetDownCallback(GroupName.GpsNavSpeed, DecrementSpeed);
         }
 
         private string IncrementSafeDistance()
@@ -501,7 +501,7 @@ namespace Autonoceptor.Host
             {
                 Stopped = false;
 
-                await Lcd.UpdateDisplayGroup(DisplayGroupName.Car, "Started", "", true);
+                await Lcd.Update(GroupName.Car, "Started", "", true);
 
                 return;
             }
@@ -514,7 +514,7 @@ namespace Autonoceptor.Host
 
             Stopped = true;
 
-            await Lcd.UpdateDisplayGroup(DisplayGroupName.Car, "Stopped", "", true);
+            await Lcd.Update(GroupName.Car, "Stopped", "", true);
         }
 
         public async Task DisableServos()

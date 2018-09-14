@@ -3,7 +3,7 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Autonoceptor.Service.Hardware.Lcd;
+using Autonoceptor.Hardware.Lcd;
 using NLog;
 
 namespace Autonoceptor.Host
@@ -61,21 +61,20 @@ namespace Autonoceptor.Host
                 .Subscribe(
                     async imuData =>
                     {
-                        await Lcd.UpdateDisplayGroup(DisplayGroupName.Imu, $"Yaw: {imuData.Yaw}", $"UYaw: {imuData.UncorrectedYaw}");
+                        await Lcd.Update(GroupName.Imu, $"Yaw: {imuData.Yaw}", $"UYaw: {imuData.UncorrectedYaw}");
                     });
 
             _gpsLcdLoggerDisposable = Gps
                 .GetObservable()
-                .Sample(TimeSpan.FromMilliseconds(500))
                 .ObserveOnDispatcher()
                 .Subscribe(
                     async gpsFixData =>
                     {
-                        await Lcd.UpdateDisplayGroup(DisplayGroupName.Gps1,
+                        await Lcd.Update(GroupName.Gps1,
                             $"{gpsFixData.Lat}",
                             $"{gpsFixData.Lon}");
 
-                        await Lcd.UpdateDisplayGroup(DisplayGroupName.Gps2,
+                        await Lcd.Update(GroupName.Gps2,
                             $"S: {gpsFixData.SatellitesInView} HDOP: {gpsFixData.Hdop}",
                             $"Q: {gpsFixData.Quality}");
                     });
@@ -108,7 +107,7 @@ namespace Autonoceptor.Host
                 {
                     FollowingWaypoints = false;
 
-                    await Lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, "No waypoints...", "...found!", true);
+                    await Lcd.Update(GroupName.Waypoint, "No waypoints...", "...found!", true);
                     return;
                 }
 
@@ -158,7 +157,7 @@ namespace Autonoceptor.Host
 
                             await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
 
-                            await Lcd.UpdateDisplayGroup(DisplayGroupName.GpsNavDistHeading, $"Heading: {mr.HeadingToTargetWp}", $"Distance: {mr.DistanceToTargetWp}ft");
+                            await Lcd.Update(GroupName.GpsNavDistHeading, $"Heading: {mr.HeadingToTargetWp}", $"Distance: {mr.DistanceToTargetWp}ft");
                         }
                         catch (Exception e)
                         {
@@ -174,7 +173,7 @@ namespace Autonoceptor.Host
                 if (moveRequest == null)
                 {
                     _logger.Log(LogLevel.Info, "Either no waypoints, or there was only one and we were already at it.");
-                    await Lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, $"Already at wp?", "", true);
+                    await Lcd.Update(GroupName.Waypoint, $"Already at wp?", "", true);
 
                     return;
                 }
@@ -183,7 +182,7 @@ namespace Autonoceptor.Host
 
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
-                await Lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, "Started Nav", string.Empty, true);
+                await Lcd.Update(GroupName.Waypoint, "Started Nav", string.Empty, true);
 
                 if (SpeedControlEnabled)
                 {
@@ -195,7 +194,7 @@ namespace Autonoceptor.Host
 
             await StopCruiseControl();
 
-            await Lcd.UpdateDisplayGroup(DisplayGroupName.Waypoint, "Nav finished to", $"{Waypoints.Count} WPs", true);
+            await Lcd.Update(GroupName.Waypoint, "Nav finished to", $"{Waypoints.Count} WPs", true);
 
             await Stop();
 
