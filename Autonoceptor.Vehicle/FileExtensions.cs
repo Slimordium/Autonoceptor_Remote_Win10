@@ -7,7 +7,7 @@ using Windows.Storage;
 using Windows.Storage.Streams;
 using NLog;
 
-namespace Autonoceptor.Host
+namespace Autonoceptor.Vehicle
 {
     internal static class FileExtensions
     {
