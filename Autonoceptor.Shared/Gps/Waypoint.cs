@@ -1,5 +1,5 @@
 ﻿
-namespace Autonoceptor.Host
+namespace Autonoceptor.Shared.Gps
 {
     public class Waypoint
     {

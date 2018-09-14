@@ -12,7 +12,7 @@
     <DefaultLanguage>en-US</DefaultLanguage>
     <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
     <TargetPlatformVersion Condition=" '$(TargetPlatformVersion)' == '' ">10.0.17134.0</TargetPlatformVersion>
-    <TargetPlatformMinVersion>10.0.16299.0</TargetPlatformMinVersion>
+    <TargetPlatformMinVersion>10.0.17134.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
@@ -103,22 +103,13 @@
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Car.cs" />
-    <Compile Include="Chassis.cs" />
-    <Compile Include="Conductor.cs" />
     <Compile Include="FileExtensions.cs" />
-    <Compile Include="MoveRequest.cs" />
-    <Compile Include="GpsNavigation.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <None Include="Arduino\PulseCount.ino" />
     <Compile Include="ViewModels\ShellViewModel.cs" />
     <Compile Include="Views\ShellView.xaml.cs">
       <DependentUpon>ShellView.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Waypoint\Waypoint.cs" />
-    <Compile Include="Waypoint\WaypointQueue.cs" />
-    <Compile Include="Waypoint\WaypointType.cs" />
-    <Compile Include="XboxController.cs" />
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
@@ -172,13 +163,17 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Autonoceptor.Hardware\Autonoceptor.Hardware.csproj">
+      <Project>{a6422859-45bd-495e-bddb-7398730eba06}</Project>
+      <Name>Autonoceptor.Hardware</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Autonoceptor.Shared\Autonoceptor.Shared.csproj">
       <Project>{696c75e3-040a-4aac-b008-a268bf73879a}</Project>
       <Name>Autonoceptor.Shared</Name>
     </ProjectReference>
-    <ProjectReference Include="..\Autonoceptor\Autonoceptor.Hardware.csproj">
-      <Project>{a6422859-45bd-495e-bddb-7398730eba06}</Project>
-      <Name>Autonoceptor.Hardware</Name>
+    <ProjectReference Include="..\Autonoceptor.Vehicle\Autonoceptor.Vehicle.csproj">
+      <Project>{3be8cdd2-6fea-416b-a0e8-3cefb6a3c0ba}</Project>
+      <Name>Autonoceptor.Vehicle</Name>
     </ProjectReference>
     <ProjectReference Include="..\Hardware.Xbox\Hardware.Xbox.csproj">
       <Project>{81ded141-b2cd-4d21-aa5c-788c7534e2fa}</Project>
