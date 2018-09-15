@@ -74,10 +74,8 @@
         <CheckBox Name="EnableNavSpeedControl" Grid.Row="4" Grid.Column="0" FontSize="12">GPS Nav speed?</CheckBox>
 
         <StackPanel Grid.Column="1" Grid.Row="4" HorizontalAlignment="Left" Grid.ColumnSpan="4"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="600">
-            <TextBlock Width="110"  VerticalAlignment="Center">Turn input modifier:</TextBlock>
-            <Slider Name="TurnMagnitudeInputModifier" StepFrequency=".01" Minimum="1" Maximum="3" Value="1.6" Width="100" VerticalAlignment="Center"></Slider>
-            <TextBlock Width="65"  VerticalAlignment="Center">Nav speed:</TextBlock>
-            <Slider Name="CruiseControl" Minimum="100" Maximum="900" StepFrequency="1" Value="350" Width="100" VerticalAlignment="Center"></Slider>
+            <TextBlock Width="125"  VerticalAlignment="Center">Nav feet per. second:</TextBlock>
+            <Slider Name="CruiseControl" Minimum="1" Maximum="10" StepFrequency=".25" Value="2.5" Width="100" VerticalAlignment="Center"></Slider>
             <Button Name="SetNavParams" Content="Set"></Button>
         </StackPanel>
 

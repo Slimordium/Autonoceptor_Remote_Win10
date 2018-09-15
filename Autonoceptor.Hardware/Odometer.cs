@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
@@ -38,7 +39,7 @@ namespace Autonoceptor.Hardware
         public async Task ZeroTripMeter()
         {
             var odoData = await GetLatest();
-            _odometerSet = odoData.InTraveled;
+            _odometerSet = (float)odoData.InTraveled;
         }
 
         private volatile float _odometerSet;
@@ -57,66 +58,83 @@ namespace Autonoceptor.Hardware
             _readTask = new Task(async() =>
             {
                 var lastOdometer = new OdometerData();
+                var odoDataList = new List<OdometerData>();
 
                 //TODO: send from ESP32 Thing as JSON, this is annoying. As long as it is fast enough...
                 while (!_cancellationToken.IsCancellationRequested)
                 {
-                    var byteCount = await _inputStream.LoadAsync(100);
-
-                    if (byteCount == 0)
-                        continue;
-
-                    var readString = _inputStream.ReadString(byteCount);
-
-                    if (string.IsNullOrEmpty(readString))
-                        continue;
-
-                    foreach (var ss in readString.Split('\n'))
+                    while (odoDataList.Count < 3)
                     {
-                        try
+                        var byteCount = await _inputStream.LoadAsync(50);
+
+                        if (byteCount == 0)
+                            continue;
+
+                        var readString = _inputStream.ReadString(byteCount);
+
+                        if (string.IsNullOrEmpty(readString))
+                            continue;
+
+                        foreach (var ss in readString.Split('\n'))
                         {
-                            var split = ss.Split(',').ToList();
-
-                            if (split.Count < 2)
+                            try
                             {
-                                continue;
-                            }
+                                var split = ss.Split(',').ToList();
 
-                            if (!readString.Contains("IN=") && !readString.Contains("\r"))
-                            {
-                                continue;
-                            }
-                        
-                            var odometerDataNew = new OdometerData();
+                                if (split.Count < 2)
+                                {
+                                    continue;
+                                }
 
-                            if (!float.TryParse(split[0].Replace("IN=", "").Replace("\r", "").Replace("\n", ""), out var inches))
-                            {
-                                odometerDataNew.InTraveled = lastOdometer.InTraveled;
-                            }
-                            else
-                            {
-                                odometerDataNew.InTraveled = inches;
-                                lastOdometer.InTraveled = inches;
-                            }
+                                if (!readString.Contains("IN=") && !readString.Contains("\r"))
+                                {
+                                    continue;
+                                }
 
-                            if (!float.TryParse(split[1].Replace("FPS=", ""), out var fps))
-                            {
-                                odometerDataNew.FeetPerSecond = lastOdometer.FeetPerSecond;
-                            }
-                            else
-                            {
-                                odometerDataNew.FeetPerSecond = fps;
-                            }
+                                var odometerDataNew = new OdometerData();
 
-                            odometerDataNew.DistanceSinceSet = inches - _odometerSet;
+                                if (!float.TryParse(split[0].Replace("IN=", "").Replace("\r", "").Replace("\n", ""), out var inches))
+                                {
+                                    odometerDataNew.InTraveled = lastOdometer.InTraveled;
+                                }
+                                else
+                                {
+                                    odometerDataNew.InTraveled = inches;
+                                    lastOdometer.InTraveled = inches;
+                                }
 
-                            _subject.OnNext(odometerDataNew);
-                        }
-                        catch (Exception e)
-                        {
-                            _logger.Log(LogLevel.Error, $"Odometer: {e.Message}");
+                                if (!float.TryParse(split[1].Replace("FPS=", ""), out var fps))
+                                {
+                                    odometerDataNew.FeetPerSecond = Math.Round(lastOdometer.FeetPerSecond, 1);
+                                }
+                                else
+                                {
+                                    odometerDataNew.FeetPerSecond = fps;
+                                }
+
+                                odometerDataNew.DistanceSinceSet = inches - _odometerSet;
+
+                                odoDataList.Add(odometerDataNew);
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Log(LogLevel.Error, $"Odometer: {e.Message}");
+                            }
                         }
                     }
+
+                    var newData = new OdometerData
+                    {
+                        InTraveled = Math.Round(odoDataList.Average(d => d.InTraveled), 1),
+                        FeetPerSecond = Math.Round(odoDataList.Average(d => d.FeetPerSecond), 1),
+                        DistanceSinceSet = Math.Round(odoDataList.Average(d => d.DistanceSinceSet), 1)
+                    };
+
+                    _subject.OnNext(newData);
+
+                    lastOdometer = newData;
+
+                    odoDataList = new List<OdometerData>();
                 }
             }, TaskCreationOptions.LongRunning);
             _readTask.Start();
@@ -130,11 +148,11 @@ namespace Autonoceptor.Hardware
 
     public class OdometerData
     {
-        public float InTraveled { get; set; }
+        public double InTraveled { get; set; }
 
-        public float FeetPerSecond { get; set; }
+        public double FeetPerSecond { get; set; }
 
-        public float DistanceSinceSet { get; set; }
+        public double DistanceSinceSet { get; set; }
 
     }
 }

@@ -40,7 +40,7 @@ void loop()
 {
     if (Ms == 0)
     {
-      Ms = millis() + 200;
+      Ms = millis() + 100;
     }
 
     if (millis() >= Ms) 
@@ -48,7 +48,7 @@ void loop()
       Serial.print("IN=");
       Serial.print(InTraveled);
       Serial.print(",FPS=");
-      Serial.print(((InTraveled - LastInTraveled) * 5) / 12);
+      Serial.print(((InTraveled - LastInTraveled) / 12) * 10);
       Serial.println();
 
       Ms = 0;

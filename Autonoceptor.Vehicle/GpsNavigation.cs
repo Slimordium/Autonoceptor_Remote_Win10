@@ -102,7 +102,15 @@ namespace Autonoceptor.Vehicle
 
             if (enabled)
             {
-                await Waypoints.Load(); //Load waypoint file from disk
+                var load = await Waypoints.Load(); //Load waypoint file from disk
+
+                if (!load)
+                {
+                    FollowingWaypoints = false;
+
+                    await Lcd.Update(GroupName.Waypoint, "Waypoint load...", "...failed", true);
+                    return;
+                }
 
                 if (!Waypoints.Any())
                 {
@@ -118,21 +126,30 @@ namespace Autonoceptor.Vehicle
                     .ObserveOnDispatcher()
                     .Subscribe(async gpsData =>
                     {
-                        var mr = await Waypoints.GetMoveRequestForNextWaypoint(gpsData.Lat, gpsData.Lon, gpsData.Heading);
-
-                        if (mr == null)
+                        try
                         {
-                            if (!FollowingWaypoints)
+                            var mr = await Waypoints.GetMoveRequestForNextWaypoint(gpsData.Lat, gpsData.Lon, gpsData.Heading);
+
+                            if (mr == null)
+                            {
+                                if (!FollowingWaypoints)
+                                    return;
+
+                                await WaypointFollowEnable(false);
                                 return;
+                            }
 
-                            await WaypointFollowEnable(false);
-                            return;
+                            if (mr.DistanceInToTargetWp < 60)
+                                UpdateCruiseControl(310);
+
+                            await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
                         }
+                        catch (Exception e)
+                        {
+                            _logger.Log(LogLevel.Error, $"GpsHeadingUpdate failed {e.Message}");
 
-                        if (mr.Distance < 60)
-                            UpdateCruiseControl(310);
-
-                        await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
+                            await Stop();
+                        }
                     });
 
                 _imuHeadingUpdateDisposable = Imu
@@ -158,7 +175,7 @@ namespace Autonoceptor.Vehicle
 
                             await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
 
-                            await Lcd.Update(GroupName.GpsNavDistHeading, $"Heading: {mr.HeadingToTargetWp}", $"Distance: {mr.DistanceToTargetWp}ft");
+                            await Lcd.Update(GroupName.GpsNavDistHeading, $"WP Head: {Math.Round(mr.HeadingToTargetWp, 1)}", $"WP Dist: {Math.Round(mr.DistanceInToTargetWp, 1)}ft");
                         }
                         catch (Exception e)
                         {

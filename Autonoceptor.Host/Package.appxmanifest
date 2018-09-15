@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:iot="http://schemas.microsoft.com/appx/manifest/iot/windows10" xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3" IgnorableNamespaces="uap mp iot uap3">
-  <Identity Name="Autonoceptor.Host" Publisher="CN=turtle" Version="1.0.13.0" />
+  <Identity Name="Autonoceptor.Host" Publisher="CN=turtle" Version="1.0.14.0" />
   <mp:PhoneIdentity PhoneProductId="fc1964c0-ccee-4518-b197-a77da035f99a" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
     <DisplayName>Autonoceptor.Host</DisplayName>

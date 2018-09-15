@@ -113,7 +113,7 @@ namespace Autonoceptor.Vehicle
                         if (!lidarData.IsValid)
                             return;
 
-                        await Lcd.Update(GroupName.Lidar, $"Distance: {lidarData.Distance}", $"Str: {lidarData.Strength}");
+                        await Lcd.Update(GroupName.Lidar, $"L Dist: {lidarData.Distance}cm", $"L Str: {lidarData.Strength}");
                     });
 
             await Lcd.Update(GroupName.General, "Init Car", "Complete");
@@ -132,7 +132,7 @@ namespace Autonoceptor.Vehicle
             await Lcd.SetUpCallback(GroupName.LidarDangerZone, IncrementSafeDistance);
             await Lcd.SetDownCallback(GroupName.LidarDangerZone, DecrementSafeDistance);
 
-            await Lcd.Update(GroupName.GpsNavSpeed, "GPS Nav FPS", $" {_fpsTarget} fps");
+            await Lcd.Update(GroupName.GpsNavSpeed, "Nav feet p/sec", $" {_fpsTarget} fps");
             await Lcd.SetUpCallback(GroupName.GpsNavSpeed, IncrementSpeed);
             await Lcd.SetDownCallback(GroupName.GpsNavSpeed, DecrementSpeed);
         }
@@ -148,7 +148,7 @@ namespace Autonoceptor.Vehicle
 
             SafeDistance = sd;
 
-            return $"  {sd}cm";
+            return $" {sd}cm";
         }
 
         private string DecrementSafeDistance()
@@ -162,35 +162,35 @@ namespace Autonoceptor.Vehicle
 
             SafeDistance = sd;
 
-            return $"  {sd}cm";
+            return $" {sd}cm";
         }
 
         private string IncrementSpeed()
         {
-            var p = _fpsTarget;
+            var fpsTarget = _fpsTarget;
 
-            p = p + .25;
+            fpsTarget = fpsTarget + .25;
 
-            if (p > 4)
-                p = 4;
+            if (fpsTarget > 4)
+                fpsTarget = 4;
 
-            _fpsTarget = p;
+            _fpsTarget = fpsTarget;
 
-            return $"{p} / 200ms";
+            return $" {fpsTarget} fps";
         }
 
         private string DecrementSpeed()
         {
-            var p = _fpsTarget;
+            var fpsTarget = _fpsTarget;
 
-            p = p - .25;
+            fpsTarget = fpsTarget - .25;
 
-            if (p < 0)
-                p = 0;
+            if (fpsTarget < 0)
+                fpsTarget = 0;
 
-            _fpsTarget = p;
+            _fpsTarget = fpsTarget;
 
-            return $" {p} fps";
+            return $" {fpsTarget} fps";
         }
 
         public void StartLidarTask()
@@ -355,7 +355,7 @@ namespace Autonoceptor.Vehicle
                     }));
         }
 
-        protected void StartCruiseControlThread()
+        private void StartCruiseControlThread()
         {
             _cruiseControlThread = new Thread(async () =>
             {
@@ -398,7 +398,7 @@ namespace Autonoceptor.Vehicle
 
                                 if (moveMagnitude > 50)
                                 {
-                                    moveMagnitude = moveMagnitude - 2;
+                                    moveMagnitude = moveMagnitude - 1.5;
                                 }
                                 else if (moveMagnitude > 40)
                                 {
@@ -481,7 +481,7 @@ namespace Autonoceptor.Vehicle
 
             _cruiseControlCancellationTokenSource = new CancellationTokenSource();
 
-            _fpsTarget = Convert.ToInt32(feetPerSecond);
+            _fpsTarget = feetPerSecond;
 
             await SetVehicleTorque(MovementDirection.Forward, 40);
 
@@ -497,9 +497,19 @@ namespace Autonoceptor.Vehicle
             await Stop();
         }
 
-        public void UpdateCruiseControl(int pulseCountPerUpdateInterval)
+        /// <summary>
+        /// How many feet per second 
+        /// </summary>
+        /// <param name="feetPerSecond"></param>
+        public void UpdateCruiseControl(double feetPerSecond)
         {
-            _fpsTarget = pulseCountPerUpdateInterval;
+            if (feetPerSecond > 4)
+                feetPerSecond = 4;
+
+            if (feetPerSecond < 1.5)
+                feetPerSecond = 1.5;
+
+            _fpsTarget = feetPerSecond;
         }
 
         public async Task Stop(bool isCanceled = false)
@@ -508,7 +518,7 @@ namespace Autonoceptor.Vehicle
             {
                 Stopped = false;
 
-                await Lcd.Update(GroupName.Car, "Started", "", true);
+                await Lcd.Update(GroupName.Car, "Started", string.Empty, true);
 
                 return;
             }

@@ -96,7 +96,7 @@ namespace Autonoceptor.Vehicle
         /// This needs to be called before navigating
         /// </summary>
         /// <returns></returns>
-        public async Task Load()
+        public async Task<bool> Load()
         {
             using (await _asyncLock.LockAsync())
             {
@@ -113,7 +113,7 @@ namespace Autonoceptor.Vehicle
                     if (waypoints == null)
                     {
                         await _lcd.Update(GroupName.Waypoint, "Waypoints null", string.Empty, true);
-                        return;
+                        return false;
                     }
 
                     foreach (var wp in waypoints)
@@ -126,7 +126,11 @@ namespace Autonoceptor.Vehicle
                 catch (Exception e)
                 {
                     await _lcd.Update(GroupName.Waypoint, e.Message, "Load failed", true);
+
+                    return false;
                 }
+
+                return true;
             }
         }
 
@@ -147,13 +151,13 @@ namespace Autonoceptor.Vehicle
 
                 if (overrideCalculatedDistanceRemaining > 0)
                 {
-                    moveReq.Distance = overrideCalculatedDistanceRemaining;
+                    moveReq.DistanceInToTargetWp = overrideCalculatedDistanceRemaining;
                     radiusDistanceInCheck = overrideCalculatedDistanceRemaining;
                     directionAndMagnitude = GetSteeringDirectionAndMagnitude(currentHeading, distanceAndHeading.HeadingToWaypoint, overrideCalculatedDistanceRemaining);
                 }
                 else
                 {
-                    moveReq.Distance = distanceAndHeading.DistanceInInches;
+                    moveReq.DistanceInToTargetWp = distanceAndHeading.DistanceInInches;
                     radiusDistanceInCheck = distanceAndHeading.DistanceInInches;
                     directionAndMagnitude = GetSteeringDirectionAndMagnitude(currentHeading, distanceAndHeading.HeadingToWaypoint, distanceAndHeading.DistanceInInches);
                 }
@@ -161,14 +165,14 @@ namespace Autonoceptor.Vehicle
                 moveReq.SteeringDirection = directionAndMagnitude.Item1;
                 moveReq.SteeringMagnitude = directionAndMagnitude.Item2;
 
-                moveReq.HeadingToTargetWp = Math.Round(distanceAndHeading.HeadingToWaypoint);
-                moveReq.DistanceToTargetWp = Math.Round(distanceAndHeading.DistanceInFeet);
-
-                await _lcd.Update(GroupName.WaypointInfo, $"D: {moveReq.DistanceToTargetWp}ft", $"H: {moveReq.HeadingToTargetWp}");
+                moveReq.HeadingToTargetWp = Math.Round(distanceAndHeading.HeadingToWaypoint, 1);
+                moveReq.DistanceInToTargetWp = Math.Round(distanceAndHeading.DistanceInInches, 1);
 
                 if (radiusDistanceInCheck <= CurrentWaypoint.Radius || moveReq.SteeringMagnitude > 120) //Was 85
                 {
                     Dequeue(); //Remove waypoint from queue, as we have arrived, move on to next one if available
+
+                    await _lcd.Update(GroupName.WaypointInfo, $"WP st mag: {moveReq.SteeringMagnitude}", $"WP dist: {moveReq.DistanceInToTargetWp}");
 
                     if (!this.Any())
                     {
@@ -188,16 +192,13 @@ namespace Autonoceptor.Vehicle
 
                 distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(yourLat, yourLon, CurrentWaypoint.Lat, CurrentWaypoint.Lon);
 
-                moveReq.Distance = distanceAndHeading.DistanceInInches;
                 directionAndMagnitude = GetSteeringDirectionAndMagnitude(currentHeading, distanceAndHeading.HeadingToWaypoint, distanceAndHeading.DistanceInInches);
 
                 moveReq.SteeringDirection = directionAndMagnitude.Item1;
                 moveReq.SteeringMagnitude = directionAndMagnitude.Item2;
 
-                moveReq.HeadingToTargetWp = Math.Round(distanceAndHeading.HeadingToWaypoint);
-                moveReq.DistanceToTargetWp = Math.Round(distanceAndHeading.DistanceInFeet);
-
-                await _lcd.Update(GroupName.WaypointInfo, $"D: {distanceAndHeading.DistanceInFeet}ft", $"H: {distanceAndHeading.HeadingToWaypoint}");
+                moveReq.HeadingToTargetWp = Math.Round(distanceAndHeading.HeadingToWaypoint, 1);
+                moveReq.DistanceInToTargetWp = Math.Round(distanceAndHeading.DistanceInInches, 1);
 
                 return moveReq;
             }
