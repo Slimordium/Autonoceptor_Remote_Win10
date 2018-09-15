@@ -8,6 +8,10 @@ volatile long PulseCount = 0;
 
 volatile float CmTraveled = 0;
 
+volatile float InTraveled = 0;
+
+volatile float LastInTraveled = 0;
+
 volatile int Ms = 0;
 
 void setup() 
@@ -26,6 +30,10 @@ void setup()
   Ms = 0;
 
   CmTraveled = 0;
+
+  InTraveled = 0;
+
+  LastInTraveled = 0;
 }
 
 void loop() 
@@ -37,16 +45,15 @@ void loop()
 
     if (millis() >= Ms) 
     {
-      Serial.print("P=");
-      Serial.print(PulseCount);
-      Serial.print(",CM=");
-      Serial.print(CmTraveled);
-      Serial.print(",IN=");
-      Serial.print(CmTraveled / 2.54);
+      Serial.print("IN=");
+      Serial.print(InTraveled);
+      Serial.print(",FPS=");
+      Serial.print(((InTraveled - LastInTraveled) * 5) / 12);
       Serial.println();
 
       Ms = 0;
       PulseCount = 0;
+      LastInTraveled = InTraveled;
     }
 
 //2.54cm per in
@@ -59,6 +66,8 @@ void loop()
     SendCount = 0;
     
     CmTraveled = CmTraveled + 5.3333; //cm
+
+    InTraveled = CmTraveled / 2.54;
   }
 }
 

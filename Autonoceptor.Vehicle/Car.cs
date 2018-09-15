@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.Core;
 using Windows.UI.Core;
+using Autonoceptor.Hardware;
 using Autonoceptor.Hardware.Lcd;
 using Autonoceptor.Shared;
 using Autonoceptor.Shared.Utilities;
@@ -19,7 +20,7 @@ namespace Autonoceptor.Vehicle
     {
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-        private volatile int _ppUpdateInterval;
+        private double _fpsTarget;
 
         protected const ushort _extraInputChannel = 14;
 
@@ -95,12 +96,11 @@ namespace Autonoceptor.Vehicle
         {
             _odoLcdDisposable = Odometer
                 .GetObservable()
-                .Sample(TimeSpan.FromMilliseconds(250))
                 .ObserveOnDispatcher()
                 .Subscribe(
                     async odoData =>
                     {
-                        await Lcd.Update(GroupName.Odometer, $"FPS: {Math.Round(odoData.FeetPerSecond, 1)},PC: {odoData.PulseCount}", $"Trv: {Math.Round(odoData.InTraveled / 12, 1)}ft");
+                        await Lcd.Update(GroupName.Odometer, $"FPS: {Math.Round(odoData.FeetPerSecond, 1)}", $"Trv: {Math.Round(odoData.InTraveled / 12, 1)}ft");
                     });
 
             _lidarLcdDisposable = Lidar
@@ -132,7 +132,7 @@ namespace Autonoceptor.Vehicle
             await Lcd.SetUpCallback(GroupName.LidarDangerZone, IncrementSafeDistance);
             await Lcd.SetDownCallback(GroupName.LidarDangerZone, DecrementSafeDistance);
 
-            await Lcd.Update(GroupName.GpsNavSpeed, "GPS Nav speed", $"{_ppUpdateInterval} / 200ms");
+            await Lcd.Update(GroupName.GpsNavSpeed, "GPS Nav FPS", $" {_fpsTarget} fps");
             await Lcd.SetUpCallback(GroupName.GpsNavSpeed, IncrementSpeed);
             await Lcd.SetDownCallback(GroupName.GpsNavSpeed, DecrementSpeed);
         }
@@ -167,30 +167,30 @@ namespace Autonoceptor.Vehicle
 
         private string IncrementSpeed()
         {
-            var p = _ppUpdateInterval;
+            var p = _fpsTarget;
 
-            p = p + 5;
+            p = p + .25;
 
-            if (p > 700)
-                p = 700;
+            if (p > 4)
+                p = 4;
 
-            _ppUpdateInterval = p;
+            _fpsTarget = p;
 
             return $"{p} / 200ms";
         }
 
         private string DecrementSpeed()
         {
-            var p = _ppUpdateInterval;
+            var p = _fpsTarget;
 
-            p = p - 5;
+            p = p - .25;
 
             if (p < 0)
                 p = 0;
 
-            _ppUpdateInterval = p;
+            _fpsTarget = p;
 
-            return $"{p} / 200ms";
+            return $" {p} fps";
         }
 
         public void StartLidarTask()
@@ -368,41 +368,45 @@ namespace Autonoceptor.Vehicle
 
                         while (!_cruiseControlCancellationTokenSource.IsCancellationRequested)
                         {
-                            var pulseCountPerUpdate = _ppUpdateInterval;
+                            var fpsTarget = _fpsTarget;
 
-                            var odometer = await Odometer.GetLatest();
+                            var odometerList = new List<OdometerData>
+                            {
+                                await Odometer.GetLatest(),
+                                await Odometer.GetLatest()
+                            };
 
-                            var pulseCount = odometer.PulseCount;
+                            var currentFps = odometerList.Average(d => d.FeetPerSecond);
 
-                            if (pulseCount < 100 && !starting)
+                            if (currentFps < 1 && !starting)
                             {
                                 isStuck = true;
                             }
 
                             //Give it some wiggle room
-                            if (pulseCount < pulseCountPerUpdate + 30 && pulseCount > pulseCountPerUpdate - 50)
+                            if (currentFps < fpsTarget + .5 && currentFps > fpsTarget - .5)
                             {
                                 return;
                             }
 
-                            if (pulseCount < pulseCountPerUpdate)
-                                moveMagnitude = moveMagnitude + 30;
+                            if (currentFps < fpsTarget)
+                                moveMagnitude = moveMagnitude + 10;
 
-                            if (pulseCount > pulseCountPerUpdate)
+                            if (currentFps > fpsTarget)
                             {
                                 starting = false;
 
                                 if (moveMagnitude > 50)
                                 {
-                                    moveMagnitude = moveMagnitude - 5;
+                                    moveMagnitude = moveMagnitude - 2;
                                 }
                                 else if (moveMagnitude > 40)
                                 {
-                                    moveMagnitude = moveMagnitude - 2;
+                                    moveMagnitude = moveMagnitude - 1;
                                 }
                                 else
                                 {
-                                    moveMagnitude = moveMagnitude - .7;
+                                    moveMagnitude = moveMagnitude - .5;
                                 }
                             }
 
@@ -462,17 +466,22 @@ namespace Autonoceptor.Vehicle
             await SetChannelValue(moveValue, MovementChannel);
         }
 
-        public async Task SetCruiseControl(int pulseCountPerUpdateInterval)
+        /// <summary>
+        /// Sets target feet per second (FPS)
+        /// </summary>
+        /// <param name="feetPerSecond"></param>
+        /// <returns></returns>
+        public async Task SetCruiseControlFps(double feetPerSecond)
         {
-            _cruiseControlCancellationTokenSource.Cancel();
+            _cruiseControlCancellationTokenSource?.Cancel();
 
             await Task.Delay(250);
 
-            _cruiseControlCancellationTokenSource.Dispose();
+            _cruiseControlCancellationTokenSource?.Dispose();
 
             _cruiseControlCancellationTokenSource = new CancellationTokenSource();
 
-            _ppUpdateInterval = pulseCountPerUpdateInterval;
+            _fpsTarget = Convert.ToInt32(feetPerSecond);
 
             await SetVehicleTorque(MovementDirection.Forward, 40);
 
@@ -481,8 +490,8 @@ namespace Autonoceptor.Vehicle
 
         public async Task StopCruiseControl()
         {
-            _cruiseControlCancellationTokenSource.Cancel();
-            _cruiseControlCancellationTokenSource.Dispose();
+            _cruiseControlCancellationTokenSource?.Cancel();
+            _cruiseControlCancellationTokenSource?.Dispose();
             _cruiseControlCancellationTokenSource = new CancellationTokenSource();
 
             await Stop();
@@ -490,7 +499,7 @@ namespace Autonoceptor.Vehicle
 
         public void UpdateCruiseControl(int pulseCountPerUpdateInterval)
         {
-            _ppUpdateInterval = pulseCountPerUpdateInterval;
+            _fpsTarget = pulseCountPerUpdateInterval;
         }
 
         public async Task Stop(bool isCanceled = false)

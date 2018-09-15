@@ -130,7 +130,7 @@ namespace Autonoceptor.Host.ViewModels
                 .Subscribe(odoData =>
                 {
                     OdometerIn =
-                        $"FPS: {odoData.FeetPerSecond}, Pulse: {odoData.PulseCount}, {odoData.InTraveled / 12} ft, {odoData.InTraveled}in";
+                        $"{odoData.FeetPerSecond} fps, {odoData.InTraveled / 12} ft, {odoData.InTraveled}in";
                     NotifyOfPropertyChange(nameof(OdometerIn));
                 });
 

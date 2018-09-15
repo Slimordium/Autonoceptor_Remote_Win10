@@ -164,7 +164,7 @@ namespace Autonoceptor.Vehicle
                 moveReq.HeadingToTargetWp = Math.Round(distanceAndHeading.HeadingToWaypoint);
                 moveReq.DistanceToTargetWp = Math.Round(distanceAndHeading.DistanceInFeet);
 
-                await _lcd.Update(GroupName.WaypointInfo, $"D: {distanceAndHeading.DistanceInFeet}ft", $"H: {distanceAndHeading.HeadingToWaypoint}");
+                await _lcd.Update(GroupName.WaypointInfo, $"D: {moveReq.DistanceToTargetWp}ft", $"H: {moveReq.HeadingToTargetWp}");
 
                 if (radiusDistanceInCheck <= CurrentWaypoint.Radius || moveReq.SteeringMagnitude > 120) //Was 85
                 {

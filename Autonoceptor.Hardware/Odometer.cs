@@ -41,12 +41,6 @@ namespace Autonoceptor.Hardware
             _odometerSet = odoData.InTraveled;
         }
 
-        private volatile float _previousIn;
-
-        private volatile float _feetPerSecond;
-
-        private IDisposable _fpsDisposable;
-
         private volatile float _odometerSet;
 
         public async Task InitializeAsync()
@@ -59,20 +53,6 @@ namespace Autonoceptor.Hardware
             _logger.Log(LogLevel.Info, "Odometer opened");
 
             _inputStream = new DataReader(_serialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
-
-            _fpsDisposable = Observable
-                .Interval(TimeSpan.FromSeconds(1))
-                .ObserveOnDispatcher()
-                .Subscribe(async _ =>
-                {
-                    var inTraveled = (await GetLatest()).InTraveled;
-
-                    var fps = (inTraveled - _previousIn) / 12;
-
-                    _feetPerSecond = fps;
-
-                    _previousIn = inTraveled;
-                });
 
             _readTask = new Task(async() =>
             {
@@ -97,19 +77,19 @@ namespace Autonoceptor.Hardware
                         {
                             var split = ss.Split(',').ToList();
 
-                            if (split.Count < 3)
+                            if (split.Count < 2)
                             {
                                 continue;
                             }
 
-                            if (!readString.Contains("P=") && !readString.Contains("\r"))
+                            if (!readString.Contains("IN=") && !readString.Contains("\r"))
                             {
                                 continue;
                             }
                         
                             var odometerDataNew = new OdometerData();
 
-                            if (!float.TryParse(split[2].Replace("IN=", "").Replace("\r", "").Replace("\n", ""), out var inches))
+                            if (!float.TryParse(split[0].Replace("IN=", "").Replace("\r", "").Replace("\n", ""), out var inches))
                             {
                                 odometerDataNew.InTraveled = lastOdometer.InTraveled;
                             }
@@ -119,27 +99,15 @@ namespace Autonoceptor.Hardware
                                 lastOdometer.InTraveled = inches;
                             }
 
-                            if (!float.TryParse(split[1].Replace("CM=", ""), out var cm))
+                            if (!float.TryParse(split[1].Replace("FPS=", ""), out var fps))
                             {
-                                odometerDataNew.CmTraveled = lastOdometer.CmTraveled;
+                                odometerDataNew.FeetPerSecond = lastOdometer.FeetPerSecond;
                             }
                             else
                             {
-                                odometerDataNew.CmTraveled = cm;
-                                lastOdometer.CmTraveled = cm;
+                                odometerDataNew.FeetPerSecond = fps;
                             }
 
-                            if (!int.TryParse(split[0].Replace("P=", ""), out var pulse))
-                            {
-                                odometerDataNew.PulseCount = lastOdometer.PulseCount;
-                            }
-                            else
-                            {
-                                odometerDataNew.PulseCount = pulse;
-                                lastOdometer.PulseCount = pulse;
-                            }
-
-                            odometerDataNew.FeetPerSecond = _feetPerSecond;
                             odometerDataNew.DistanceSinceSet = inches - _odometerSet;
 
                             _subject.OnNext(odometerDataNew);
@@ -162,10 +130,6 @@ namespace Autonoceptor.Hardware
 
     public class OdometerData
     {
-        public int PulseCount { get; set; }
-
-        public float CmTraveled { get; set; }
-
         public float InTraveled { get; set; }
 
         public float FeetPerSecond { get; set; }

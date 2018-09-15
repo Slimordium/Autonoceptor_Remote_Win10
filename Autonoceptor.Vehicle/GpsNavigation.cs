@@ -179,15 +179,13 @@ namespace Autonoceptor.Vehicle
                     return;
                 }
 
-                await SetVehicleTorque(MovementDirection.Forward, 30);
-
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
                 await Lcd.Update(GroupName.Waypoint, "Started Nav", string.Empty, true);
 
                 if (SpeedControlEnabled)
                 {
-                    await SetCruiseControl(330);
+                    await SetCruiseControlFps(2.5);
                 }
 
                 return;
