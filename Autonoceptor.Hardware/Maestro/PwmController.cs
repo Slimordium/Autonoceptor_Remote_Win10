@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Threading;
@@ -119,7 +120,7 @@ namespace Autonoceptor.Hardware.Maestro
                 var inputBytes = new byte[2];
                 _inputStream.ReadBytes(inputBytes);
 
-                return await Task.FromResult(BitConverter.ToUInt16(inputBytes, 0) * 4);
+                return await Task.FromResult(BitConverter.ToUInt16(inputBytes, 0));
             }
         }
 

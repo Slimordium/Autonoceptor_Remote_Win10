@@ -8,7 +8,6 @@ using Windows.ApplicationModel.Core;
 using Windows.UI.Core;
 using Autonoceptor.Hardware;
 using Autonoceptor.Hardware.Lcd;
-using Autonoceptor.Shared;
 using Autonoceptor.Shared.Utilities;
 using Newtonsoft.Json;
 using Nito.AsyncEx;
@@ -24,13 +23,11 @@ namespace Autonoceptor.Vehicle
 
         protected const ushort _extraInputChannel = 14;
 
-        private const ushort _lidarServoChannel = 17;
-
-        private const int _rightLidarPwm = 1056;
+        protected const int _rightLidarPwm = 1056;
         private const int _rightMidLidarPwm = 1282;
-        private const int _centerLidarPwm = 1488;
+        protected const int _centerLidarPwm = 1488;
         private const int _leftMidLidarPwm = 1682;
-        private const int _leftLidarPwm = 1880;
+        protected const int _leftLidarPwm = 1880;
 
         private const int _nerfDartChannel = 15;
 
@@ -80,7 +77,7 @@ namespace Autonoceptor.Vehicle
             cancellationTokenSource.Token.Register(async () =>
             {
                 await Stop();
-                await SetChannelValue(0, _lidarServoChannel);
+                await SetChannelValue(0, LidarServoChannel);
                 await SetChannelValue(0, MovementChannel);
                 await SetChannelValue(0, SteeringChannel);
             });
@@ -135,6 +132,8 @@ namespace Autonoceptor.Vehicle
             await Lcd.Update(GroupName.GpsNavSpeed, "Nav feet p/sec", $" {_fpsTarget} fps");
             await Lcd.SetUpCallback(GroupName.GpsNavSpeed, IncrementSpeed);
             await Lcd.SetDownCallback(GroupName.GpsNavSpeed, DecrementSpeed);
+
+            StartLidarThread();
         }
 
         private string IncrementSafeDistance()
@@ -193,7 +192,17 @@ namespace Autonoceptor.Vehicle
             return $" {fpsTarget} fps";
         }
 
-        public void StartLidarTask()
+        public void StopLidarThread()
+        {
+            if (LidarCancellationTokenSource == null || !LidarCancellationTokenSource.IsCancellationRequested)
+            {
+                LidarCancellationTokenSource?.Cancel();
+                LidarCancellationTokenSource?.Dispose();
+                LidarCancellationTokenSource = new CancellationTokenSource();
+            }
+        }
+
+        public void StartLidarThread()
         {
             if (LidarCancellationTokenSource == null || !LidarCancellationTokenSource.IsCancellationRequested)
             {
@@ -207,9 +216,11 @@ namespace Autonoceptor.Vehicle
                 await CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
                     async () =>
                     {
-                        var ir = await SetChannelValue(_rightMidLidarPwm * 4, _lidarServoChannel);
+                        var ir = await SetChannelValue(_centerLidarPwm * 4, LidarServoChannel);
 
                         await Task.Delay(250);
+
+                        var originalTargetFps = _fpsTarget;
 
                         while (!LidarCancellationTokenSource.IsCancellationRequested)
                         {
@@ -223,85 +234,56 @@ namespace Autonoceptor.Vehicle
                                     continue;
                                 }
 
-                                var data = new List<LidarData>();
+                                var lidarData = await Lidar.GetLatest();
 
-                                for (var pwm = _rightMidLidarPwm; pwm < _leftMidLidarPwm; pwm += 10)
+                                if (lidarData.Distance < safeDistance)
                                 {
-                                    var r = await SetChannelValue(pwm * 4, _lidarServoChannel);
-
-                                    var lidarData = await Lidar.GetLatest();
-
-                                    if (!lidarData.IsValid)
-                                        continue;
-
-                                    lidarData.Angle = Math.Round(pwm.Map(_rightMidLidarPwm, _leftMidLidarPwm, 35, -35));
-                                    data.Add(lidarData);
-
-                                    if (lidarData.Distance < safeDistance)
-                                    {
-                                        if (lidarData.Angle < 0)
-                                        {
-                                            var newAngle = lidarData.Angle.Map(-35, 0, 0, -35);
-
-                                            await SetVehicleHeadingLidar(SteeringDirection.Right,
-                                                Math.Abs(newAngle * 8));
-                                        }
-                                        else
-                                        {
-                                            var newAngle = lidarData.Angle.Map(35, 0, 0, 35);
-                                            await SetVehicleHeadingLidar(SteeringDirection.Left,
-                                                Math.Abs(newAngle * 8));
-                                        }
-                                    }
-                                }
-
-                                var dangerAngles = data.Where(d => d.Distance < safeDistance).ToList();
-
-                                data = new List<LidarData>();
-
-                                for (var pwm = _leftMidLidarPwm; pwm >= _rightMidLidarPwm; pwm -= 10)
-                                {
-                                    var r = await SetChannelValue(pwm * 4, _lidarServoChannel);
-
-                                    var lidarData = await Lidar.GetLatest();
-
-                                    if (!lidarData.IsValid)
-                                        continue;
-
-                                    lidarData.Angle = Math.Round(pwm.Map(_leftMidLidarPwm, _rightMidLidarPwm, -35, 35));
-                                    data.Add(lidarData);
-
-                                    if (lidarData.Distance < safeDistance)
-                                    {
-                                        if (lidarData.Angle < 0)
-                                        {
-                                            var newAngle = lidarData.Angle.Map(-35, 0, 0, -35);
-                                            await SetVehicleHeadingLidar(SteeringDirection.Right,
-                                                Math.Abs(newAngle * 8));
-                                        }
-                                        else
-                                        {
-                                            var newAngle = lidarData.Angle.Map(35, 0, 0, 35);
-                                            await SetVehicleHeadingLidar(SteeringDirection.Left,
-                                                Math.Abs(newAngle * 8));
-                                        }
-                                    }
-                                }
-
-                                dangerAngles.AddRange(data.Where(d => d.Distance < safeDistance).ToList());
-
-                                if (dangerAngles.Any())
-                                {
+                                    //Danger
                                     _asyncResetEvent.Set();
+                                    
+                                    await UpdateCruiseControl(1.5);
+
+                                    await Lcd.Update(GroupName.LidarDangerZone, $"Danger @ {lidarData.Distance}cm", string.Empty, true);
+
+                                    var lidarCv = await GetChannelValue(LidarServoChannel) / 4;
+
+                                    var steerMagnitude = 0d;
+
+                                    var steerDirection = SteeringDirection.Center;
+
+                                    if (lidarCv > _centerLidarPwm)
+                                    {
+                                        steerDirection = SteeringDirection.Right;
+                                        steerMagnitude = lidarCv.Map(_centerLidarPwm, _leftLidarPwm, 100, 0);
+                                    }
+                                    else if (lidarCv < _centerLidarPwm)
+                                    {
+                                        steerDirection = SteeringDirection.Left;
+                                        steerMagnitude = lidarCv.Map(_rightLidarPwm, _centerLidarPwm, 100, 0);
+                                    }
+
+                                    _logger.Log(LogLevel.Info, $"LidarPwm: {lidarCv}, SteerDirection: {steerDirection}, SteerMagnitude: {steerMagnitude} ");
+
+                                    await SetVehicleHeading(steerDirection, steerMagnitude, true);
+
+                                    await Task.Delay(250);
                                 }
                                 else
                                 {
+                                    //Safe
                                     _asyncResetEvent.Reset();
+
+                                    await UpdateCruiseControl(originalTargetFps);
+
+                                    await Lcd.Update(GroupName.LidarDangerZone, $"Safe @ {lidarData.Distance}cm", string.Empty);
+
+                                    originalTargetFps = _fpsTarget;
                                 }
+
                             }
                             catch (Exception e)
                             {
-                                _logger.Log(LogLevel.Error, $"Sweep: {e.Message}");
+                                _logger.Log(LogLevel.Error, $"Lidar: {e.Message}");
                             }
                         }
                     });
@@ -331,7 +313,7 @@ namespace Autonoceptor.Vehicle
                     {
                         try
                         {
-                            await MqttClient.PublishAsync(JsonConvert.SerializeObject(gpsFixData), "autono-gps");
+                            await MqttClient.PublishAsync(JsonConvert.SerializeObject(gpsFixData), "autono-gps").ConfigureAwait(false);
                         }
                         catch (Exception)
                         {
@@ -339,20 +321,20 @@ namespace Autonoceptor.Vehicle
                         }
                     }));
 
-            _sensorDisposables.Add(
-                Lidar.GetObservable()
-                    .ObserveOnDispatcher()
-                    .Subscribe(async lidarData =>
-                    {
-                        try
-                        {
-                            await MqttClient.PublishAsync(JsonConvert.SerializeObject(lidarData), "autono-lidar");
-                        }
-                        catch (Exception)
-                        {
-                            //Yum
-                        }
-                    }));
+            //_sensorDisposables.Add(
+            //    Lidar.GetObservable()
+            //        .ObserveOnDispatcher()
+            //        .Subscribe(async lidarData =>
+            //        {
+            //            try
+            //            {
+            //                await MqttClient.PublishAsync(JsonConvert.SerializeObject(lidarData), "autono-lidar");
+            //            }
+            //            catch (Exception)
+            //            {
+            //                //Yum
+            //            }
+            //        }));
         }
 
         private void StartCruiseControlThread()
@@ -362,9 +344,11 @@ namespace Autonoceptor.Vehicle
                 await CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
                     async () =>
                     {
-                        var moveMagnitude = 0d;
+                        var moveMagnitude = 30d;
                         var starting = true;
                         var isStuck = false;
+
+                        await Lcd.Update(GroupName.Odometer, $"Cruise started", $" {_fpsTarget} fps");
 
                         while (!_cruiseControlCancellationTokenSource.IsCancellationRequested)
                         {
@@ -386,21 +370,21 @@ namespace Autonoceptor.Vehicle
                             //Give it some wiggle room
                             if (currentFps < fpsTarget + .5 && currentFps > fpsTarget - .5)
                             {
-                                return;
+                                continue;
                             }
 
                             if (currentFps < fpsTarget)
-                                moveMagnitude = moveMagnitude + 10;
+                                moveMagnitude = moveMagnitude + 5;
 
                             if (currentFps > fpsTarget)
                             {
                                 starting = false;
 
-                                if (moveMagnitude > 50)
+                                if (moveMagnitude > 40)
                                 {
                                     moveMagnitude = moveMagnitude - 1.5;
                                 }
-                                else if (moveMagnitude > 40)
+                                else if (moveMagnitude > 30)
                                 {
                                     moveMagnitude = moveMagnitude - 1;
                                 }
@@ -410,8 +394,8 @@ namespace Autonoceptor.Vehicle
                                 }
                             }
 
-                            if (moveMagnitude > 55)
-                                moveMagnitude = 55;
+                            if (moveMagnitude > 65)
+                                moveMagnitude = 65;
 
                             if (moveMagnitude < 0)
                                 moveMagnitude = 0;
@@ -425,6 +409,8 @@ namespace Autonoceptor.Vehicle
                             }
                             else
                             {
+                                await Lcd.Update(GroupName.Odometer, $"Stuck!", string.Empty);
+
                                 // shoot a nerf dart
                                 //await SetChannelValue(1500 * 4, 15);
 
@@ -463,7 +449,7 @@ namespace Autonoceptor.Vehicle
                     break;
             }
 
-            await SetChannelValue(moveValue, MovementChannel);
+            var scv = await SetChannelValue(moveValue, MovementChannel);
         }
 
         /// <summary>
@@ -483,7 +469,7 @@ namespace Autonoceptor.Vehicle
 
             _fpsTarget = feetPerSecond;
 
-            await SetVehicleTorque(MovementDirection.Forward, 40);
+            await SetVehicleTorque(MovementDirection.Forward, 30);
 
             StartCruiseControlThread();
         }
@@ -494,6 +480,10 @@ namespace Autonoceptor.Vehicle
             _cruiseControlCancellationTokenSource?.Dispose();
             _cruiseControlCancellationTokenSource = new CancellationTokenSource();
 
+            _fpsTarget = 0;
+
+            await Lcd.Update(GroupName.Odometer, $"Cruise stopped", string.Empty);
+
             await Stop();
         }
 
@@ -501,15 +491,17 @@ namespace Autonoceptor.Vehicle
         /// How many feet per second 
         /// </summary>
         /// <param name="feetPerSecond"></param>
-        public void UpdateCruiseControl(double feetPerSecond)
+        public async Task UpdateCruiseControl(double feetPerSecond)
         {
-            if (feetPerSecond > 4)
-                feetPerSecond = 4;
+            if (feetPerSecond > 5)
+                feetPerSecond = 5;
 
-            if (feetPerSecond < 1.5)
-                feetPerSecond = 1.5;
+            if (feetPerSecond < 0)
+                feetPerSecond = 0;
 
             _fpsTarget = feetPerSecond;
+
+            await Lcd.Update(GroupName.Odometer, $"Cruise updated", $" {feetPerSecond} fps");
         }
 
         public async Task Stop(bool isCanceled = false)
@@ -540,63 +532,52 @@ namespace Autonoceptor.Vehicle
             await SetChannelValue(0, SteeringChannel);
         }
 
-        private async Task SetVehicleHeadingLidar(SteeringDirection direction, double magnitude)
-        {
-            try
-            {
-                var steerValue = CenterPwm * 4;
-
-                if (magnitude > 100)
-                    magnitude = 100;
-
-                switch (direction)
-                {
-                    case SteeringDirection.Left:
-                        steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4;
-                        break;
-                    case SteeringDirection.Right:
-                        steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, RightPwmMax)) * 4;
-                        break;
-                }
-
-                await SetChannelValue(steerValue, SteeringChannel);
-            }
-            catch (Exception err)
-            {
-                _logger.Log(LogLevel.Error, $"Error in SetVehicleHeadingLidar: {err}");
-            }
-        }
-
-        protected async Task SetVehicleHeading(SteeringDirection direction, double magnitude)
+        protected async Task SetVehicleHeading(SteeringDirection direction, double magnitude, bool isSourceLidar = false)
         {
             try
             {
                 if (Stopped)
                 {
-                    await SetChannelValue(StoppedPwm * 4, MovementChannel);
-                    await SetChannelValue(0, SteeringChannel);
+                    var mcv = await SetChannelValue(StoppedPwm * 4, MovementChannel);
+                    var scv = await SetChannelValue(0, SteeringChannel);
+                    var lcv = await SetChannelValue(0, LidarServoChannel);
+
+                    _asyncResetEvent.Set();
                     return;
                 }
 
-                if (!_asyncResetEvent.IsSet) //Will this work? We shall see
+                if (!_asyncResetEvent.IsSet && !isSourceLidar) //Will this work? We shall see
+                {
                     return;
+                }
 
                 var steerValue = CenterPwm * 4;
+                var lidarAngle = _centerLidarPwm * 4;
 
                 if (magnitude > 100)
                     magnitude = 100;
+
+                if (magnitude < 0)
+                    magnitude = 0;
 
                 switch (direction)
                 {
                     case SteeringDirection.Left:
                         steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, LeftPwmMax)) * 4;
+                        lidarAngle = Convert.ToUInt16(magnitude.Map(0, 100, _centerLidarPwm, _leftLidarPwm)) * 4;
                         break;
                     case SteeringDirection.Right:
                         steerValue = Convert.ToUInt16(magnitude.Map(0, 100, CenterPwm, RightPwmMax)) * 4;
+                        lidarAngle = Convert.ToUInt16(magnitude.Map(0, 100, _centerLidarPwm, _rightLidarPwm)) * 4;
                         break;
                 }
 
-                await SetChannelValue(steerValue, SteeringChannel);
+                if (!isSourceLidar)
+                {
+                    var rsv = await SetChannelValue(lidarAngle, LidarServoChannel);
+                }
+
+                var cv = await SetChannelValue(steerValue, SteeringChannel);
             }
             catch (Exception err)
             {

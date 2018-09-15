@@ -140,10 +140,10 @@ namespace Autonoceptor.Hardware
                         if (!imuReadings.Any())
                             continue;
 
-                        var avgYaw = imuReadings.Average(r => r.Yaw) - YawCorrection;
-                        var avgPitch = imuReadings.Average(r => r.Pitch);
-                        var avgRoll = imuReadings.Average(r => r.Roll);
-                        var avgUncorrectedYaw = imuReadings.Average(r => r.UncorrectedYaw);
+                        var avgYaw = Math.Round(imuReadings.Average(r => r.Yaw) - YawCorrection, 1);
+                        var avgPitch = Math.Round(imuReadings.Average(r => r.Pitch), 1);
+                        var avgRoll = Math.Round(imuReadings.Average(r => r.Roll), 1);
+                        var avgUncorrectedYaw = Math.Round(imuReadings.Average(r => r.UncorrectedYaw), 1);
 
                         if (avgYaw < 0)
                             avgYaw += 360;

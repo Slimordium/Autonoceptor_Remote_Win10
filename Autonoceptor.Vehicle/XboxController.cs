@@ -10,6 +10,7 @@ using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Utilities;
 using Hardware.Xbox;
 using Hardware.Xbox.Enums;
+using Newtonsoft.Json;
 using NLog;
 
 namespace Autonoceptor.Vehicle
@@ -57,7 +58,7 @@ namespace Autonoceptor.Vehicle
 
             _xboxButtonDisposable = XboxDevice.GetObservable()
                 .Where(xboxData => xboxData != null && xboxData.FunctionButtons.Any())
-                .Sample(TimeSpan.FromMilliseconds(125))
+                .Sample(TimeSpan.FromMilliseconds(250))
                 .ObserveOnDispatcher()
                 .Subscribe(async xboxData =>
                 {
@@ -66,7 +67,7 @@ namespace Autonoceptor.Vehicle
 
             _xboxDpadDisposable = XboxDevice.GetObservable()
                 .Where(xboxData => xboxData != null && xboxData.Dpad != Direction.None)
-                .Sample(TimeSpan.FromMilliseconds(125))
+                .Sample(TimeSpan.FromMilliseconds(250))
                 .ObserveOnDispatcher()
                 .Subscribe(async xboxData =>
                 {
@@ -78,36 +79,36 @@ namespace Autonoceptor.Vehicle
         {
             await base.InitializeAsync();
 
-            _gpsNavSwitchDisposable = PwmObservable
-                .Where(channel => channel.ChannelId == GpsNavEnabledChannel)
-                .ObserveOnDispatcher()
-                .Subscribe(async channelData =>
-                {
-                    DisposeLcdWriters();
+            //_gpsNavSwitchDisposable = PwmObservable
+            //    .Where(channel => channel.ChannelId == GpsNavEnabledChannel)
+            //    .ObserveOnDispatcher()
+            //    .Subscribe(async channelData =>
+            //    {
+            //        DisposeLcdWriters();
 
-                    await Task.Delay(250);
+            //        await Task.Delay(250);
 
-                    await WaypointFollowEnable(channelData.DigitalValue);
-                });
+            //        await WaypointFollowEnable(channelData.DigitalValue);
+            //    });
 
-            _enableLcdDisposable = PwmObservable
-                .Where(channel => channel.ChannelId == _enableLidarChannel)
-                .ObserveOnDispatcher()
-                .Subscribe(
-                    channel =>
-                    {
-                        if (!channel.DigitalValue)
-                        {
-                            LidarCancellationTokenSource?.Cancel(false);
-                            LidarCancellationTokenSource?.Dispose();
-                            return;
-                        }
+            //_enableLcdDisposable = PwmObservable
+            //    .Where(channel => channel.ChannelId == _enableLidarChannel)
+            //    .ObserveOnDispatcher()
+            //    .Subscribe(
+            //        channel =>
+            //        {
+            //            if (!channel.DigitalValue)
+            //            {
+            //                LidarCancellationTokenSource?.Cancel(false);
+            //                LidarCancellationTokenSource?.Dispose();
+            //                return;
+            //            }
 
-                        StartLidarTask();
-                    });
+            //            StartLidarThread();
+            //        });
 
             _xboxConnectedCheckDisposable = Observable
-                .Interval(TimeSpan.FromMilliseconds(1000))
+                .Interval(TimeSpan.FromSeconds(1))
                 .ObserveOnDispatcher()
                 .Subscribe(
                     async _ =>
@@ -177,11 +178,17 @@ namespace Autonoceptor.Vehicle
                 case Direction.DownLeft:
                 case Direction.Left:
                     steeringPwm = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, LeftPwmMax) * 4);
+
+                    await SetChannelValue(Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, _centerLidarPwm, _leftLidarPwm)) * 4, LidarServoChannel);
+
                     break;
                 case Direction.UpRight:
                 case Direction.DownRight:
                 case Direction.Right:
                     steeringPwm = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, RightPwmMax) * 4);
+
+                    await SetChannelValue(Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, _centerLidarPwm, _rightLidarPwm)) * 4, LidarServoChannel);
+
                     break;
             }
 
@@ -269,16 +276,19 @@ namespace Autonoceptor.Vehicle
             {
                 var gpsFix = await Gps.GetLatest();
 
-                await Waypoints.Enqueue(new Waypoint
+                var wp = new Waypoint
                 {
                     Lat = gpsFix.Lat,
                     Lon = gpsFix.Lon,
-                });
+                };
+
+                await Waypoints.Enqueue(wp);
+
+                await MqttClient.PublishAsync(JsonConvert.SerializeObject(wp), "autono-waypoint").ConfigureAwait(false);
 
                 _logger.Log(LogLevel.Info, $"WP Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}, {gpsFix.Quality}");
 
-
-                await Lcd.Update(GroupName.WaypointInfo, $"WP: {gpsFix.Lat}", $"{ gpsFix.Lon}", true);
+                await Lcd.Update(GroupName.WaypointInfo, $"WP: {gpsFix.Lat}", $"{ gpsFix.Lon}");
 
                 await Lcd.Update(GroupName.Waypoint, $"WP {Waypoints.Count}...", "...queued", true);
 

@@ -28,6 +28,8 @@ namespace Autonoceptor.Vehicle
 
         protected const ushort GpsNavEnabledChannel = 12;
 
+        protected const ushort LidarServoChannel = 17;
+
         protected Chassis(CancellationTokenSource cancellationTokenSource)
         {
             CancellationToken = cancellationTokenSource.Token;
@@ -82,6 +84,8 @@ namespace Autonoceptor.Vehicle
 
             await Lidar.InitializeAsync();
 
+            await InitializeMqtt("172.16.0.246");
+
             await Lcd.Update(GroupName.General, "Initialized");
         }
 
@@ -102,8 +106,9 @@ namespace Autonoceptor.Vehicle
             var returnValue = 0u;
             if (Stopped && channel == MovementChannel)// || channel == SteeringChannel))
             {
-                returnValue = await PwmController.SetChannelValue(StoppedPwm * 4, MovementChannel);
+                await PwmController.SetChannelValue(StoppedPwm * 4, MovementChannel);
                 //returnValue = await PwmController.SetChannelValue(0, SteeringChannel);
+                returnValue = await PwmController.SetChannelValue(0, LidarServoChannel);
                 return returnValue;
             }
 

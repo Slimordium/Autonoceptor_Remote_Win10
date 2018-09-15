@@ -4,6 +4,10 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Autonoceptor.Hardware.Lcd;
+using Autonoceptor.Shared.Gps;
+using Autonoceptor.Shared.Imu;
+using Autonoceptor.Shared.Utilities;
+using Newtonsoft.Json;
 using NLog;
 
 namespace Autonoceptor.Vehicle
@@ -13,8 +17,8 @@ namespace Autonoceptor.Vehicle
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
         private IDisposable _syncImuDisposable;
-        private IDisposable _imuHeadingUpdateDisposable;
-        private IDisposable _gpsDisposable;
+        private IDisposable _imuUpdateDisposable;
+        private IDisposable _gpsUpdateDisposable;
         private IDisposable _imuLcdLoggerDisposable;
         private IDisposable _gpsLcdLoggerDisposable;
 
@@ -96,6 +100,75 @@ namespace Autonoceptor.Vehicle
             await ConfigureLcdWriters();
         }
 
+        private async Task UpdateGpsNav(GpsFixData gpsData)
+        {
+            try
+            {
+                var imuData = await Imu.GetLatest();
+
+                //var distanceAndHeadingDebug = GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsData.Lat, gpsData.Lon, Waypoints.CurrentWaypoint.Lat, Waypoints.CurrentWaypoint.Lon);
+
+                var mr = await Waypoints.GetMoveRequestForNextWaypoint(gpsData.Lat, gpsData.Lon, imuData.Yaw);
+
+                //await MqttClient.PublishAsync(JsonConvert.SerializeObject(distanceAndHeadingDebug), "autono-gpsDistanceHeading").ConfigureAwait(false);
+                await MqttClient.PublishAsync(JsonConvert.SerializeObject(mr), "autono-moveRequest").ConfigureAwait(false);
+
+                //await MqttClient.PublishAsync(JsonConvert.SerializeObject(gpsData), "autono-gps").ConfigureAwait(false);
+
+                if (mr == null)
+                {
+                    if (!FollowingWaypoints)
+                        return;
+
+                    await WaypointFollowEnable(false);
+                    return;
+                }
+
+                if (mr.DistanceInToTargetWp < 60)
+                    await UpdateCruiseControl(2);
+
+                await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
+            }
+            catch (Exception e)
+            {
+                _logger.Log(LogLevel.Error, $"GpsHeadingUpdate failed {e.Message}");
+
+                await Stop();
+            }
+        }
+
+        private async Task UpdateImuNav(ImuData imuData)
+        {
+            try
+            {
+                var gpsData = await Gps.GetLatest();
+
+                //var distanceAndHeadingDebug = GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsData.Lat, gpsData.Lon, Waypoints.CurrentWaypoint.Lat, Waypoints.CurrentWaypoint.Lon);
+                //await MqttClient.PublishAsync(JsonConvert.SerializeObject(distanceAndHeadingDebug), "autono-imuDistanceHeading").ConfigureAwait(false);
+
+                //await MqttClient.PublishAsync(JsonConvert.SerializeObject(imuData), "autono-imu").ConfigureAwait(false);
+
+                var mr = await Waypoints.GetMoveRequestForNextWaypoint(gpsData.Lat, gpsData.Lon, imuData.Yaw);
+
+                if (mr == null)
+                {
+                    if (!FollowingWaypoints)
+                        return;
+
+                    await WaypointFollowEnable(false);
+                    return;
+                }
+
+                await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
+            }
+            catch (Exception e)
+            {
+                _logger.Log(LogLevel.Error, $"ImuHeadingUpdate failed {e.Message}");
+
+                await Stop();
+            }
+        }
+
         public async Task WaypointFollowEnable(bool enabled)
         {
             FollowingWaypoints = enabled;
@@ -120,70 +193,17 @@ namespace Autonoceptor.Vehicle
                     return;
                 }
 
-                _gpsDisposable = Gps
+                _gpsUpdateDisposable = Gps
                     .GetObservable()
                     .Where(d => d != null)
                     .ObserveOnDispatcher()
-                    .Subscribe(async gpsData =>
-                    {
-                        try
-                        {
-                            var mr = await Waypoints.GetMoveRequestForNextWaypoint(gpsData.Lat, gpsData.Lon, gpsData.Heading);
+                    .Subscribe(async gpsData => { await UpdateGpsNav(gpsData); });
 
-                            if (mr == null)
-                            {
-                                if (!FollowingWaypoints)
-                                    return;
-
-                                await WaypointFollowEnable(false);
-                                return;
-                            }
-
-                            if (mr.DistanceInToTargetWp < 60)
-                                UpdateCruiseControl(310);
-
-                            await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
-                        }
-                        catch (Exception e)
-                        {
-                            _logger.Log(LogLevel.Error, $"GpsHeadingUpdate failed {e.Message}");
-
-                            await Stop();
-                        }
-                    });
-
-                _imuHeadingUpdateDisposable = Imu
+                _imuUpdateDisposable = Imu
                     .GetReadObservable()
                     .Where(d => d != null)
                     .ObserveOnDispatcher()
-                    .Subscribe(async imuData =>
-                    {
-                        try
-                        {
-                            var gpsData = await Gps.GetLatest();
-
-                            var mr = await Waypoints.GetMoveRequestForNextWaypoint(gpsData.Lat, gpsData.Lon, imuData.Yaw);
-
-                            if (mr == null)
-                            {
-                                if (!FollowingWaypoints)
-                                    return;
-
-                                await WaypointFollowEnable(false);
-                                return;
-                            }
-
-                            await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
-
-                            await Lcd.Update(GroupName.GpsNavDistHeading, $"WP Head: {Math.Round(mr.HeadingToTargetWp, 1)}", $"WP Dist: {Math.Round(mr.DistanceInToTargetWp, 1)}ft");
-                        }
-                        catch (Exception e)
-                        {
-                            _logger.Log(LogLevel.Error, $"ImuHeadingUpdate failed {e.Message}");
-
-                            await Stop();
-                        }
-                    });
+                    .Subscribe(async imuData => { await UpdateImuNav(imuData); });
 
                 var currentLocation = await Gps.GetLatest();
                 var moveRequest = await Waypoints.GetMoveRequestForNextWaypoint(currentLocation.Lat, currentLocation.Lon, currentLocation.Heading);
@@ -196,13 +216,15 @@ namespace Autonoceptor.Vehicle
                     return;
                 }
 
+                //StartLidarThread();
+
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
                 await Lcd.Update(GroupName.Waypoint, "Started Nav", string.Empty, true);
 
                 if (SpeedControlEnabled)
                 {
-                    await SetCruiseControlFps(2.5);
+                    await SetCruiseControlFps(3);
                 }
 
                 return;
@@ -210,15 +232,17 @@ namespace Autonoceptor.Vehicle
 
             await StopCruiseControl();
 
-            await Lcd.Update(GroupName.Waypoint, "Nav finished", string.Empty, true);
+            //StopLidarThread();
+
+            await Lcd.Update(GroupName.Waypoint, "Nav stopped", string.Empty, true);
 
             await Stop();
 
-            _gpsDisposable?.Dispose();
-            _imuHeadingUpdateDisposable?.Dispose();
+            _gpsUpdateDisposable?.Dispose();
+            _imuUpdateDisposable?.Dispose();
 
-            _gpsDisposable = null;
-            _imuHeadingUpdateDisposable = null;
+            _gpsUpdateDisposable = null;
+            _imuUpdateDisposable = null;
         }
 
         public async Task SyncImuYaw()

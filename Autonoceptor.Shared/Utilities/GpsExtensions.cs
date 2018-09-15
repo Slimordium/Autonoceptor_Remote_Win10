@@ -5,14 +5,6 @@ using NLog;
 
 namespace Autonoceptor.Shared.Utilities
 {
-    public class DistanceAndHeading
-    {
-        public double DistanceInInches { get; set; }
-        public double DistanceInFeet => DistanceInInches / 12;
-        public double HeadingToWaypoint { get; set; }
-        public bool IsValid { get; set; } = true;
-    }
-
     public static class GpsExtensions
     {
         private static double _lat;
@@ -279,7 +271,7 @@ namespace Autonoceptor.Shared.Utilities
                 Quality = _quality.ToString(),
                 SatellitesInView = _satellitesInView,
                 SignalToNoiseRatio = _signalToNoiseRatio,
-                Heading = _heading,
+                Heading = Math.Round(_heading, 1),
                 DateTime = _dateTime,
                 RtkAge = _rtkAge,
                 RtkRatio = _rtkRatio,

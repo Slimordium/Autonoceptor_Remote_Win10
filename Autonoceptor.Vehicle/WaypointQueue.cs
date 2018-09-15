@@ -215,7 +215,7 @@ namespace Autonoceptor.Vehicle
         private static Tuple<SteeringDirection, double> GetSteeringDirectionAndMagnitude(double currentHeading, double headingToWaypoint, double distanceInFt)
         {
             var steeringDirection = GetSteeringDirection(currentHeading, headingToWaypoint);
-            var steeringMagnitude = GetSteeringMagnitude(currentHeading, headingToWaypoint, distanceInFt);
+            var steeringMagnitude = Math.Round(GetSteeringMagnitude(currentHeading, headingToWaypoint, distanceInFt));
 
             return new Tuple<SteeringDirection, double>(steeringDirection, steeringMagnitude);
         }
