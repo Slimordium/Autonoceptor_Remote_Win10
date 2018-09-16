@@ -15,13 +15,13 @@ namespace Autonoceptor.Vehicle
     {
         private readonly ILogger _logger = LogManager.GetLogger("Autonoceptor");
 
-        protected const int RightPwmMax = 1800;
-        protected const int CenterPwm = 1435; //was 1408
-        protected const int LeftPwmMax = 1015;
+        protected const int RightSteeringPwm = 1800;
+        protected const int CenterSteeringPwm = 1435; //was 1408
+        protected const int LeftSteeringPwm = 1015;
 
-        protected const int ReversePwmMax = 1072;
+        protected const int ReversePwm = 1072;
         protected const int StoppedPwm = 1471;
-        protected const int ForwardPwmMax = 1856;
+        protected const int ForwardPwm = 1856;
 
         protected const ushort MovementChannel = 0;
         protected const ushort SteeringChannel = 1;
