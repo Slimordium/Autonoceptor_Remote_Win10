@@ -35,14 +35,6 @@ namespace Autonoceptor.Vehicle
             });
         }
 
-        private bool _followingWaypoints;
-
-        protected bool FollowingWaypoints
-        {
-            get => Volatile.Read(ref _followingWaypoints);
-            set => Volatile.Write(ref _followingWaypoints, value);
-        }
-
         protected new void DisposeLcdWriters()
         {
             _imuLcdLoggerDisposable?.Dispose();

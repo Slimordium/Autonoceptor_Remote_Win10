@@ -167,44 +167,40 @@ namespace Autonoceptor.Vehicle
 
         private async Task OnNextXboxData(XboxData xboxData)
         {
-            if (Stopped || FollowingWaypoints)
+            if (FollowingWaypoints)
                 return;
 
-            ushort steeringPwm = CenterPwm * 4;
+            var steeringDirection = SteeringDirection.Center;
 
             switch (xboxData.RightStick.Direction)
             {
                 case Direction.UpLeft:
                 case Direction.DownLeft:
                 case Direction.Left:
-                    steeringPwm = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, LeftPwmMax) * 4);
-
-                    await SetChannelValue(Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, _centerLidarPwm, _leftLidarPwm)) * 4, LidarServoChannel);
-
+                    steeringDirection = SteeringDirection.Left;
                     break;
                 case Direction.UpRight:
                 case Direction.DownRight:
                 case Direction.Right:
-                    steeringPwm = Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, CenterPwm, RightPwmMax) * 4);
-
-                    await SetChannelValue(Convert.ToUInt16(xboxData.RightStick.Magnitude.Map(0, 10000, _centerLidarPwm, _rightLidarPwm)) * 4, LidarServoChannel);
-
+                    steeringDirection = SteeringDirection.Right;
                     break;
             }
 
-            var reverseMagnitude = Convert.ToUInt16(xboxData.LeftTrigger.Map(0, 33000, StoppedPwm, ReversePwmMax) * 4);
-            var forwardMagnitude = Convert.ToUInt16(xboxData.RightTrigger.Map(0, 33000, StoppedPwm, ForwardPwmMax) * 4);
+            var steeringMagnitude = Math.Round(xboxData.RightStick.Magnitude.Map(0, 10000, 0, 100));
 
-            var movePwm = forwardMagnitude;
+            var reverseMagnitude = Math.Round(xboxData.LeftTrigger.Map(0, 33000, 0, 100));
+            var forwardMagnitude = Math.Round(xboxData.RightTrigger.Map(0, 33000, 0, 100));
 
-            if (reverseMagnitude < 5500)
+            var movementDirection = MovementDirection.Forward;
+            var movementMagnitude = forwardMagnitude;
+
+            if (reverseMagnitude > forwardMagnitude)
             {
-                movePwm = reverseMagnitude;
+                movementDirection = MovementDirection.Reverse;
+                movementMagnitude = reverseMagnitude;
             }
 
-            await SetChannelValue(movePwm, MovementChannel);
-
-            await SetChannelValue(steeringPwm, SteeringChannel);
+            await SetVehicleHeadingAndTorque(steeringDirection, steeringMagnitude, movementDirection, movementMagnitude);
         }
 
         private async Task OnNextXboxDpadData(XboxData xboxData)

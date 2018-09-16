@@ -30,6 +30,14 @@ namespace Autonoceptor.Vehicle
 
         protected const ushort LidarServoChannel = 17;
 
+        private bool _followingWaypoints;
+
+        protected bool FollowingWaypoints
+        {
+            get => Volatile.Read(ref _followingWaypoints);
+            set => Volatile.Write(ref _followingWaypoints, value);
+        }
+
         protected Chassis(CancellationTokenSource cancellationTokenSource)
         {
             CancellationToken = cancellationTokenSource.Token;

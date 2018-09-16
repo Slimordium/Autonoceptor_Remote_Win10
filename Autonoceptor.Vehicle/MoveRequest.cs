@@ -16,13 +16,15 @@
 
     public enum SteeringDirection
     {
+        None,
         Left,
         Center,
-        Right
+        Right,
     }
 
     public enum MovementDirection
     {
+        None,
         Forward,
         Stopped,
         Reverse
