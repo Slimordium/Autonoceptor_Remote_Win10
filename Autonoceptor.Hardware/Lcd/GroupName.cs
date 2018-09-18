@@ -17,6 +17,7 @@
         Lidar,
         LidarDangerZone,
         LidarDangerSet,
+        LidarEnable,
 
         Odometer,
 

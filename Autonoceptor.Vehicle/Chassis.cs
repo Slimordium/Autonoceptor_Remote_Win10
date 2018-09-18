@@ -92,7 +92,7 @@ namespace Autonoceptor.Vehicle
 
             await Lidar.InitializeAsync();
 
-            await InitializeMqtt("172.16.0.246");
+            //await InitializeMqtt("172.16.0.246");
 
             await Lcd.Update(GroupName.General, "Initialized");
         }

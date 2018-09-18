@@ -103,7 +103,7 @@ namespace Autonoceptor.Vehicle
                 var mr = await Waypoints.GetMoveRequestForNextWaypoint(gpsData.Lat, gpsData.Lon, imuData.Yaw);
 
                 //await MqttClient.PublishAsync(JsonConvert.SerializeObject(distanceAndHeadingDebug), "autono-gpsDistanceHeading").ConfigureAwait(false);
-                await MqttClient.PublishAsync(JsonConvert.SerializeObject(mr), "autono-moveRequest").ConfigureAwait(false);
+                //await MqttClient.PublishAsync(JsonConvert.SerializeObject(mr), "autono-moveRequest").ConfigureAwait(false);
 
                 //await MqttClient.PublishAsync(JsonConvert.SerializeObject(gpsData), "autono-gps").ConfigureAwait(false);
 
@@ -210,13 +210,15 @@ namespace Autonoceptor.Vehicle
 
                 //StartLidarThread();
 
+                await Stop(true);
+
                 await SetVehicleHeading(moveRequest.SteeringDirection, moveRequest.SteeringMagnitude);
 
                 await Lcd.Update(GroupName.Waypoint, "Started Nav", string.Empty, true);
 
                 if (SpeedControlEnabled)
                 {
-                    await SetCruiseControlFps(3);
+                    await SetCruiseControlFps(4);
                 }
 
                 return;

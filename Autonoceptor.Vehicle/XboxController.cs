@@ -280,7 +280,7 @@ namespace Autonoceptor.Vehicle
 
                 await Waypoints.Enqueue(wp);
 
-                await MqttClient.PublishAsync(JsonConvert.SerializeObject(wp), "autono-waypoint").ConfigureAwait(false);
+                //await MqttClient.PublishAsync(JsonConvert.SerializeObject(wp), "autono-waypoint").ConfigureAwait(false);
 
                 _logger.Log(LogLevel.Info, $"WP Lat: {gpsFix.Lat}, Lon: { gpsFix.Lon}, {gpsFix.Quality}");
 

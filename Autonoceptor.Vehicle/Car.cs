@@ -32,7 +32,7 @@ namespace Autonoceptor.Vehicle
 
         private const int _nerfDartChannel = 15;
 
-        private int _safeDistance = 130;
+        private int _safeDistance = 90;
 
         private Thread _lidarThread;
 
@@ -144,7 +144,27 @@ namespace Autonoceptor.Vehicle
             await Lcd.SetUpCallback(GroupName.GpsNavSpeed, IncrementSpeed);
             await Lcd.SetDownCallback(GroupName.GpsNavSpeed, DecrementSpeed);
 
+            await Lcd.Update(GroupName.LidarEnable, "Lidar enable", string.Empty);
+            await Lcd.SetUpCallback(GroupName.LidarEnable, LidarEnable);
+            await Lcd.SetDownCallback(GroupName.LidarEnable, LidarDisable);
+
             StartLidarThread();
+        }
+
+        private bool _lidarEnabled;
+
+        private string LidarEnable()
+        {
+            Volatile.Write(ref _lidarEnabled, true);
+
+            return "Enabled";
+        }
+
+        private string LidarDisable()
+        {
+            Volatile.Write(ref _lidarEnabled, false);
+
+            return "Disabled";
         }
 
         private string IncrementSafeDistance()
@@ -181,8 +201,8 @@ namespace Autonoceptor.Vehicle
 
             fpsTarget = fpsTarget + .25;
 
-            if (fpsTarget > 4)
-                fpsTarget = 4;
+            if (fpsTarget > 5)
+                fpsTarget = 5;
 
             _fpsTarget = fpsTarget;
 
@@ -239,7 +259,7 @@ namespace Autonoceptor.Vehicle
 
                             try
                             {
-                                if (Stopped)
+                                if (Stopped || !Volatile.Read(ref _lidarEnabled))
                                 {
                                     await Task.Delay(500);
                                     continue;
@@ -249,7 +269,6 @@ namespace Autonoceptor.Vehicle
 
                                 if (!lidarData.IsValid)
                                 {
-                                    Thread.Sleep(1);
                                     continue;
                                 }
 
@@ -342,7 +361,7 @@ namespace Autonoceptor.Vehicle
                         var starting = true;
                         var isStuck = false;
 
-                        await Lcd.Update(GroupName.Odometer, $"Cruise started", $" {_fpsTarget} fps");
+                        await Lcd.Update(GroupName.Odometer, $"Cruise started", $" {_fpsTarget} fps", true);
 
                         while (!_cruiseControlCancellationTokenSource.IsCancellationRequested)
                         {
@@ -374,7 +393,7 @@ namespace Autonoceptor.Vehicle
                             {
                                 starting = false;
 
-                                if (moveMagnitude > 40)
+                                if (moveMagnitude > 50)
                                 {
                                     moveMagnitude = moveMagnitude - 1.5;
                                 }
@@ -384,7 +403,7 @@ namespace Autonoceptor.Vehicle
                                 }
                                 else
                                 {
-                                    moveMagnitude = moveMagnitude - .5;
+                                    moveMagnitude = moveMagnitude - .8;
                                 }
                             }
 
@@ -397,29 +416,29 @@ namespace Autonoceptor.Vehicle
                             if (Stopped)
                                 return;
 
-                            if (!isStuck)
-                            {
-                                await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
-                            }
-                            else
-                            {
-                                await Lcd.Update(GroupName.Odometer, $"Stuck!", string.Empty);
+                            //if (!isStuck)
+                            //{
+                                  await SetVehicleTorque(MovementDirection.Forward, moveMagnitude);
+                            //}
+                            //else
+                            //{
+                            //    await Lcd.Update(GroupName.Odometer, $"Stuck!", string.Empty);
 
-                                // shoot a nerf dart
-                                //await SetChannelValue(1500 * 4, 15);
+                            //    // shoot a nerf dart
+                            //    //await SetChannelValue(1500 * 4, 15);
 
-                                // turn wheels slightly to the left
-                                await SetVehicleHeading(SteeringDirection.Left, 70);
+                            //    // turn wheels slightly to the left
+                            //    await SetVehicleHeading(SteeringDirection.Left, 70);
 
-                                // reverse
-                                await SetVehicleTorque(MovementDirection.Reverse, 60);
-                                await Task.Delay(1800);
+                            //    // reverse
+                            //    await SetVehicleTorque(MovementDirection.Reverse, 60);
+                            //    await Task.Delay(1800);
 
-                                // now continue trying to get to next waypoint
-                                await SetVehicleTorque(MovementDirection.Forward, 60);
+                            //    // now continue trying to get to next waypoint
+                            //    await SetVehicleTorque(MovementDirection.Forward, 60);
 
-                                isStuck = false;
-                            }
+                            //    isStuck = false;
+                            //}
                         }
                     });
             }) {IsBackground = true};
@@ -471,7 +490,7 @@ namespace Autonoceptor.Vehicle
 
             _fpsTarget = feetPerSecond;
 
-            await SetVehicleTorque(MovementDirection.Forward, 20);
+            await SetVehicleTorque(MovementDirection.Forward, 50);
 
             StartCruiseControlThread();
         }
