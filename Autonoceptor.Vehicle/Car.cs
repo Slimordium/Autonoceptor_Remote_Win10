@@ -70,8 +70,8 @@ namespace Autonoceptor.Vehicle
             {
                 var val = value;
 
-                if (val < 0)
-                    val = 0;
+                if (val < 30)
+                    val = 30;
 
                 if (val > 300)
                     val = 300;
@@ -387,28 +387,28 @@ namespace Autonoceptor.Vehicle
                             }
 
                             if (currentFps < fpsTarget)
-                                moveMagnitude = moveMagnitude + 5;
+                                moveMagnitude = moveMagnitude + 10;
 
                             if (currentFps > fpsTarget)
                             {
                                 starting = false;
 
-                                if (moveMagnitude > 50)
-                                {
-                                    moveMagnitude = moveMagnitude - 1.5;
-                                }
-                                else if (moveMagnitude > 30)
-                                {
-                                    moveMagnitude = moveMagnitude - 1;
-                                }
-                                else
-                                {
-                                    moveMagnitude = moveMagnitude - .8;
-                                }
+                                //if (moveMagnitude > 60)
+                                //{
+                                //    moveMagnitude = moveMagnitude - .7;
+                                //}
+                                //else if (moveMagnitude > 40)
+                                //{
+                                //    moveMagnitude = moveMagnitude - .6;
+                                //}
+                                //else
+                                //{
+                                moveMagnitude = moveMagnitude - .5;
+                                //}
                             }
 
-                            if (moveMagnitude > 65)
-                                moveMagnitude = 65;
+                            if (moveMagnitude > 70)
+                                moveMagnitude = 70;
 
                             if (moveMagnitude < 0)
                                 moveMagnitude = 0;
@@ -490,7 +490,9 @@ namespace Autonoceptor.Vehicle
 
             _fpsTarget = feetPerSecond;
 
-            await SetVehicleTorque(MovementDirection.Forward, 50);
+            await SetVehicleTorque(MovementDirection.Forward, 70);
+
+            await Task.Delay(100);
 
             StartCruiseControlThread();
         }

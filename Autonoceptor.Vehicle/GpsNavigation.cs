@@ -82,7 +82,7 @@ namespace Autonoceptor.Vehicle
             await base.InitializeAsync();
 
             _syncImuDisposable = Observable
-                .Interval(TimeSpan.FromSeconds(4)) //sync every 8-12ft when moving
+                .Interval(TimeSpan.FromSeconds(2)) //sync every 8-12ft when moving
                 .ObserveOnDispatcher()
                 .Subscribe(async _ =>
                 {
@@ -96,11 +96,11 @@ namespace Autonoceptor.Vehicle
         {
             try
             {
-                var imuData = await Imu.GetLatest();
+                //var imuData = await Imu.GetLatest();
 
                 //var distanceAndHeadingDebug = GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsData.Lat, gpsData.Lon, Waypoints.CurrentWaypoint.Lat, Waypoints.CurrentWaypoint.Lon);
 
-                var mr = await Waypoints.GetMoveRequestForNextWaypoint(gpsData.Lat, gpsData.Lon, imuData.Yaw);
+                var mr = await Waypoints.GetMoveRequestForNextWaypoint(gpsData.Lat, gpsData.Lon, gpsData.Heading);
 
                 //await MqttClient.PublishAsync(JsonConvert.SerializeObject(distanceAndHeadingDebug), "autono-gpsDistanceHeading").ConfigureAwait(false);
                 //await MqttClient.PublishAsync(JsonConvert.SerializeObject(mr), "autono-moveRequest").ConfigureAwait(false);
@@ -117,7 +117,9 @@ namespace Autonoceptor.Vehicle
                 }
 
                 if (mr.DistanceInToTargetWp < 60)
-                    await UpdateCruiseControl(2);
+                    await UpdateCruiseControl(1.5);
+                if (mr.DistanceInToTargetWp > 50)
+                    await UpdateCruiseControl(4);
 
                 await SetVehicleHeading(mr.SteeringDirection, mr.SteeringMagnitude);
             }
