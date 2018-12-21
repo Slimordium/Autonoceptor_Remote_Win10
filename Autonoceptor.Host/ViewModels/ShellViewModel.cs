@@ -1,15 +1,22 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.ExtendedExecution;
+using Windows.Devices.SerialCommunication;
+using Windows.Storage.Streams;
 using Windows.UI.Xaml;
+using Autonoceptor.Hardware;
 using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Utilities;
 using Autonoceptor.Vehicle;
 using Caliburn.Micro;
+using Hardware.Xbox;
+using Hardware.Xbox.Enums;
 using Newtonsoft.Json;
 using Nito.AsyncEx;
 using NLog.Targets.Rx;
@@ -37,7 +44,7 @@ namespace Autonoceptor.Host.ViewModels
 
         public ShellViewModel()
         {
-            _conductor = new Conductor(_cancellationTokenSource, BrokerIp);
+            //_conductor = new Conductor(_cancellationTokenSource, BrokerIp);
 
             Application.Current.Suspending += CurrentOnSuspending;
             Application.Current.Resuming += CurrentOnResuming;
@@ -46,11 +53,11 @@ namespace Autonoceptor.Host.ViewModels
                 .Subscribe(async _ => { await RequestExtendedSession(); });
 
             //Automatically start...
-            Observable.Timer(TimeSpan.FromSeconds(2))
-                .ObserveOnDispatcher()
-                .Subscribe(async _ => { await StartConductor().ConfigureAwait(false); });
+            //Observable.Timer(TimeSpan.FromSeconds(2))
+            //    .ObserveOnDispatcher()
+            //    .Subscribe(async _ => { await StartConductor().ConfigureAwait(false); });
 
-            RxTarget.LogObservable.ObserveOnDispatcher().Subscribe(async e => { await AddToLog(e); });
+            //RxTarget.LogObservable.ObserveOnDispatcher().Subscribe(async e => { await AddToLog(e); });
         }
 
         public string Yaw { get; set; }
@@ -85,6 +92,10 @@ namespace Autonoceptor.Host.ViewModels
             }
         }
 
+        //54383
+
+        private SerialDevice _lcdSerialDevice;
+
         public double TurnMagnitudeInputModifier { get; set; } = 1; // LEAVE AT 1 NOT NEEDED
 
         public int CruiseControl { get; set; } = 340;
@@ -100,6 +111,42 @@ namespace Autonoceptor.Host.ViewModels
             }
         }
 
+        private XboxDevice XboxDevice;
+
+        private IDisposable _xboxDisposable;
+        private IDisposable _xboxButtonDisposable;
+        private IDisposable _xboxDpadDisposable;
+
+        private DataWriter _outputStream;
+        private DataReader _inputStream;
+
+        private readonly AsyncLock _mutex = new AsyncLock();
+
+        private async Task<string> Read()
+        {
+            //using (await _mutex.LockAsync())
+            {
+                _outputStream.WriteBytes(new[] { (byte)0x52 }); //Request new data frame
+                var x = await _outputStream.StoreAsync();
+
+                var inCount = await _inputStream.LoadAsync(140);
+
+                if (inCount < 1)
+                    return string.Empty;
+
+                return _inputStream.ReadString(inCount);
+            }
+        }
+
+        private async Task Write(byte[] buffer)
+        {
+            //using (await _mutex.LockAsync())
+            {
+                _outputStream.WriteBytes(buffer.ToArray());
+                var x = await _outputStream.StoreAsync();
+            }
+        }
+
         public async Task StartConductor()
         {
             if (_started)
@@ -108,6 +155,87 @@ namespace Autonoceptor.Host.ViewModels
             _started = true;
 
             await AddToLog("Starting conductor");
+
+            _lcdSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("54383", 115200, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(100));
+
+            _inputStream = new DataReader(_lcdSerialDevice.InputStream);// { InputStreamOptions = InputStreamOptions.Partial };
+            _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
+
+            XboxDevice = new XboxDevice();
+            await XboxDevice.InitializeAsync(CancellationToken.None);
+
+            Observable.Interval(TimeSpan.FromMilliseconds(100)).ObserveOnDispatcher().Subscribe(async _ =>
+            {
+                var s = await Read();
+
+                await AddToLog(s);
+
+            });
+
+            _xboxDisposable = XboxDevice.GetObservable()
+                .Where(xboxData => xboxData != null)
+                .Sample(TimeSpan.FromMilliseconds(40))
+                .ObserveOnDispatcher()
+                .Subscribe(async xboxData =>
+                {
+                    var moveMagnitude = 6000d; //Stopped
+                    var steerMagnitude = 6000d; //Center
+
+                    if (xboxData.RightTrigger > xboxData.LeftTrigger)
+                    {
+                        moveMagnitude = Math.Round(xboxData.RightTrigger.Map(0, 33000, 6000, 4400)); //Forward
+                    }
+                    else
+                    {
+                        moveMagnitude = Math.Round(xboxData.LeftTrigger.Map(0, 33000, 6000, 7500)); //Reverse
+                    }
+
+                    if (xboxData.RightStick.Direction == Direction.DownLeft ||
+                        xboxData.RightStick.Direction == Direction.UpLeft ||
+                        xboxData.RightStick.Direction == Direction.Left)
+                    {
+                        steerMagnitude = Math.Round(xboxData.RightStick.Magnitude.Map(0, 10000, 6000, 4000));
+                    }
+
+                    if (xboxData.RightStick.Direction == Direction.DownRight ||
+                        xboxData.RightStick.Direction == Direction.UpRight ||
+                        xboxData.RightStick.Direction == Direction.Right)
+                    {
+                        steerMagnitude = Math.Round(xboxData.RightStick.Magnitude.Map(0, 10000, 6000, 8000));
+                    }
+
+                    var moveMagBytesOut = moveMagnitude.ToString(CultureInfo.InvariantCulture).ToCharArray(0, 4).Select(c => (byte)c).ToList();
+                    var steerMagBytesOut = steerMagnitude.ToString(CultureInfo.InvariantCulture).ToCharArray(0, 4).Select(c => (byte)c).ToList();
+                    
+                    var buffer = new List<byte> {0x02, 0x4D}; //STX - (M)ovement
+
+                    buffer.AddRange(moveMagBytesOut);
+                    buffer.AddRange(steerMagBytesOut);
+
+                    await Write(buffer.ToArray());
+                });
+
+
+            //_xboxButtonDisposable = XboxDevice.GetObservable()
+            //    .Where(xboxData => xboxData != null && xboxData.FunctionButtons.Any())
+            //    .Sample(TimeSpan.FromMilliseconds(250))
+            //    .ObserveOnDispatcher()
+            //    .Subscribe(async xboxData =>
+            //    {
+            //        await OnNextXboxButtonData(xboxData);
+            //    });
+
+            //_xboxDpadDisposable = XboxDevice.GetObservable()
+            //    .Where(xboxData => xboxData != null && xboxData.Dpad != Direction.None)
+            //    .Sample(TimeSpan.FromMilliseconds(250))
+            //    .ObserveOnDispatcher()
+            //    .Subscribe(async xboxData =>
+            //    {
+            //        await OnNextXboxDpadData(xboxData);
+            //    });
+
+            if (_conductor == null)
+                return;
 
             await _conductor.InitializeAsync();
 
@@ -176,10 +304,10 @@ namespace Autonoceptor.Host.ViewModels
                     await RequestExtendedSession(); 
                 });
 
-            Observable.Timer(TimeSpan
-                .FromSeconds(3))
-                .ObserveOnDispatcher()
-                .Subscribe(async _ => { await StartConductor().ConfigureAwait(false); });
+            //Observable.Timer(TimeSpan
+            //    .FromSeconds(3))
+            //    .ObserveOnDispatcher()
+            //    .Subscribe(async _ => { await StartConductor().ConfigureAwait(false); });
         }
 
         private void NewSessionOnRevoked(object sender, ExtendedExecutionRevokedEventArgs args)
@@ -219,7 +347,9 @@ namespace Autonoceptor.Host.ViewModels
 
         public async Task InitMqtt()
         {
-            await _conductor.InitializeMqtt(BrokerIp);
+            //await _conductor.InitializeMqtt(BrokerIp);
+
+            await StartConductor();
         }
 
         private async Task RequestExtendedSession()

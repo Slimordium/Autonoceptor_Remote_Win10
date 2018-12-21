@@ -8,11 +8,11 @@ using NLog;
 
 namespace Autonoceptor.Hardware
 {
-    internal static class SerialDeviceHelper
+    public static class SerialDeviceHelper
     {
         private static readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-        internal static async Task<SerialDevice> GetSerialDeviceAsync(string identifier, int baudRate, TimeSpan readTimeout, TimeSpan writeTimeout)
+        public static async Task<SerialDevice> GetSerialDeviceAsync(string identifier, int baudRate, TimeSpan readTimeout, TimeSpan writeTimeout)
         {
             var deviceInformationCollection = await DeviceInformation.FindAllAsync(SerialDevice.GetDeviceSelector());
             var selectedPort = deviceInformationCollection.LastOrDefault(d => d.Id.Contains(identifier) || d.Name.Contains(identifier));

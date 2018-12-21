@@ -141,9 +141,6 @@
     <PackageReference Include="Caliburn.Micro">
       <Version>4.0.0-alpha.1</Version>
     </PackageReference>
-    <PackageReference Include="Microsoft.Bcl.Build">
-      <Version>1.0.21</Version>
-    </PackageReference>
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform">
       <Version>6.1.7</Version>
     </PackageReference>
@@ -164,6 +161,10 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="app.config" />
+    <None Include="Autonoceptor.Host_TemporaryKey.pfx" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Autonoceptor.Hardware\Autonoceptor.Hardware.csproj">
       <Project>{a6422859-45bd-495e-bddb-7398730eba06}</Project>
       <Name>Autonoceptor.Hardware</Name>
@@ -181,11 +182,6 @@
       <Name>Hardware.Xbox</Name>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup>
-    <None Include="app.config" />
-    <None Include="Autonoceptor.Host_TemporaryKey.pfx" />
-  </ItemGroup>
-  <ItemGroup />
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
   </PropertyGroup>

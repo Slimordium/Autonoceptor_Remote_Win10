@@ -1,13 +1,12 @@
-﻿
+#define interruptPin 7 // pulse Counter input
 
-#define interruptPin 2 // pulse Counter input
 
 volatile int SendCount = 0;
 
 volatile long PulseCount = 0;
 
 volatile float CmTraveled = 0;
-
+ 
 volatile float InTraveled = 0;
 
 volatile float LastInTraveled = 0;
@@ -38,6 +37,8 @@ void setup()
 
 void loop() 
 {
+	
+
     if (Ms == 0)
     {
       Ms = millis() + 100;
@@ -70,5 +71,3 @@ void loop()
     InTraveled = CmTraveled / 2.54;
   }
 }
-
-
