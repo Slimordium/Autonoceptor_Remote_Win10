@@ -6,13 +6,15 @@
     <micro:CaliburnApplication.Resources>
         <Style TargetType="Button">
             <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="BorderBrush" Value="DarkSlateGray"/>
             <Setter Property="BorderThickness" Value=".5"/>
+            <Setter Property="Background" Value="Aquamarine"/>
             <Setter Property="Foreground" Value="Black"/>
             <Setter Property="Width" Value="120"/>
-            <Setter Property="Height" Value="30"/>
-            <Setter Property="Margin" Value="3"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
         </Style>
         <Style TargetType="ListBox">
             <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -24,17 +26,11 @@
         </Style>
         <Style TargetType="TextBlock">
             <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Margin" Value="10,0,0,0"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Margin" Value="5,0,0,0"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Foreground" Value="Black"/>
-        </Style>
-        <Style TargetType="ListView">
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="6"/>
-            <Setter Property="Margin" Value="5"/>
-            <Setter Property="Padding" Value="5"/>
-            <Setter Property="Foreground" Value="GreenYellow"/>
+            <Setter Property="Height" Value="20"/>
         </Style>
     </micro:CaliburnApplication.Resources>
 </micro:CaliburnApplication>

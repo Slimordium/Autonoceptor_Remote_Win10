@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
+    <PackageReference Include="Nito.AsyncEx" Version="4.0.1" />
     <PackageReference Include="NLog" Version="4.5.9" />
     <PackageReference Include="NLog.Extensions.Logging" Version="1.2.1" />
     <PackageReference Include="RxMqtt.Client" Version="1.1.1.1" />

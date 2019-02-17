@@ -8,7 +8,7 @@ using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Utilities;
 using NLog;
 
-namespace Autonoceptor.Hardware
+namespace Autonoceptor.Host.Hardware
 {
     public class Gps
     {

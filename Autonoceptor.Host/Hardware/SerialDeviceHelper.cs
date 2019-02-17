@@ -6,7 +6,7 @@ using Windows.Devices.Enumeration;
 using Windows.Devices.SerialCommunication;
 using NLog;
 
-namespace Autonoceptor.Hardware
+namespace Autonoceptor.Host.Hardware
 {
     public static class SerialDeviceHelper
     {

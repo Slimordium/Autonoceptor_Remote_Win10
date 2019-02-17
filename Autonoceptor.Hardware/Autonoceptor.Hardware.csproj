@@ -107,16 +107,9 @@
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Maestro\ChannelData.cs" />
-    <Compile Include="Maestro\PwmController.cs" />
     <Compile Include="Odometer.cs" />
     <Compile Include="Tf02Lidar.cs" />
-    <Compile Include="Gps.cs" />
     <Compile Include="Imu.cs" />
-    <Compile Include="SerialDeviceHelper.cs" />
-    <Compile Include="Lcd\Lcd.cs" />
-    <Compile Include="Lcd\GroupName.cs" />
-    <Compile Include="Lcd\Group.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="Properties\Test2.rd.xml" />
   </ItemGroup>

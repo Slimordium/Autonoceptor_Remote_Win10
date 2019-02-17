@@ -109,12 +109,8 @@
     <Compile Include="Car.cs" />
     <Compile Include="Chassis.cs" />
     <Compile Include="Conductor.cs" />
-    <Compile Include="FileExtensions.cs" />
-    <Compile Include="GpsNavigation.cs" />
     <Compile Include="MoveRequest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="WaypointQueue.cs" />
-    <Compile Include="XboxController.cs" />
     <EmbeddedResource Include="Properties\Autonoceptor.Vehicle.rd.xml" />
   </ItemGroup>
   <ItemGroup>
@@ -123,10 +119,6 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Autonoceptor.Hardware\Autonoceptor.Hardware.csproj">
-      <Project>{a6422859-45bd-495e-bddb-7398730eba06}</Project>
-      <Name>Autonoceptor.Hardware</Name>
-    </ProjectReference>
     <ProjectReference Include="..\Autonoceptor.Shared\Autonoceptor.Shared.csproj">
       <Project>{696c75e3-040a-4aac-b008-a268bf73879a}</Project>
       <Name>Autonoceptor.Shared</Name>
@@ -138,8 +130,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
-    <None Include="Arduino\PulseCount.ino" />
   </ItemGroup>
+  <ItemGroup />
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
   </PropertyGroup>

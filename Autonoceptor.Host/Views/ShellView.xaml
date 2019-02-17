@@ -7,81 +7,77 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Width="Auto" Height="Auto">
+    <Grid Background="Black" Width="800" Height="480">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="120"/>
-            <ColumnDefinition Width="640"/>
-            <ColumnDefinition Width="255"/>
+            <ColumnDefinition Width="164"/>
+            <ColumnDefinition Width="164"/>
+            <ColumnDefinition Width="164"/>
+            <ColumnDefinition Width="164"/>
             <ColumnDefinition />
-            <ColumnDefinition Width="460" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="40" />
-            <RowDefinition Height="40" />
-            <RowDefinition Height="40" />
-            <RowDefinition Height="40" />
-            <RowDefinition Height="40" />
-            <!--<RowDefinition Height="40" />
-            <RowDefinition Height="40" />-->
+            <RowDefinition Height="50" />
+            <RowDefinition Height="50" />
+            <RowDefinition Height="30" />
+            <RowDefinition Height="30" />
+            <RowDefinition Height="30" />
+            <RowDefinition Height="30" />
+            <RowDefinition Height="30" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TextBlock Text="MQTT Broker IP" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
-        <TextBox Name="BrokerIp" Grid.Row="0" Width="250" Grid.Column="1" HorizontalAlignment="Left"></TextBox>
-
-        <StackPanel Grid.Row="0" Grid.Column="2" HorizontalAlignment="Left" Height="40" Width="350" Orientation="Horizontal" VerticalAlignment="Center">
-            <Button Name="InitMqtt" Content="Init." HorizontalAlignment="Left"></Button>
-            <Button Name="DisposeMqtt" Content="Dispose" HorizontalAlignment="Left"></Button>
+        <StackPanel Grid.Row="0" Grid.Column="0" HorizontalAlignment="Left" Height="40" Orientation="Horizontal" VerticalAlignment="Center">
+            <Button Name="InitCar" Content="Start Car" HorizontalAlignment="Left" Width="80"></Button>
+            <Button Name="DisposeCar" Content="Dispose" HorizontalAlignment="Left" Width="80"></Button>
         </StackPanel>
 
-        <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Left" Height="40" Width="620" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Name="Yaw" Width="70"  VerticalAlignment="Center"></TextBlock>
-            <TextBlock Name="OdometerIn" Width="180" HorizontalAlignment="Left"  VerticalAlignment="Center"></TextBlock>
-            <TextBlock Name="Lidar" Width="220" HorizontalAlignment="Left"  VerticalAlignment="Center"></TextBlock>
+        <StackPanel Grid.Row="0" Grid.Column="1" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
+            <Button Name="InitXbox" Content="Xbox" Width="80"></Button>
+            <Button Name="DisposeXbox" Content="Dispose" Width="80"></Button>
         </StackPanel>
 
-        <StackPanel Grid.Column="2" Grid.Row="1" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center"/>
-
-        <TextBlock Text="GPS" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"></TextBlock>
-        <TextBlock Name="LatLon" Width="640" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center"></TextBlock>
-
-        <StackPanel Grid.Column="2" Grid.Row="2" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
-            <Button Name="InitGps" Content="Init." ></Button>
-            <Button Name="DisposeGps" Content="Dispose"></Button>
+        <StackPanel Grid.Row="0" Grid.Column="2" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
+            <Button Name="EnablePixy" Content="Pixy" Width="80"></Button>
+            <Button Name="DisablePixy" Content="Disable" Width="80"></Button>
         </StackPanel>
 
-        <!--<CheckBox Grid.Column="2" Grid.Row="2" Content="GPS Nav controlled speed" HorizontalAlignment="Left" x:Name="EnableNavSpeedControl"></CheckBox>-->
-
-        <Button Name="ListWaypoints" Grid.Column="0" Grid.Row="3" Content="Get Waypoints" HorizontalAlignment="Center" Width="100"></Button>
-        <StackPanel Grid.Column="1" Grid.Row="3" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
-            <ComboBox Name="WaypointsCombo"
-                  ItemsSource="{Binding Waypoints}" 
-                  SelectedIndex="{Binding SelectedWaypoint}"
-                  HorizontalAlignment="Left" Width="480" 
-                  VerticalAlignment="Center">
-            <ComboBox.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding Lat}" Width="220"/>
-                            <TextBlock Text="{Binding Lon}" Width="220"/>
-                        </StackPanel>
-                </DataTemplate>
-            </ComboBox.ItemTemplate>
-        </ComboBox>
-            <Button Name="GetDistanceHeading" Content="Get Dist/Heading"></Button>
+        <StackPanel Grid.Row="0" Grid.Column="3" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
+            <Button Name="EnableLidar" Content="LIDAR" Width="80"></Button>
+            <Button Name="DisableLidar" Content="Disable" Width="80"></Button>
         </StackPanel>
 
-        <CheckBox Name="EnableNavSpeedControl" Grid.Row="4" Grid.Column="0" FontSize="12">GPS Nav speed?</CheckBox>
-
-        <StackPanel Grid.Column="1" Grid.Row="4" HorizontalAlignment="Left" Grid.ColumnSpan="4"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="600">
-            <TextBlock Width="125"  VerticalAlignment="Center">Nav feet per. second:</TextBlock>
-            <Slider Name="CruiseControl" Minimum="1" Maximum="10" StepFrequency=".25" Value="2.5" Width="100" VerticalAlignment="Center"></Slider>
-            <Button Name="SetNavParams" Content="Set"></Button>
+        <StackPanel Grid.Row="1" Grid.Column="0" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
+            <Button Name="StreamFrames" Content="Enable Telemetry" Width="160"></Button>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="5" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="{Binding Path=Width, ElementName=LogColumn}" Margin="3.4,0,0,-0.4">
-            <ListBox x:Name="LogBox" FontSize="13" FontFamily="Arial Narrow" ItemsSource="{Binding Log}" BorderThickness="0" SelectionMode="Multiple" Margin="5,0,0,0" >
-            </ListBox>
+        <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
+            <Button Name="EnableFollow" Content="Follow" Width="80"></Button>
+            <Button Name="DisableFollow" Content="Disable" Width="80"></Button>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
+            <TextBlock Name="Cm" Width="60" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="35" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">cm.</TextBlock>
+        </StackPanel>
+        <StackPanel Grid.Row="3" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
+            <TextBlock Name="Yaw" Width="60" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="35" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Yaw</TextBlock>
+        </StackPanel>
+        <StackPanel Grid.Row="4" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
+            <TextBlock Name="Pitch" Width="60" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="35" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Pitch</TextBlock>
+        </StackPanel>
+        <StackPanel Grid.Row="5" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
+            <TextBlock Name="Roll" Width="60" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="35" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Roll</TextBlock>
+        </StackPanel>
+        <StackPanel Grid.Row="6" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
+            <TextBlock Name="Rpm" Width="60" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="35" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Rpm</TextBlock>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="2" Grid.RowSpan="6" Grid.Column="1" Grid.ColumnSpan="4" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="622" Margin="0" HorizontalAlignment="Left" Background="Black" Height="400">
+            <TextBlock Name="Log" Margin="0" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Foreground="GreenYellow" FontSize="16" FontFamily="Arial Narrow" IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
         </ScrollViewer>
 
     </Grid>

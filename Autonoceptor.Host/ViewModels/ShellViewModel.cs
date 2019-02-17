@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.ApplicationModel;
@@ -10,29 +10,22 @@ using Windows.ApplicationModel.ExtendedExecution;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
 using Windows.UI.Xaml;
-using Autonoceptor.Hardware;
+using Autonoceptor.Host.Hardware;
 using Autonoceptor.Shared.Gps;
 using Autonoceptor.Shared.Utilities;
-using Autonoceptor.Vehicle;
 using Caliburn.Micro;
 using Hardware.Xbox;
 using Hardware.Xbox.Enums;
 using Newtonsoft.Json;
 using Nito.AsyncEx;
-using NLog.Targets.Rx;
 
 namespace Autonoceptor.Host.ViewModels
 {
     public class ShellViewModel : Conductor<object>
     {
-        private readonly AsyncLock _asyncLock = new AsyncLock();
-
         private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
-        private readonly Conductor _conductor;
 
-        private IDisposable _gpsDisposable;
-        private IDisposable _lidarDisposable;
-        private IDisposable _odometerDisposable;
+        private SerialDevice _arduinoSerialDevice;
 
         private ExtendedExecutionSession _session;
 
@@ -40,12 +33,25 @@ namespace Autonoceptor.Host.ViewModels
 
         private bool _started;
 
-        private IDisposable _yawDisposable;
+        private readonly AsyncProducerConsumerQueue<Task> _asyncProducerConsumerQueue = new AsyncProducerConsumerQueue<Task>();
+
+        private XboxDevice XboxDevice;
+
+        private IDisposable _xboxDisposable;
+        private bool _streamFrames;
+        private IDisposable _streamFrameDisposable;
+
+        private DataWriter _arduinoOutputStream;
+        private DataReader _arduinoInputStream;
+
+        public string Cm { get; set; }
+        public string Yaw { get; set; }
+        public string Pitch { get; set; }
+        public string Roll { get; set; }
+        public string Rpm { get; set; }
 
         public ShellViewModel()
         {
-            //_conductor = new Conductor(_cancellationTokenSource, BrokerIp);
-
             Application.Current.Suspending += CurrentOnSuspending;
             Application.Current.Resuming += CurrentOnResuming;
 
@@ -58,239 +64,338 @@ namespace Autonoceptor.Host.ViewModels
             //    .Subscribe(async _ => { await StartConductor().ConfigureAwait(false); });
 
             //RxTarget.LogObservable.ObserveOnDispatcher().Subscribe(async e => { await AddToLog(e); });
+
+            //Observable.Interval(TimeSpan.FromMilliseconds(100)).SubscribeOnDispatcher().Subscribe(b =>
+            //{
+            //    AddToLog(b.ToString());
+            //});
         }
 
-        public string Yaw { get; set; }
+        public string Log => _stringBuilder.ToString();
 
-        public string LatLon { get; set; }
+        private readonly StringBuilder _stringBuilder = new StringBuilder();
 
-        public string Lidar { get; set; }
-
-        public string OdometerIn { get; set; }
-
-        public BindableCollection<string> Log { get; set; } = new BindableCollection<string>();
-
-        public BindableCollection<Waypoint> Waypoints { get; set; } = new BindableCollection<Waypoint>();
-
-        public int SelectedWaypoint { get; set; }
-
-        public string BrokerIp { get; set; } = "172.16.0.246";
-
-        public bool EnableNavSpeedControl
+        private void AddToLog(string entry)
         {
-            get
-            {
-                if (_conductor != null)
-                    return _conductor.SpeedControlEnabled;
+            _stringBuilder.Insert(0, $"{entry} {Environment.NewLine}");
 
-                return true;
-            }
-            set
+            if (_stringBuilder.Length > 1500)
             {
-                if (_conductor != null)
-                    _conductor.SpeedControlEnabled = value;
+                _stringBuilder.Remove(_stringBuilder.Length - 500, 499);
             }
+
+            NotifyOfPropertyChange(nameof(Log));
         }
 
-        //54383
-
-        private SerialDevice _lcdSerialDevice;
-
-        public double TurnMagnitudeInputModifier { get; set; } = 1; // LEAVE AT 1 NOT NEEDED
-
-        public int CruiseControl { get; set; } = 340;
-
-        private async Task AddToLog(string entry)
+        private async Task<string> Read(uint length)
         {
-            using (await _asyncLock.LockAsync())
+            if (_arduinoInputStream == null)
+                return "input stream is null";
+        
+            try
             {
-                Log.Insert(0, entry);
-
-                if (Log.Count > 600)
-                    Log.RemoveAt(598);
-            }
-        }
-
-        private XboxDevice XboxDevice;
-
-        private IDisposable _xboxDisposable;
-        private IDisposable _xboxButtonDisposable;
-        private IDisposable _xboxDpadDisposable;
-
-        private DataWriter _outputStream;
-        private DataReader _inputStream;
-
-        private readonly AsyncLock _mutex = new AsyncLock();
-
-        private async Task<string> Read()
-        {
-            //using (await _mutex.LockAsync())
-            {
-                _outputStream.WriteBytes(new[] { (byte)0x52 }); //Request new data frame
-                var x = await _outputStream.StoreAsync();
-
-                var inCount = await _inputStream.LoadAsync(140);
+                var inCount = await _arduinoInputStream.LoadAsync(length);
 
                 if (inCount < 1)
                     return string.Empty;
 
-                return _inputStream.ReadString(inCount);
+                return _arduinoInputStream.ReadString(inCount);
+            }
+            catch (Exception e)
+            {
+                //AddToLog($"Read failed: {e.Message}");
+                return string.Empty;
             }
         }
 
         private async Task Write(byte[] buffer)
         {
-            //using (await _mutex.LockAsync())
+            if (_arduinoOutputStream == null)
+                return;
+
+            try
             {
-                _outputStream.WriteBytes(buffer.ToArray());
-                var x = await _outputStream.StoreAsync();
+                _arduinoOutputStream.WriteBytes(buffer.ToArray());
+                var x = await _arduinoOutputStream.StoreAsync();
+            }
+            catch (Exception e)
+            {
+                //AddToLog($"Write failed: {e.Message}");
             }
         }
 
-        public async Task StartConductor()
+        public void DisposeCar()
+        {
+            AddToLog("Disposing...");
+
+            _arduinoOutputStream?.Dispose();
+            _arduinoInputStream?.Dispose();
+
+            _arduinoSerialDevice?.Dispose();
+
+            _arduinoOutputStream = null;
+            _arduinoInputStream = null;
+
+            _arduinoSerialDevice = null;
+
+            DisposeXbox();
+
+            _started = false;
+
+            AddToLog("Disposed");
+        }
+
+        private async Task<uint> WriteMappedXboxValues(XboxData xboxData)
+        {
+            var moveMagnitude = 6000d; //Stopped
+            var steerMagnitude = 6000d; //Center
+
+            if (xboxData.RightTrigger > xboxData.LeftTrigger)
+            {
+                moveMagnitude = Math.Round(xboxData.RightTrigger.Map(0, 33000, 6000, 4400)); //Forward
+            }
+            else
+            {
+                moveMagnitude = Math.Round(xboxData.LeftTrigger.Map(0, 33000, 6000, 7500)); //Reverse
+            }
+
+            if (xboxData.RightStick.Direction == Direction.DownLeft ||
+                xboxData.RightStick.Direction == Direction.UpLeft ||
+                xboxData.RightStick.Direction == Direction.Left)
+            {
+                steerMagnitude = Math.Round(xboxData.RightStick.Magnitude.Map(0, 10000, 6000, 4000));
+            }
+
+            if (xboxData.RightStick.Direction == Direction.DownRight ||
+                xboxData.RightStick.Direction == Direction.UpRight ||
+                xboxData.RightStick.Direction == Direction.Right)
+            {
+                steerMagnitude = Math.Round(xboxData.RightStick.Magnitude.Map(0, 10000, 6000, 8000));
+            }
+
+            var writeBuffer = BuildCommandBuffer(Command.SetThrottlePwm, Convert.ToUInt16(moveMagnitude));
+
+            writeBuffer.AddRange(BuildCommandBuffer(Command.SetSteeringPwm, Convert.ToUInt16(steerMagnitude)));
+
+            //AddToLog(BitConverter.ToString(writeBuffer.ToArray()));
+
+            _arduinoOutputStream.WriteBytes(writeBuffer.ToArray());
+
+            await _arduinoOutputStream.StoreAsync();
+
+            return await Task.FromResult(1u);
+        }
+
+        private List<byte> BuildCommandBuffer(Command command, ushort commandValue)
+        {
+            var writeBuffer = new List<byte>
+            {
+                0x7E,
+                0x7E,
+                (byte) command
+            };
+
+            writeBuffer.AddRange(BitConverter.GetBytes(commandValue));
+
+            return writeBuffer;
+        }
+
+        public async Task GetFrame()
+        {
+            try
+            {
+                await Write(BuildCommandBuffer(Command.GetCurrentTelemetryFrame, 1).ToArray());
+
+                var frameString = await Read(300);
+
+                if (string.IsNullOrEmpty(frameString) || !frameString.StartsWith('{') || !frameString.EndsWith('\n'))
+                    return;
+
+                var frame = JsonConvert.DeserializeObject<AutonoDataFrame>(frameString);
+
+                Cm = frame.CmToTarget.ToString();
+                Yaw = frame.Yaw.ToString();
+                Pitch = frame.Pitch.ToString();
+                Roll = frame.Roll.ToString();
+                Rpm = frame.RpmActual.ToString();
+
+                NotifyOfPropertyChange(nameof(Cm));
+                NotifyOfPropertyChange(nameof(Yaw));
+                NotifyOfPropertyChange(nameof(Pitch));
+                NotifyOfPropertyChange(nameof(Roll));
+                NotifyOfPropertyChange(nameof(Rpm));
+            }
+            catch (Exception e)
+            {
+                AddToLog($"Get frame failed: {e.Message}");
+            }
+        }
+
+        public async Task EnablePixy()
+        {
+            AddToLog("PIXY steering enabled");
+            await Write(BuildCommandBuffer(Command.PixySteeringEnabled, 1).ToArray());
+        }
+
+        public async Task DisablePixy()
+        {
+            AddToLog("PIXY steering disabled");
+            await Write(BuildCommandBuffer(Command.PixySteeringEnabled, 0).ToArray());
+        }
+
+        public async Task EnableLidar()
+        {
+            AddToLog("LIDAR safety enabled");
+            await Write(BuildCommandBuffer(Command.LidarEnabled, 1).ToArray());
+        }
+
+        public async Task DisableLidar()
+        {
+            AddToLog("LIDAR safety disabled");
+            await Write(BuildCommandBuffer(Command.LidarEnabled, 0).ToArray());
+        }
+
+        public async Task EnableFollow()
+        {
+            AddToLog("Follow enable");
+            await Write(BuildCommandBuffer(Command.FollowMeEnabled, 1).ToArray());
+        }
+
+        public async Task DisableFollow()
+        {
+            AddToLog("Follow disable");
+            await Write(BuildCommandBuffer(Command.FollowMeEnabled, 0).ToArray());
+        }
+
+        public void StreamFrames()
+        {
+            _streamFrames = !_streamFrames;
+
+            AddToLog($"Streaming frames: {_streamFrames}");
+
+            if (_streamFrames)
+            {
+                _streamFrameDisposable?.Dispose();
+
+                _streamFrameDisposable = Observable
+                    .Interval(TimeSpan.FromMilliseconds(125))
+                    .ObserveOnDispatcher()
+                    .Subscribe(
+                        async _ =>
+                        {
+                            await _asyncProducerConsumerQueue.TryEnqueueAsync(GetFrame());
+                        });
+            }
+            else
+            {
+                _streamFrameDisposable?.Dispose();
+                _streamFrameDisposable = null;
+            }
+        }
+
+        public async Task InitXbox()
+        {
+            AddToLog("XBox starting...");
+
+            if (XboxDevice != null)
+            {
+                DisposeXbox();
+            }
+
+            XboxDevice = new XboxDevice();
+            var init = await XboxDevice.InitializeAsync(CancellationToken.None);
+
+            if (!init)
+            {
+                AddToLog("Could not find xBox controller");
+                return;
+            }
+
+            _xboxDisposable = XboxDevice.GetObservable()
+                .Where(xboxData => xboxData != null)
+                .Sample(TimeSpan.FromMilliseconds(50))
+                .ObserveOnDispatcher()
+                .Subscribe(async xboxData =>
+                {
+                    try
+                    {
+                        await _asyncProducerConsumerQueue.TryEnqueueAsync(WriteMappedXboxValues(xboxData));
+                    }
+                    catch (Exception e)
+                    {
+                        AddToLog(e.Message);
+                    }
+                });
+
+            AddToLog("XBox started");
+        }
+
+        private Task _queueTask;
+
+        public void DisposeXbox()
+        {
+            XboxDevice?.Dispose();
+            XboxDevice = null;
+
+            _xboxDisposable?.Dispose();
+            _xboxDisposable = null;
+
+            AddToLog("XBox disposed");
+        }
+
+        public async Task InitCar()
         {
             if (_started)
                 return;
 
             _started = true;
 
-            await AddToLog("Starting conductor");
+            AddToLog("Starting autonoceptor...");
 
-            _lcdSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("54383", 115200, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(100));
+            //543 - USB Cable
+            //03FJ - FTDI
 
-            _inputStream = new DataReader(_lcdSerialDevice.InputStream);// { InputStreamOptions = InputStreamOptions.Partial };
-            _outputStream = new DataWriter(_lcdSerialDevice.OutputStream);
+            
 
-            XboxDevice = new XboxDevice();
-            await XboxDevice.InitializeAsync(CancellationToken.None);
+            _arduinoSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("03FJ", 115200, TimeSpan.FromMilliseconds(30), TimeSpan.FromMilliseconds(100));
 
-            Observable.Interval(TimeSpan.FromMilliseconds(100)).ObserveOnDispatcher().Subscribe(async _ =>
+            if (_arduinoSerialDevice == null)
             {
-                var s = await Read();
+                AddToLog("Could not find arduino?");
+                return;
+            }
 
-                await AddToLog(s);
+            AddToLog($"Found: {_arduinoSerialDevice.UsbVendorId} - {_arduinoSerialDevice.UsbProductId}");
+
+            _arduinoInputStream = new DataReader(_arduinoSerialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
+            _arduinoOutputStream = new DataWriter(_arduinoSerialDevice.OutputStream);
+
+            _queueTask = Task.Run(async () =>
+            {
+                foreach (var t in _asyncProducerConsumerQueue.GetConsumingEnumerable())
+                {
+                    await t.ConfigureAwait(false);
+                }
 
             });
 
-            _xboxDisposable = XboxDevice.GetObservable()
-                .Where(xboxData => xboxData != null)
-                .Sample(TimeSpan.FromMilliseconds(40))
-                .ObserveOnDispatcher()
-                .Subscribe(async xboxData =>
-                {
-                    var moveMagnitude = 6000d; //Stopped
-                    var steerMagnitude = 6000d; //Center
+            //_queueTask.Start();
 
-                    if (xboxData.RightTrigger > xboxData.LeftTrigger)
-                    {
-                        moveMagnitude = Math.Round(xboxData.RightTrigger.Map(0, 33000, 6000, 4400)); //Forward
-                    }
-                    else
-                    {
-                        moveMagnitude = Math.Round(xboxData.LeftTrigger.Map(0, 33000, 6000, 7500)); //Reverse
-                    }
+            await InitXbox();
 
-                    if (xboxData.RightStick.Direction == Direction.DownLeft ||
-                        xboxData.RightStick.Direction == Direction.UpLeft ||
-                        xboxData.RightStick.Direction == Direction.Left)
-                    {
-                        steerMagnitude = Math.Round(xboxData.RightStick.Magnitude.Map(0, 10000, 6000, 4000));
-                    }
+            AddToLog("Started autonoceptor");
 
-                    if (xboxData.RightStick.Direction == Direction.DownRight ||
-                        xboxData.RightStick.Direction == Direction.UpRight ||
-                        xboxData.RightStick.Direction == Direction.Right)
-                    {
-                        steerMagnitude = Math.Round(xboxData.RightStick.Magnitude.Map(0, 10000, 6000, 8000));
-                    }
-
-                    var moveMagBytesOut = moveMagnitude.ToString(CultureInfo.InvariantCulture).ToCharArray(0, 4).Select(c => (byte)c).ToList();
-                    var steerMagBytesOut = steerMagnitude.ToString(CultureInfo.InvariantCulture).ToCharArray(0, 4).Select(c => (byte)c).ToList();
-                    
-                    var buffer = new List<byte> {0x02, 0x4D}; //STX - (M)ovement
-
-                    buffer.AddRange(moveMagBytesOut);
-                    buffer.AddRange(steerMagBytesOut);
-
-                    await Write(buffer.ToArray());
-                });
-
-
-            //_xboxButtonDisposable = XboxDevice.GetObservable()
-            //    .Where(xboxData => xboxData != null && xboxData.FunctionButtons.Any())
-            //    .Sample(TimeSpan.FromMilliseconds(250))
+            //_gpsDisposable = _conductor
+            //    .Gps
+            //    .GetObservable()
+            //    .Where(data => data != null)
             //    .ObserveOnDispatcher()
-            //    .Subscribe(async xboxData =>
+            //    .Subscribe(data =>
             //    {
-            //        await OnNextXboxButtonData(xboxData);
+            //        LatLon = data.ToString();
+            //        NotifyOfPropertyChange(nameof(LatLon));
             //    });
 
-            //_xboxDpadDisposable = XboxDevice.GetObservable()
-            //    .Where(xboxData => xboxData != null && xboxData.Dpad != Direction.None)
-            //    .Sample(TimeSpan.FromMilliseconds(250))
-            //    .ObserveOnDispatcher()
-            //    .Subscribe(async xboxData =>
-            //    {
-            //        await OnNextXboxDpadData(xboxData);
-            //    });
-
-            if (_conductor == null)
-                return;
-
-            await _conductor.InitializeAsync();
-
-            await Task.Delay(1000);
-
-            _yawDisposable = _conductor
-                .Imu
-                .GetReadObservable()
-                .ObserveOnDispatcher()
-                .Subscribe(data =>
-                {
-                    Yaw = $"Yaw: {Convert.ToInt32(data.Yaw)}";
-                    NotifyOfPropertyChange(nameof(Yaw));
-                });
-
-            _odometerDisposable = _conductor
-                .Odometer
-                .GetObservable()
-                .ObserveOnDispatcher()
-                .Subscribe(odoData =>
-                {
-                    OdometerIn = $"{odoData.FeetPerSecond} fps, {Math.Round(odoData.InTraveled / 12, 1)} ft, {Math.Round(odoData.InTraveled, 1)}in";
-                    NotifyOfPropertyChange(nameof(OdometerIn));
-                });
-
-            _gpsDisposable = _conductor
-                .Gps
-                .GetObservable()
-                .Where(data => data != null)
-                .ObserveOnDispatcher()
-                .Subscribe(data =>
-                {
-                    LatLon = data.ToString();
-                    NotifyOfPropertyChange(nameof(LatLon));
-                });
-
-            _lidarDisposable = _conductor
-                .Lidar
-                .GetObservable()
-                .Where(d => d != null)
-                .Sample(TimeSpan.FromMilliseconds(100))
-                .ObserveOnDispatcher()
-                .Subscribe(data =>
-                {
-                    if (!data.IsValid)
-                    {
-                        //Lidar = "Invalid signal";
-                    }
-                    else
-                    {
-                        Lidar = $"Distance: {data.Distance}, Strength: {data.Strength}";
-                    }
-
-                    NotifyOfPropertyChange(nameof(Lidar));
-                });
         }
 
         private void CurrentOnResuming(object sender, object o)
@@ -316,42 +421,6 @@ namespace Autonoceptor.Host.ViewModels
             _session = null;
         }
 
-        public async Task GetDistanceHeading()
-        {
-            try
-            {
-                if (!Waypoints.Any()) await ListWaypoints();
-
-                if (!Waypoints.Any())
-                    return;
-
-                var gpsFixData = await _conductor.Gps.GetLatest();
-
-                var wp = _conductor.Waypoints.CurrentWaypoint;
-
-                if (wp == null)
-                {
-                    await AddToLog($"No waypoints in queue");
-                    return;
-                }
-
-                var distanceAndHeading = GpsExtensions.GetDistanceAndHeadingToWaypoint(gpsFixData.Lat, gpsFixData.Lon, wp.Lat, wp.Lon);
-
-                await AddToLog($"Distance: {distanceAndHeading.DistanceInFeet}ft, Heading: {distanceAndHeading.HeadingToWaypoint}");
-            }
-            catch (Exception e)
-            {
-                await AddToLog(e.Message);
-            }
-        }
-
-        public async Task InitMqtt()
-        {
-            //await _conductor.InitializeMqtt(BrokerIp);
-
-            await StartConductor();
-        }
-
         private async Task RequestExtendedSession()
         {
             _session = new ExtendedExecutionSession {Reason = ExtendedExecutionReason.LocationTracking};
@@ -371,39 +440,6 @@ namespace Autonoceptor.Host.ViewModels
                     //AddToLog("Session extend denied");
                     break;
             }
-        }
-
-        public async Task InitGps()
-        {
-            await _conductor.Gps.InitializeAsync().ConfigureAwait(false);
-        }
-
-        public async Task DisposeGps()
-        {
-            try
-            {
-                _conductor.Gps.Dispose();
-            }
-            catch (Exception e)
-            {
-                await AddToLog(e.Message);
-            }
-        }
-
-        public async Task ListWaypoints()
-        {
-            Waypoints = new BindableCollection<Waypoint>();
-
-            if (_conductor.Waypoints.Count == 0)
-            {
-                await AddToLog("No waypoints in list");
-                NotifyOfPropertyChange(nameof(Waypoints));
-                return;
-            }
-
-            Waypoints.AddRange(_conductor.Waypoints.ToArray());
-
-            NotifyOfPropertyChange(nameof(Waypoints));
         }
 
         private async void CurrentOnSuspending(object sender, SuspendingEventArgs suspendingEventArgs)
