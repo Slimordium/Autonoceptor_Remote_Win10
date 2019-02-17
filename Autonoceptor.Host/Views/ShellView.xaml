@@ -50,7 +50,7 @@
         </StackPanel>
 
         <StackPanel Grid.Row="1" Grid.Column="0" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">
-            <Button Name="StreamFrames" Content="Enable Telemetry" Width="160"></Button>
+            <Button Name="TelemetryEnabled" Content="Enable Telemetry" Width="160"></Button>
         </StackPanel>
 
         <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Left"  Height="40" Orientation="Horizontal" VerticalAlignment="Center">

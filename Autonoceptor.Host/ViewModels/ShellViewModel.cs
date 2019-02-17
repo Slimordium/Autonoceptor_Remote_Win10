@@ -278,11 +278,11 @@ namespace Autonoceptor.Host.ViewModels
             await Write(BuildCommandBuffer(Command.FollowMeEnabled, 0).ToArray());
         }
 
-        public void StreamFrames()
+        public void TelemetryEnabled()
         {
             _streamFrames = !_streamFrames;
 
-            AddToLog($"Streaming frames: {_streamFrames}");
+            AddToLog($"Telemetry enabled: {_streamFrames}");
 
             if (_streamFrames)
             {
