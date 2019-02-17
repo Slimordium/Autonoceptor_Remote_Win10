@@ -31,6 +31,7 @@
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Foreground" Value="Black"/>
             <Setter Property="Height" Value="20"/>
+            <Setter Property="FontWeight" Value="Bold"/>
         </Style>
     </micro:CaliburnApplication.Resources>
 </micro:CaliburnApplication>

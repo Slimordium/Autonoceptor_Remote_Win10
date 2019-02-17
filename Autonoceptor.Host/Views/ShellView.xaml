@@ -18,11 +18,14 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="50" />
             <RowDefinition Height="50" />
-            <RowDefinition Height="30" />
-            <RowDefinition Height="30" />
-            <RowDefinition Height="30" />
-            <RowDefinition Height="30" />
-            <RowDefinition Height="30" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
+            <RowDefinition Height="35" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -56,28 +59,40 @@
         </StackPanel>
 
         <StackPanel Grid.Row="2" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
-            <TextBlock Name="Cm" Width="60" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
-            <TextBlock Width="35" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">cm.</TextBlock>
+            <TextBlock Name="Cm" Width="65" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="55" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">cm.</TextBlock>
         </StackPanel>
-        <StackPanel Grid.Row="3" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
-            <TextBlock Name="Yaw" Width="60" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
-            <TextBlock Width="35" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Yaw</TextBlock>
+        <StackPanel Grid.Row="3" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="164">
+            <TextBlock Name="Yaw" Width="65" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="55" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Yaw</TextBlock>
         </StackPanel>
-        <StackPanel Grid.Row="4" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
-            <TextBlock Name="Pitch" Width="60" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
-            <TextBlock Width="35" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Pitch</TextBlock>
+        <StackPanel Grid.Row="4" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="164">
+            <TextBlock Name="Pitch" Width="65" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="55" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Pitch</TextBlock>
         </StackPanel>
-        <StackPanel Grid.Row="5" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
-            <TextBlock Name="Roll" Width="60" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
-            <TextBlock Width="35" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Roll</TextBlock>
+        <StackPanel Grid.Row="5" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="164">
+            <TextBlock Name="Roll" Width="65" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="55" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Roll</TextBlock>
         </StackPanel>
-        <StackPanel Grid.Row="6" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
-            <TextBlock Name="Rpm" Width="60" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
-            <TextBlock Width="35" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Rpm</TextBlock>
+        <StackPanel Grid.Row="6" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="164">
+            <TextBlock Name="ImuCalibrated" Width="65" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="55" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Imu?</TextBlock>
+        </StackPanel>
+        <StackPanel Grid.Row="7" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
+            <TextBlock Name="Rpm" Width="65" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="55" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Rpm</TextBlock>
+        </StackPanel>
+        <StackPanel Grid.Row="8" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
+            <TextBlock Name="Sig1x" Width="65" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="55" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Sig1x</TextBlock>
+        </StackPanel>
+        <StackPanel Grid.Row="9" Grid.Column="0" HorizontalAlignment="Left" Grid.ColumnSpan="3"  Height="40" Orientation="Horizontal" VerticalAlignment="Center" Width="120">
+            <TextBlock Name="Sig1y" Width="65" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Right" VerticalAlignment="Center">0</TextBlock>
+            <TextBlock Width="55" HorizontalAlignment="Left" Foreground="GreenYellow" TextAlignment="Left" VerticalAlignment="Center">Sig1y</TextBlock>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="2" Grid.RowSpan="6" Grid.Column="1" Grid.ColumnSpan="4" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" Width="622" Margin="0" HorizontalAlignment="Left" Background="Black" Height="400">
-            <TextBlock Name="Log" Margin="0" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Foreground="GreenYellow" FontSize="16" FontFamily="Arial Narrow" IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
+        <ScrollViewer Grid.Row="2" Grid.RowSpan="6" Grid.Column="1" Grid.ColumnSpan="4" VerticalScrollBarVisibility="Visible" Width="622" Margin="0" HorizontalAlignment="Left" Background="Black" Height="360">
+            <TextBlock Name="Log" Margin="0" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Foreground="GreenYellow" FontSize="16" FontFamily="Arial Narrow" IsTextSelectionEnabled="True" TextWrapping="Wrap" Height="359"/>
         </ScrollViewer>
 
     </Grid>

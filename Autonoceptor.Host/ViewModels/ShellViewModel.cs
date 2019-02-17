@@ -44,11 +44,16 @@ namespace Autonoceptor.Host.ViewModels
         private DataWriter _arduinoOutputStream;
         private DataReader _arduinoInputStream;
 
+        private Task _queueTask;
+
         public string Cm { get; set; }
         public string Yaw { get; set; }
         public string Pitch { get; set; }
         public string Roll { get; set; }
         public string Rpm { get; set; }
+        public string Sig1x { get; set; }
+        public string Sig1y { get; set; }
+        public string ImuCalibrated { get; set; }
 
         public ShellViewModel()
         {
@@ -90,7 +95,7 @@ namespace Autonoceptor.Host.ViewModels
         private async Task<string> Read(uint length)
         {
             if (_arduinoInputStream == null)
-                return "input stream is null";
+                return string.Empty;
         
             try
             {
@@ -218,12 +223,18 @@ namespace Autonoceptor.Host.ViewModels
                 Pitch = frame.Pitch.ToString();
                 Roll = frame.Roll.ToString();
                 Rpm = frame.RpmActual.ToString();
+                Sig1x = frame.PixySig1X.ToString();
+                Sig1y = frame.PixySig1Y.ToString();
+                ImuCalibrated = frame.ImuCalibrated.ToString();
 
                 NotifyOfPropertyChange(nameof(Cm));
                 NotifyOfPropertyChange(nameof(Yaw));
                 NotifyOfPropertyChange(nameof(Pitch));
                 NotifyOfPropertyChange(nameof(Roll));
                 NotifyOfPropertyChange(nameof(Rpm));
+                NotifyOfPropertyChange(nameof(Sig1x));
+                NotifyOfPropertyChange(nameof(Sig1y));
+                NotifyOfPropertyChange(nameof(ImuCalibrated));
             }
             catch (Exception e)
             {
@@ -278,7 +289,7 @@ namespace Autonoceptor.Host.ViewModels
                 _streamFrameDisposable?.Dispose();
 
                 _streamFrameDisposable = Observable
-                    .Interval(TimeSpan.FromMilliseconds(125))
+                    .Interval(TimeSpan.FromMilliseconds(200))
                     .ObserveOnDispatcher()
                     .Subscribe(
                         async _ =>
@@ -330,8 +341,6 @@ namespace Autonoceptor.Host.ViewModels
             AddToLog("XBox started");
         }
 
-        private Task _queueTask;
-
         public void DisposeXbox()
         {
             XboxDevice?.Dispose();
@@ -355,8 +364,6 @@ namespace Autonoceptor.Host.ViewModels
             //543 - USB Cable
             //03FJ - FTDI
 
-            
-
             _arduinoSerialDevice = await SerialDeviceHelper.GetSerialDeviceAsync("03FJ", 115200, TimeSpan.FromMilliseconds(30), TimeSpan.FromMilliseconds(100));
 
             if (_arduinoSerialDevice == null)
@@ -364,8 +371,6 @@ namespace Autonoceptor.Host.ViewModels
                 AddToLog("Could not find arduino?");
                 return;
             }
-
-            AddToLog($"Found: {_arduinoSerialDevice.UsbVendorId} - {_arduinoSerialDevice.UsbProductId}");
 
             _arduinoInputStream = new DataReader(_arduinoSerialDevice.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
             _arduinoOutputStream = new DataWriter(_arduinoSerialDevice.OutputStream);
@@ -376,10 +381,7 @@ namespace Autonoceptor.Host.ViewModels
                 {
                     await t.ConfigureAwait(false);
                 }
-
             });
-
-            //_queueTask.Start();
 
             await InitXbox();
 
